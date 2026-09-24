@@ -1,8 +1,17 @@
+// Email ingest webhook: accepts incoming emails from external email service via bearer token auth.
 import { NextRequest, NextResponse } from "next/server";
 import { processEmail } from "@/lib/pipeline/processor";
+import { verifyBearerSecret } from "@/lib/auth/cron";
 import type { RawEmail } from "@/types";
 
 export async function POST(req: NextRequest) {
+	const denied = verifyBearerSecret(
+		req,
+		process.env.EMAIL_INGEST_SECRET,
+		"EMAIL_INGEST_SECRET",
+	);
+	if (denied) return denied;
+
 	try {
 		const body = await req.json();
 

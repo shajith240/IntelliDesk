@@ -9,7 +9,6 @@ import { identifyCustomer } from "./customer-identifier";
 import {
 	cleanEmailBody,
 	isLikelySpam,
-	extractTicketReferences,
 } from "@/lib/email/parser";
 import { sendEmail, buildAutoResponseEmail, type SmtpConfig } from "@/lib/email/smtp";
 import { orgNamespace } from "@/lib/auth/org-context";

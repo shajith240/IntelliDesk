@@ -1,7 +1,16 @@
+// Ticket list endpoint: returns filtered/searched/paginated tickets for the org, filling missing SLA due dates from policies.
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth/helpers";
 import { getOrgId } from "@/lib/auth/org-context";
+
+interface TicketRow {
+	created_at: string;
+	severity: string;
+	sla_first_response_due: string | null;
+	sla_resolution_due: string | null;
+	[key: string]: unknown;
+}
 
 export async function GET(req: NextRequest) {
 	const session = await requireAuth();
@@ -11,13 +20,44 @@ export async function GET(req: NextRequest) {
 
 	try {
 		const { searchParams } = new URL(req.url);
-		const status = searchParams.get("status");
-		const severity = searchParams.get("severity");
+
+		// Parse status (comma-separated)
+		const statusParam = searchParams.get("status") ?? "";
+		const statuses = statusParam
+			.split(",")
+			.map((s) => s.trim())
+			.filter((s) => ["New", "In Progress", "Resolved", "Closed"].includes(s));
+
+		// Parse severity (comma-separated)
+		const severityParam = searchParams.get("severity") ?? "";
+		const severities = severityParam
+			.split(",")
+			.map((s) => s.trim())
+			.filter((s) => ["P1", "P2", "P3", "P4"].includes(s));
+
+		// Sanitize search
+		const rawSearch = searchParams.get("search") ?? "";
+		const search = rawSearch
+			.replace(/[,()*%\\:]/g, " ")
+			.trim()
+			.slice(0, 100);
+
+		// Parse assigned filter
+		const assigned = searchParams.get("assigned");
+
 		const category = searchParams.get("category");
-		const search = searchParams.get("search");
-		const page = parseInt(searchParams.get("page") || "1");
-		const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
+
+		// Robust paging
+		const page = Math.max(
+			1,
+			Number.parseInt(searchParams.get("page") ?? "1", 10) || 1,
+		);
+		const limit = Math.min(
+			100,
+			Math.max(1, Number.parseInt(searchParams.get("limit") ?? "20", 10) || 20),
+		);
 		const offset = (page - 1) * limit;
+
 		const sortBy = searchParams.get("sort") || "created_at";
 		const sortOrder = searchParams.get("order") === "asc" ? true : false;
 
@@ -31,19 +71,36 @@ export async function GET(req: NextRequest) {
 			)
 			.eq("organization_id", orgId);
 
-		if (status) {
-			query = query.eq("status", status);
+		// Apply status filter
+		if (statuses.length === 1) {
+			query = query.eq("status", statuses[0]);
+		} else if (statuses.length > 1) {
+			query = query.in("status", statuses);
 		}
-		if (severity) {
-			query = query.eq("severity", severity);
+
+		// Apply severity filter
+		if (severities.length === 1) {
+			query = query.eq("severity", severities[0]);
+		} else if (severities.length > 1) {
+			query = query.in("severity", severities);
 		}
+
 		if (category) {
 			query = query.eq("category", category);
 		}
+
+		// Apply search filter
 		if (search) {
 			query = query.or(
 				`subject.ilike.%${search}%,ticket_number.ilike.%${search}%,summary.ilike.%${search}%`,
 			);
+		}
+
+		// Apply assigned filter
+		if (assigned === "me") {
+			query = query.eq("assigned_agent", session.user.id);
+		} else if (assigned === "unassigned") {
+			query = query.is("assigned_agent", null);
 		}
 
 		const validSortFields = [
@@ -61,8 +118,52 @@ export async function GET(req: NextRequest) {
 
 		if (error) throw error;
 
+		// Fill missing SLA due dates
+		let tickets: TicketRow[] = data || [];
+		const missingAny = tickets.some(
+			(t) => t.sla_first_response_due === null || t.sla_resolution_due === null,
+		);
+
+		if (missingAny) {
+			// SLA due dates are computed from sla_policies because the email pipeline does not store them on the ticket.
+			const { data: policies, error: policiesError } = await supabaseAdmin
+				.from("sla_policies")
+				.select("severity, first_response_minutes, resolution_minutes");
+
+			if (!policiesError && policies) {
+				const policyMap = new Map<
+					string,
+					{ first_response_minutes: number; resolution_minutes: number }
+				>();
+				for (const policy of policies) {
+					policyMap.set(policy.severity, {
+						first_response_minutes: policy.first_response_minutes,
+						resolution_minutes: policy.resolution_minutes,
+					});
+				}
+
+				tickets = tickets.map((t) => {
+					const policy = policyMap.get(t.severity);
+					if (policy) {
+						const createdTime = new Date(t.created_at).getTime();
+						if (t.sla_first_response_due === null) {
+							t.sla_first_response_due = new Date(
+								createdTime + policy.first_response_minutes * 60000,
+							).toISOString();
+						}
+						if (t.sla_resolution_due === null) {
+							t.sla_resolution_due = new Date(
+								createdTime + policy.resolution_minutes * 60000,
+							).toISOString();
+						}
+					}
+					return t;
+				});
+			}
+		}
+
 		return NextResponse.json({
-			tickets: data,
+			tickets,
 			total: count,
 			page,
 			limit,

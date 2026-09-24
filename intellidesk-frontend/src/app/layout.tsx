@@ -8,17 +8,10 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { fraunces, plexSans, plexMono } from "./fonts";
 
-// SEO Metadata
 export const metadata: Metadata = {
-  title: "IntelliDesk AI | Intelligent Email Support Dashboard",
-  description: "AI-powered email support dashboard with intelligent classification, SLA tracking, and automated responses. Built for B2B SaaS companies.",
-  keywords: ["AI", "Support", "Dashboard", "Email", "SLA", "Classification", "Automation"],
-  authors: [{ name: "IntelliDesk Team" }],
-  openGraph: {
-    title: "IntelliDesk AI | Intelligent Email Support Dashboard",
-    description: "AI-powered email support dashboard with intelligent classification and SLA tracking.",
-    type: "website",
-  },
+  title: { default: "IntelliDesk", template: "%s · IntelliDesk" },
+  description: "AI-assisted support operations: triage incoming customer email, track SLA risk, review AI evidence, and send responses.",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({
@@ -27,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${fraunces.variable} ${plexSans.variable} ${plexMono.variable} antialiased`}
       >

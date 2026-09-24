@@ -1,3 +1,4 @@
+// Response send endpoint: sends an email via SMTP, marks the response as sent, and updates ticket SLA and status.
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/smtp";
@@ -12,107 +13,136 @@ export async function POST(req: NextRequest) {
 
 	try {
 		const body = await req.json();
+		const responseText =
+			typeof body.response_text === "string"
+				? body.response_text.trim()
+				: "";
 
-		if (!body.response_id) {
+		if (!body.response_id && !body.ticket_id) {
 			return NextResponse.json(
-				{ error: "Missing response_id" },
+				{ error: "Missing response_id or ticket_id" },
+				{ status: 400 },
+			);
+		}
+		if (!responseText) {
+			return NextResponse.json(
+				{ error: "Response text cannot be empty" },
+				{ status: 400 },
+			);
+		}
+		if (responseText.length > 20000) {
+			return NextResponse.json(
+				{ error: "Response text is too long" },
 				{ status: 400 },
 			);
 		}
 
-		// Get auto-response details
-		const { data: autoResponse, error } = await supabaseAdmin
+		let responseQuery = supabaseAdmin
 			.from("auto_responses")
 			.select(
-				`
-        *,
+				`*,
         tickets(id, ticket_number, subject),
-        emails(id, from_address, from_name, message_id, subject)
-      `,
+        emails(id, from_address, from_name, message_id, subject)`,
 			)
-			.eq("id", body.response_id)
 			.eq("organization_id", orgId)
-			.single();
+			.eq("sent", false)
+			.order("created_at", { ascending: false })
+			.limit(1);
 
+		if (body.response_id) {
+			responseQuery = responseQuery.eq("id", body.response_id);
+		} else {
+			responseQuery = responseQuery.eq("ticket_id", body.ticket_id);
+		}
+
+		const { data: responses, error } = await responseQuery;
+		const autoResponse = responses?.[0];
 		if (error || !autoResponse) {
 			return NextResponse.json(
-				{ error: "Auto-response not found" },
+				{ error: "No unsent response found for this ticket" },
 				{ status: 404 },
 			);
 		}
 
-		const ticket = (
-			autoResponse as unknown as {
-				tickets: { id: string; ticket_number: string; subject: string };
-			}
-		).tickets;
-		const email = (
-			autoResponse as unknown as {
-				emails: {
-					id: string;
-					from_address: string;
-					from_name: string;
-					message_id: string;
-					subject: string;
-				};
-			}
-		).emails;
+		const ticket = autoResponse.tickets as {
+			id: string;
+			ticket_number: string;
+			subject: string;
+		};
+		const email = autoResponse.emails as {
+			from_address: string;
+			message_id: string | null;
+			subject: string;
+		};
 
-		// Use custom text if provided, otherwise use generated response
-		const responseText = body.response_text || autoResponse.response_text;
-
-		// Get org's SMTP config if set
 		const { data: orgData } = await supabaseAdmin
 			.from("organizations")
 			.select("email_config")
 			.eq("id", orgId)
 			.single();
 
-		const smtpConfig = orgData?.email_config?.smtp || undefined;
-
-		// Send the email
-		await sendEmail({
+		const sent = await sendEmail({
 			to: email.from_address,
 			subject: `Re: ${email.subject} [${ticket.ticket_number}]`,
-			html: `<div style="font-family: Arial, sans-serif; line-height: 1.6;">${responseText.replace(/\n/g, "<br>")}</div>`,
+			html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(responseText)}</div>`,
 			text: responseText,
-			inReplyTo: email.message_id,
-			smtpConfig,
+			inReplyTo: email.message_id || undefined,
+			smtpConfig: orgData?.email_config?.smtp || undefined,
 		});
+		if (!sent) {
+			return NextResponse.json(
+				{ error: "Email could not be sent. Check the organization's SMTP configuration." },
+				{ status: 502 },
+			);
+		}
 
-		// Mark as sent
-		await supabaseAdmin
+		const sentAt = new Date().toISOString();
+		const { error: responseUpdateError } = await supabaseAdmin
 			.from("auto_responses")
-			.update({ sent: true, response_text: responseText })
-			.eq("id", body.response_id);
+			.update({ sent: true, sent_at: sentAt, response_text: responseText })
+			.eq("id", autoResponse.id)
+			.eq("organization_id", orgId);
+		if (responseUpdateError) throw responseUpdateError;
 
-		// Update ticket first_response_at if not set
-		const { data: ticketData } = await supabaseAdmin
+		const { data: ticketData, error: ticketLookupError } = await supabaseAdmin
 			.from("tickets")
 			.select("sla_first_response_at")
 			.eq("id", ticket.id)
+			.eq("organization_id", orgId)
 			.single();
+		if (ticketLookupError) throw ticketLookupError;
 
-		if (ticketData && !ticketData.sla_first_response_at) {
-			await supabaseAdmin
-				.from("tickets")
-				.update({ sla_first_response_at: new Date().toISOString() })
-				.eq("id", ticket.id);
+		const ticketUpdate: Record<string, string> = {
+			status: "Resolved",
+			sla_resolved_at: sentAt,
+		};
+		if (!ticketData.sla_first_response_at) {
+			ticketUpdate.sla_first_response_at = sentAt;
 		}
+		const { error: ticketUpdateError } = await supabaseAdmin
+			.from("tickets")
+			.update(ticketUpdate)
+			.eq("id", ticket.id)
+			.eq("organization_id", orgId);
+		if (ticketUpdateError) throw ticketUpdateError;
 
-		// Audit log
-		await supabaseAdmin.from("audit_logs").insert({
+		const { error: auditError } = await supabaseAdmin.from("audit_logs").insert({
 			organization_id: orgId,
 			ticket_id: ticket.id,
 			action: "response_sent",
 			details: {
-				response_id: body.response_id,
+				response_id: autoResponse.id,
 				to: email.from_address,
-				edited: !!body.response_text,
+				edited: true,
 			},
 		});
+		if (auditError) throw auditError;
 
-		return NextResponse.json({ success: true, message: "Response sent" });
+		return NextResponse.json({
+			success: true,
+			message: "Response sent",
+			ticket_id: ticket.id,
+		});
 	} catch (error) {
 		console.error("Send response error:", error);
 		return NextResponse.json(
@@ -120,4 +150,13 @@ export async function POST(req: NextRequest) {
 			{ status: 500 },
 		);
 	}
+}
+
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/\"/g, "&quot;")
+		.replace(/'/g, "&#039;");
 }

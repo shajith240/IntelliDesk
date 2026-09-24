@@ -1,489 +1,291 @@
 /* ============================================================================
-   SEARCH: GLOBAL_STYLES
-   IntelliDesk AI - Global CSS with HSL Color Variables
-   Design System: Supports Light & Dark Themes
+   IntelliDesk AI — Design tokens (Rev. 3, Atlassian-aligned)
+   Values are HSL triplets so they compose with alpha: hsl(var(--x) / 0.5).
+   See docs/colors-reference.md for the role of each token.
    ============================================================================ */
 
 @import "tailwindcss";
 
-/* ============================================================================
-   SEARCH: CSS_VARIABLES
-   Light & Dark Mode Variables
-   ============================================================================ */
+/* `dark:` follows the .dark class set by next-themes, not the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* Light Mode Defaults (Shadcn-compatible Slate/Zinc) */
+  color-scheme: light;
+
+  /* Surfaces */
   --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  
-  --primary: 222 47% 11%;      /* Dark Blue/Gray */
-  --primary-foreground: 210 40% 98%;
-  
-  --secondary: 210 40% 90%;
-  --secondary-foreground: 222 47% 11%;
-  
-  --muted: 210 40% 90%;
-  --muted-foreground: 215 16% 47%;
-  
-  --accent: 210 40% 90%;
-  --accent-foreground: 222 47% 11%;
-  
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
+  --surface-sunken: 210 14.3% 97.3%;
+  --surface-raised: 0 0% 100%;
+  --surface-overlay: 0 0% 100%;
 
-  --border: 214.3 31.8% 82%;
-  --input: 214.3 31.8% 82%;
-  --ring: 222 47% 11%;
+  /* Text */
+  --foreground: 218 54% 19.6%;
+  --text-subtle: 218 24% 35.1%;
+  --text-subtlest: 218 15.5% 45.5%;
+  --on-bold: 0 0% 100%;
 
-  --radius: 0.5rem;
+  /* Borders */
+  --border: 218 12.9% 87.8%;
+  --border-bold: 217 13.5% 57.8%;
 
-  /* Custom Semantic Colors (Shared across themes unless overridden) */
-  /* Urgent (Red) */
-  --urgent: 0 84% 60%;
-  --urgent-bg: 0 84% 95%; /* Lighter background for Light Mode */
-  
-  /* High (Orange) */
-  --high: 25 95% 53%;
-  --high-bg: 25 95% 95%;
-  
-  /* Medium (Blue) */
-  --medium: 217 91% 60%;
-  --medium-bg: 217 91% 95%;
-  
-  /* Low (Green) */
-  --low: 142 71% 45%;
-  --low-bg: 142 71% 95%;
+  /* Neutral fills (buttons, chips, hover rows) */
+  --fill: 220 12% 95.1%;
+  --fill-hover: 218 12.9% 87.8%;
+  --fill-pressed: 217 13.5% 80%;
 
-  /* Confidence */
-  --confidence-high: 142 76% 36%;
-  --confidence-high-bg: 142 76% 95%;
-  
-  --confidence-low: 0 84% 60%;
-  --confidence-low-bg: 0 84% 95%;
-  
-  /* Tiers */
-  --tier-gold: 45 93% 47%;
-  --tier-silver: 220 14% 46%;
-  --tier-bronze: 30 41% 45%;
-  
-  /* Tier Backgrounds (Light) */
-  --tier-gold-bg: 45 93% 95%;
-  --tier-silver-bg: 220 14% 95%;
-  --tier-bronze-bg: 30 41% 95%;
-  
-  /* Sentiment */
-  --sentiment-happy: 142 76% 36%;
-  --sentiment-neutral: 220 14% 46%;
-  --sentiment-frustrated: 0 84% 60%; 
+  /* Brand / interactive */
+  --primary: 215 90% 47.1%;
+  --primary-hover: 215 100% 40%;
+  --primary-foreground: 0 0% 100%;
+  --selected: 215 100% 95.7%;
+  --selected-foreground: 215 90% 47.1%;
+  --ring: 215 97.4% 55.1%;
 
-  /* Status */
-  --status-new: 217 91% 60%;
-  --status-in-progress: 38 92% 50%;
-  --status-resolved: 142 71% 45%;
+  /* Semantic */
+  --danger: 4 64.1% 48%;
+  --danger-subtle: 3 100% 96.1%;
+  --danger-text: 4 65.7% 41.2%;
+  --warning: 47 97.4% 44.9%;
+  --warning-subtle: 48 100% 92%;
+  --warning-text: 26 100% 32.4%;
+  --success: 155 64.9% 38%;
+  --success-subtle: 156 100% 93.1%;
+  --success-text: 155 53.8% 28%;
+  --info: 215 97.4% 55.1%;
+  --info-subtle: 215 100% 95.7%;
+  --info-text: 215 100% 40%;
+  --discovery: 250 47.9% 57.1%;
+  --discovery-subtle: 252 100% 97.1%;
+  --discovery-text: 250 39.6% 50%;
+  --orange: 25 86.9% 48%;
+  --orange-subtle: 24 100% 96.1%;
 
-  /* Misc */
-  --warning: 38 92% 50%;
-  --success: 142 76% 36%;
+  /* Priority (P1 Highest → P4 Low). Icons also differ by shape. */
+  --priority-highest: 4 64.1% 48%;
+  --priority-high: 25 86.9% 48%;
+  --priority-medium: 45 100% 35.1%;
+  --priority-low: 215 97.4% 55.1%;
+
+  /* Elevation */
+  --elevation-raised: 0 1px 1px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
+  --elevation-overlay: 0 8px 12px rgba(9, 30, 66, 0.15), 0 0 1px rgba(9, 30, 66, 0.31);
+  --blanket: rgba(9, 30, 66, 0.54);
+
 }
 
 .dark {
-  /* ============================================================
-     Rev. 2 Dark Mode — Walnut / Brass / Ink-Blue
-     ============================================================ */
+  color-scheme: dark;
 
-  /* Surfaces */
-  --background: 30 9% 7%;        /* Warm near-black "walnut" */
-  --foreground: 30 10% 92%;      /* Warm off-white */
+  --background: 210 12.1% 12.9%;
+  --surface-sunken: 206 13.7% 10%;
+  --surface-raised: 207 11.7% 15.1%;
+  --surface-overlay: 207 12.1% 17.8%;
 
-  --card: 28 8% 10%;             /* Slightly lifted surface */
-  --card-foreground: 30 10% 92%;
-  --card-hover: 28 8% 13%;
+  --foreground: 211 20.7% 76.3%;
+  --text-subtle: 211 17.8% 68%;
+  --text-subtlest: 211 15.6% 61%;
+  --on-bold: 210 12.1% 12.9%;
 
-  --popover: 28 8% 10%;
-  --popover-foreground: 30 10% 92%;
+  --border: 210 13.8% 25.5%;
+  --border-bold: 211 14.3% 52%;
 
-  /* Brand */
-  --primary: 174 54% 56%;         /* Cyan-teal #4FD1C5 — sharp on dark, Linear/Vercel territory */
-  --primary-foreground: 28 8% 10%;
+  --fill: 210 13.7% 20%;
+  --fill-hover: 210 13.8% 25.5%;
+  --fill-pressed: 210 13.8% 30%;
 
-  /* Secondary / muted chrome */
-  --secondary: 28 7% 17%;
-  --secondary-foreground: 30 10% 92%;
+  --primary: 215 100% 67.1%;
+  --primary-hover: 215 100% 76.1%;
+  --primary-foreground: 210 12.1% 12.9%;
+  --selected: 216 39.8% 18.2%;
+  --selected-foreground: 215 100% 67.1%;
+  --ring: 215 100% 76.1%;
 
-  --muted: 28 7% 14%;
-  --muted-foreground: 30 6% 60%; /* Warm mid-tone */
+  --danger: 4 91.1% 69%;
+  --danger-subtle: 5 36.1% 19%;
+  --danger-text: 4 96.4% 78%;
+  --warning: 46 89.7% 62%;
+  --warning-subtle: 47 30.8% 15.3%;
+  --warning-text: 46 89.7% 62%;
+  --success: 155 57.2% 55.1%;
+  --success-subtle: 154 29.1% 15.5%;
+  --success-text: 155 63.3% 69%;
+  --info: 215 100% 67.1%;
+  --info-subtle: 216 39.8% 18.2%;
+  --info-text: 215 100% 76.1%;
+  --discovery: 250 75% 74.9%;
+  --discovery-subtle: 250 23.5% 20%;
+  --discovery-text: 250 80.4% 82%;
+  --orange: 25 98.7% 69%;
+  --orange-subtle: 29 30.3% 17.5%;
 
-  /* Accent — soft lavender (complements teal without competing) */
-  --accent: 250 60% 70%;
-  --accent-foreground: 30 10% 92%;
+  --priority-highest: 4 91.1% 69%;
+  --priority-high: 25 98.7% 69%;
+  --priority-medium: 46 89.7% 62%;
+  --priority-low: 215 100% 67.1%;
 
-  /* Destructive */
-  --destructive: 358 55% 42%;
-  --destructive-foreground: 30 10% 92%;
-
-  /* Structure */
-  --border: 28 7% 17%;
-  --border-hover: 28 7% 25%;
-  --input: 28 7% 17%;
-  --ring: 174 54% 56%;            /* Focus ring matches primary */
-
-  /* Priority colors — desaturated, harmonized */
-  --urgent: 358 60% 53%;         /* P1 — muted red */
-  --high: 22 74% 54%;            /* P2 — warm amber-orange */
-  --medium: 210 32% 58%;         /* P3 — same as accent (intentional reuse) */
-  --low: 150 36% 43%;            /* P4 — earthy green */
-
-  /* Priority backgrounds */
-  --urgent-bg: 358 60% 12%;
-  --high-bg: 22 74% 12%;
-  --medium-bg: 174 54% 10%;
-  --low-bg: 150 36% 10%;
-
-  /* Confidence */
-  --confidence-high: 150 36% 43%;
-  --confidence-high-bg: 150 36% 10%;
-  --confidence-low: 358 60% 53%;
-  --confidence-low-bg: 358 60% 12%;
-
-  /* Tier */
-  --tier-gold: 174 54% 56%;       /* Reuses primary */
-  --tier-gold-bg: 174 54% 10%;
-  --tier-silver: 250 60% 60%;
-  --tier-silver-bg: 250 60% 10%;
-  --tier-bronze: 22 40% 44%;
-  --tier-bronze-bg: 22 40% 10%;
-
-  /* Status / misc */
-  --status-new: 174 54% 56%;
-  --status-in-progress: 22 74% 54%;
-  --status-resolved: 150 36% 43%;
-  --warning: 22 74% 54%;
-  --success: 150 36% 43%;
-
-  /* Glassmorphism base (kept for .glass utility) */
-  --glass-bg: 28 8% 10% / 0.75;
-  --glass-border: 28 7% 25% / 0.4;
-  --glass-blur: 16px;
+  --elevation-raised: 0 1px 1px rgba(3, 4, 4, 0.5), 0 0 1px rgba(3, 4, 4, 0.5);
+  --elevation-overlay: inset 0 0 0 1px rgba(188, 214, 240, 0.04), 0 8px 12px rgba(3, 4, 4, 0.36), 0 0 1px rgba(3, 4, 4, 0.5);
+  --blanket: rgba(16, 18, 20, 0.58);
 }
-
-/* ============================================================================
-   SEARCH: TAILWIND_THEME
-   Tailwind CSS Theme Integration
-   ============================================================================ */
 
 @theme inline {
   --color-background: hsl(var(--background));
+  --color-sunken: hsl(var(--surface-sunken));
+  --color-raised: hsl(var(--surface-raised));
+  --color-overlay: hsl(var(--surface-overlay));
+
   --color-foreground: hsl(var(--foreground));
-  
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  
+  --color-subtle: hsl(var(--text-subtle));
+  --color-subtlest: hsl(var(--text-subtlest));
+  --color-on-bold: hsl(var(--on-bold));
+
   --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
+  --color-border-bold: hsl(var(--border-bold));
+
+  --color-fill: hsl(var(--fill));
+  --color-fill-hover: hsl(var(--fill-hover));
+  --color-fill-pressed: hsl(var(--fill-pressed));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-hover: hsl(var(--primary-hover));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-selected: hsl(var(--selected));
+  --color-selected-foreground: hsl(var(--selected-foreground));
   --color-ring: hsl(var(--ring));
-  
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
 
-  /* Custom: Priority colors */
-  --color-urgent: hsl(var(--urgent));
-  --color-high: hsl(var(--high));
-  --color-medium: hsl(var(--medium));
-  --color-low: hsl(var(--low));
-  
-  /* Custom: Confidence colors */
-  --color-confidence-high: hsl(var(--confidence-high));
-  --color-confidence-low: hsl(var(--confidence-low));
-  
-  /* Custom: Tier colors */
-  --color-tier-gold: hsl(var(--tier-gold));
-  --color-tier-silver: hsl(var(--tier-silver));
-  --color-tier-bronze: hsl(var(--tier-bronze));
-  
-  /* Custom: Sentiment colors */
-  --color-sentiment-happy: hsl(var(--sentiment-happy));
-  --color-sentiment-neutral: hsl(var(--sentiment-neutral));
-  --color-sentiment-frustrated: hsl(var(--sentiment-frustrated));
+  --color-danger: hsl(var(--danger));
+  --color-danger-subtle: hsl(var(--danger-subtle));
+  --color-danger-text: hsl(var(--danger-text));
+  --color-warning: hsl(var(--warning));
+  --color-warning-subtle: hsl(var(--warning-subtle));
+  --color-warning-text: hsl(var(--warning-text));
+  --color-success: hsl(var(--success));
+  --color-success-subtle: hsl(var(--success-subtle));
+  --color-success-text: hsl(var(--success-text));
+  --color-info: hsl(var(--info));
+  --color-info-subtle: hsl(var(--info-subtle));
+  --color-info-text: hsl(var(--info-text));
+  --color-discovery: hsl(var(--discovery));
+  --color-discovery-subtle: hsl(var(--discovery-subtle));
+  --color-discovery-text: hsl(var(--discovery-text));
+  --color-orange: hsl(var(--orange));
+  --color-orange-subtle: hsl(var(--orange-subtle));
 
-  /* Font families — Rev. 2: IBM Plex Sans (UI), IBM Plex Mono (data) */
+  --color-priority-highest: hsl(var(--priority-highest));
+  --color-priority-high: hsl(var(--priority-high));
+  --color-priority-medium: hsl(var(--priority-medium));
+  --color-priority-low: hsl(var(--priority-low));
+
+  /* Radius: 3px lozenges, 4px controls, 8px cards/panels, 12px dialogs */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --color-blanket: var(--blanket);
+
+  --shadow-raised: var(--elevation-raised);
+  --shadow-overlay: var(--elevation-overlay);
+
+  --ease-out: cubic-bezier(0.15, 1, 0.3, 1);
+
   --font-sans: var(--font-sans, 'IBM Plex Sans', system-ui, -apple-system, sans-serif);
   --font-mono: var(--font-mono, 'IBM Plex Mono', 'Menlo', monospace);
   --font-display: var(--font-display, 'Fraunces', Georgia, serif);
 }
 
 /* ============================================================================
-   SEARCH: BASE_STYLES
-   Base element styles
+   Base
    ============================================================================ */
 
-*, *::before, *::after {
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: var(--font-sans, 'Inter', system-ui, -apple-system, sans-serif);
-  line-height: 1.5;
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* ============================================================================
-   SEARCH: ANIMATIONS
-   Custom animations for UI feedback
-   ============================================================================ */
-
-/* SLA Critical Pulse Animation */
-@keyframes sla-pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
+/* In a layer so component utilities (outline-none, focus-visible:ring-*) can override these. */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
   }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.02);
+
+  body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: hsl(var(--selected));
   }
 }
 
-.animate-sla-pulse {
-  animation: sla-pulse 1.5s ease-in-out infinite;
-}
-
-/* Subtle glow animation for critical items */
-@keyframes critical-glow {
-  0%, 100% {
-    box-shadow: 0 0 5px hsl(var(--urgent) / 0.3),
-                0 0 10px hsl(var(--urgent) / 0.2),
-                0 0 15px hsl(var(--urgent) / 0.1);
-  }
-  50% {
-    box-shadow: 0 0 10px hsl(var(--urgent) / 0.5),
-                0 0 20px hsl(var(--urgent) / 0.3),
-                0 0 30px hsl(var(--urgent) / 0.2);
-  }
-}
-
-.animate-critical-glow {
-  animation: critical-glow 2s ease-in-out infinite;
-}
-
-/* Fade in animation */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out forwards;
-}
-
-/* Slide in from right */
-@keyframes slide-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.animate-slide-in-right {
-  animation: slide-in-right 0.3s ease-out forwards;
-}
-
-/* Skeleton loading animation */
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    hsl(var(--muted)) 25%,
-    hsl(var(--muted-foreground) / 0.1) 50%,
-    hsl(var(--muted)) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-}
-
-/* ============================================================================
-   SEARCH: SCROLLBAR_STYLES
-   Custom scrollbar styling
-   ============================================================================ */
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: hsl(var(--background));
-}
-
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--border-hover));
-}
-
-/* ============================================================================
-   SEARCH: UTILITY_CLASSES
-   Custom utility classes
-   ============================================================================ */
-
-/* Glassmorphism effect */
-.glass {
-  background: hsl(var(--card) / 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid hsl(var(--border) / 0.5);
-}
-
-/* Card with subtle gradient border */
-.card-gradient-border {
-  position: relative;
-  background: hsl(var(--card));
-  border-radius: 12px;
-}
-
-.card-gradient-border::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  padding: 1px;
-  background: linear-gradient(
-    135deg,
-    hsl(var(--primary) / 0.3),
-    hsl(var(--accent) / 0.3)
-  );
-  -webkit-mask: 
-    linear-gradient(#fff 0 0) content-box, 
-    linear-gradient(#fff 0 0);
-  mask: 
-    linear-gradient(#fff 0 0) content-box, 
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Text gradient */
-.text-gradient {
-  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Priority indicator dot */
-.priority-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.priority-dot-p1 { background: hsl(var(--urgent)); }
-.priority-dot-p2 { background: hsl(var(--high)); }
-.priority-dot-p3 { background: hsl(var(--medium)); }
-.priority-dot-p4 { background: hsl(var(--low)); }
-
-/* ============================================================================
-   Glassmorphism & Neon Design System
-   Premium dark-mode aesthetics with glassy backdrops and neon accents
-   ============================================================================ */
-
-/* Glass Card - Primary glassmorphism container (retained, used in .glass utility) */
-.glass-card {
-  background: hsla(var(--glass-bg));
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid hsla(var(--glass-border));
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-/* ============================================================================
-   SEARCH: CARD_ACCENT_BAR
-   Rev. 2 — priority-aware card hover states.
-   A 2px top border in the card's semantic color, transparent at rest,
-   colored on hover — plus a shadow lift. No diffuse glows.
-   ============================================================================ */
-
-/* Base: transparent top accent, applies a smooth shadow lift on hover */
-.card-accent {
-  border-top: 2px solid transparent;
-  transition:
-    border-color 150ms ease-out,
-    box-shadow 150ms ease-out;
-}
-
-.card-accent:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-}
-
-/* Priority-specific accent colors */
-.card-accent-urgent:hover  { border-top-color: hsl(var(--urgent)); }
-.card-accent-high:hover    { border-top-color: hsl(var(--high)); }
-.card-accent-medium:hover  { border-top-color: hsl(var(--medium)); }
-.card-accent-low:hover     { border-top-color: hsl(var(--low)); }
-.card-accent-brass:hover   { border-top-color: hsl(var(--primary)); }
-.card-accent-ink:hover     { border-top-color: hsl(var(--accent)); }
-
-/* ============================================================================
-   SEARCH: FONT_DISPLAY_UTILITY
-   Apply the display / wordmark face inline when needed.
-   Usage: className="font-display italic"
-   ============================================================================ */
 .font-display {
   font-family: var(--font-display);
 }
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   Motion — 100–150ms ease-out, driven by Radix data-state attributes.
+   ============================================================================ */
+
+@keyframes id-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes id-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes id-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes id-pop-out { from { opacity: 1; } to { opacity: 0; transform: scale(0.98); } }
+@keyframes id-dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes id-sheet-in-right { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes id-sheet-out-right { from { transform: none; } to { transform: translateX(100%); } }
+@keyframes id-sheet-in-left { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes id-sheet-out-left { from { transform: none; } to { transform: translateX(-100%); } }
+@keyframes id-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes id-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.anim-overlay[data-state="open"] { animation: id-fade-in 150ms var(--ease-out); }
+.anim-overlay[data-state="closed"] { animation: id-fade-out 100ms ease-in; }
+.anim-pop[data-state="open"], .anim-pop[data-state="delayed-open"] { animation: id-pop-in 150ms var(--ease-out); }
+.anim-pop[data-state="closed"] { animation: id-pop-out 100ms ease-in; }
+.anim-dialog[data-state="open"] { animation: id-dialog-in 150ms var(--ease-out); }
+.anim-dialog[data-state="closed"] { animation: id-fade-out 100ms ease-in; }
+.anim-sheet-right[data-state="open"] { animation: id-sheet-in-right 250ms var(--ease-out); }
+.anim-sheet-right[data-state="closed"] { animation: id-sheet-out-right 150ms ease-in; }
+.anim-sheet-left[data-state="open"] { animation: id-sheet-in-left 250ms var(--ease-out); }
+.anim-sheet-left[data-state="closed"] { animation: id-sheet-out-left 150ms ease-in; }
+.anim-toast { animation: id-toast-in 150ms var(--ease-out); }
+
+.skeleton {
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, hsl(var(--fill)) 25%, hsl(var(--fill-hover)) 50%, hsl(var(--fill)) 75%);
+  background-size: 200% 100%;
+  animation: id-shimmer 1.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   Scrollbars
+   ============================================================================ */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--fill-hover));
+  border-radius: 8px;
+  border: 2px solid hsl(var(--background));
+}
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--border-bold)); }

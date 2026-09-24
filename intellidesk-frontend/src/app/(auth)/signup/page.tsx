@@ -1,30 +1,42 @@
-// ============================================================================
-// SEARCH: SIGNUP_PAGE
-// IntelliDesk AI - Sign Up Page
-// Premium glassmorphism registration form — creates new org + admin user
-// ============================================================================
-
 "use client";
+// Signup page: creates organization and user, then signs in.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input, Label, FieldMessage } from "@/components/ui/field";
+import { SectionMessage } from "@/components/ui/section-message";
 
 export default function SignupPage() {
   const router = useRouter();
+  const errorMessageRef = useRef<HTMLDivElement>(null);
 
+  const [organizationName, setOrganizationName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [organizationName, setOrganizationName] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [touched, setTouched] = useState({
+    organizationName: false,
+    name: false,
+    email: false,
+    password: false,
+  });
+
+  const orgInvalid = Boolean(touched.organizationName && !organizationName);
+  const nameInvalid = Boolean(touched.name && !name);
+  const emailInvalid = Boolean(touched.email && !email);
+  const emailFormatInvalid = Boolean(touched.email && email && !email.includes("@"));
+  const passwordInvalid = Boolean(touched.password && !password);
+  const passwordShortInvalid = Boolean(touched.password && password && password.length < 8);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
+    setSubmitting(true);
 
     try {
       const res = await fetch("/api/auth/signup", {
@@ -37,11 +49,13 @@ export default function SignupPage() {
 
       if (!res.ok) {
         setError(data.error || "Signup failed. Please try again.");
-        setLoading(false);
+        requestAnimationFrame(() => {
+          errorMessageRef.current?.focus();
+        });
+        setSubmitting(false);
         return;
       }
 
-      // Auto-login after successful signup
       const result = await signIn("credentials", {
         email,
         password,
@@ -57,274 +71,155 @@ export default function SignupPage() {
       }
     } catch {
       setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
+      requestAnimationFrame(() => {
+        errorMessageRef.current?.focus();
+      });
+      setSubmitting(false);
     }
   }
 
-  // Shared input style helpers
-  const inputStyle: React.CSSProperties = {
-    background: "rgba(15,23,42,0.8)",
-    border: "1px solid rgba(71, 85, 105, 0.5)",
-    color: "rgba(226,232,240,0.95)",
-    caretColor: "#818cf8",
-  };
-  const onFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.target.style.border = "1px solid rgba(99,102,241,0.6)";
-    e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)";
-  };
-  const onBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.target.style.border = "1px solid rgba(71, 85, 105, 0.5)";
-    e.target.style.boxShadow = "none";
-  };
-
   return (
-    <div
-      className="w-full rounded-2xl p-8"
-      style={{
-        background: "rgba(15, 23, 42, 0.7)",
-        border: "1px solid rgba(99, 102, 241, 0.2)",
-        boxShadow:
-          "0 0 40px rgba(99, 102, 241, 0.08), 0 20px 60px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
-        backdropFilter: "blur(20px)",
-      }}
-    >
-      {/* Header */}
+    <div className="rounded-lg border border-border bg-raised p-8 shadow-raised">
       <div className="mb-8">
-        <h1
-          className="text-2xl font-bold mb-1"
-          style={{ color: "rgba(226,232,240,0.95)" }}
-        >
-          Create your account
-        </h1>
-        <p className="text-sm" style={{ color: "rgba(148,163,184,0.8)" }}>
-          Set up IntelliDesk AI for your team
-        </p>
+        <h1 className="text-xl font-semibold text-foreground">Create your workspace</h1>
+        <p className="mt-1 text-sm text-subtle">You&apos;ll be the admin. You can invite your team later.</p>
       </div>
 
-      {/* Error message */}
       {error && (
         <div
-          className="flex items-center gap-2.5 rounded-xl px-4 py-3 mb-6 text-sm"
-          style={{
-            background: "rgba(239, 68, 68, 0.1)",
-            border: "1px solid rgba(239, 68, 68, 0.3)",
-            color: "rgba(252, 165, 165, 0.95)",
-          }}
+          ref={errorMessageRef}
+          tabIndex={-1}
+          className="mb-6"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="w-4 h-4 shrink-0"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          {error}
+          <SectionMessage appearance="error">
+            {error}
+          </SectionMessage>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Organization name */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="signup-org"
-            className="block text-sm font-medium"
-            style={{ color: "rgba(203,213,225,0.9)" }}
-          >
-            Organization name
-          </label>
-          <input
-            id="signup-org"
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <div>
+          <Label htmlFor="organization">Organization name</Label>
+          <Input
+            id="organization"
             type="text"
-            required
+            autoComplete="organization"
+            placeholder="Acme Inc."
             value={organizationName}
             onChange={(e) => setOrganizationName(e.target.value)}
-            placeholder="Acme Inc."
-            className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200"
-            style={inputStyle}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            suppressHydrationWarning
+            onBlur={() => setTouched((prev) => ({ ...prev, organizationName: true }))}
+            invalid={orgInvalid}
+            aria-describedby={orgInvalid ? "org-error" : undefined}
+            required
           />
+          {orgInvalid && (
+            <FieldMessage id="org-error" tone="error">
+              Organization name is required
+            </FieldMessage>
+          )}
         </div>
 
-        {/* Full name */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="signup-name"
-            className="block text-sm font-medium"
-            style={{ color: "rgba(203,213,225,0.9)" }}
-          >
-            Your name
-          </label>
-          <input
-            id="signup-name"
+        <div>
+          <Label htmlFor="name">Your name</Label>
+          <Input
+            id="name"
             type="text"
-            required
+            autoComplete="name"
+            placeholder="Jane Smith"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Jane Smith"
-            className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200"
-            style={inputStyle}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            suppressHydrationWarning
+            onBlur={() => setTouched((prev) => ({ ...prev, name: true }))}
+            invalid={nameInvalid}
+            aria-describedby={nameInvalid ? "name-error" : undefined}
+            required
           />
+          {nameInvalid && (
+            <FieldMessage id="name-error" tone="error">
+              Name is required
+            </FieldMessage>
+          )}
         </div>
 
-        {/* Work email */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="signup-email"
-            className="block text-sm font-medium"
-            style={{ color: "rgba(203,213,225,0.9)" }}
-          >
-            Work email
-          </label>
-          <input
-            id="signup-email"
+        <div>
+          <Label htmlFor="email">Work email</Label>
+          <Input
+            id="email"
             type="email"
             autoComplete="email"
-            required
+            placeholder="jane@acme.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="jane@acme.com"
-            className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200"
-            style={inputStyle}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            suppressHydrationWarning
+            onBlur={() => setTouched((prev) => ({ ...prev, email: true }))}
+            invalid={emailInvalid || emailFormatInvalid}
+            aria-describedby={
+              emailInvalid
+                ? "email-error-empty"
+                : emailFormatInvalid
+                  ? "email-error-format"
+                  : undefined
+            }
+            required
           />
+          {emailInvalid && (
+            <FieldMessage id="email-error-empty" tone="error">
+              Email is required
+            </FieldMessage>
+          )}
+          {emailFormatInvalid && (
+            <FieldMessage id="email-error-format" tone="error">
+              Enter a valid email address
+            </FieldMessage>
+          )}
         </div>
 
-        {/* Password */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="signup-password"
-            className="block text-sm font-medium"
-            style={{ color: "rgba(203,213,225,0.9)" }}
-          >
-            Password
-          </label>
-          <input
-            id="signup-password"
+        <div>
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
             type="password"
             autoComplete="new-password"
-            required
-            minLength={8}
+            placeholder="Min. 8 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Min. 8 characters"
-            className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200"
-            style={inputStyle}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            suppressHydrationWarning
+            onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
+            invalid={passwordInvalid || passwordShortInvalid}
+            aria-describedby={
+              passwordInvalid
+                ? "password-error-empty"
+                : passwordShortInvalid
+                  ? "password-error-short"
+                  : undefined
+            }
+            required
           />
+          {passwordInvalid && (
+            <FieldMessage id="password-error-empty" tone="error">
+              Password is required
+            </FieldMessage>
+          )}
+          {passwordShortInvalid && (
+            <FieldMessage id="password-error-short" tone="error">
+              Password must be at least 8 characters
+            </FieldMessage>
+          )}
         </div>
 
-        {/* Submit button */}
-        <button
-          id="signup-submit-btn"
+        <Button
           type="submit"
-          disabled={loading}
-          className="w-full py-3 px-4 rounded-xl text-sm font-semibold transition-all duration-200 mt-2"
-          style={{
-            background: loading
-              ? "rgba(99,102,241,0.5)"
-              : "linear-gradient(135deg, #6366f1, #4f46e5)",
-            color: "#fff",
-            boxShadow: loading
-              ? "none"
-              : "0 0 20px rgba(99,102,241,0.35), 0 4px 15px rgba(0,0,0,0.3)",
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-          onMouseEnter={(e) => {
-            if (!loading) {
-              (e.target as HTMLButtonElement).style.boxShadow =
-                "0 0 30px rgba(99,102,241,0.5), 0 6px 20px rgba(0,0,0,0.3)";
-              (e.target as HTMLButtonElement).style.transform = "translateY(-1px)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!loading) {
-              (e.target as HTMLButtonElement).style.boxShadow =
-                "0 0 20px rgba(99,102,241,0.35), 0 4px 15px rgba(0,0,0,0.3)";
-              (e.target as HTMLButtonElement).style.transform = "translateY(0)";
-            }
-          }}
-          suppressHydrationWarning
+          variant="primary"
+          className="w-full"
+          loading={submitting}
         >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg
-                className="animate-spin w-4 h-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-              Creating account...
-            </span>
-          ) : (
-            "Create account"
-          )}
-        </button>
-
-        {/* Terms note */}
-        <p className="text-xs text-center pt-1" style={{ color: "rgba(100,116,139,0.8)" }}>
-          By creating an account you agree to our terms of service.
-        </p>
+          Create account
+        </Button>
       </form>
 
-      {/* Divider */}
-      <div className="flex items-center gap-4 my-6">
-        <div className="flex-1 h-px" style={{ background: "rgba(51,65,85,0.6)" }} />
-        <span className="text-xs" style={{ color: "rgba(100,116,139,0.8)" }}>
-          Already have an account?
-        </span>
-        <div className="flex-1 h-px" style={{ background: "rgba(51,65,85,0.6)" }} />
+      <div className="mt-6 text-center text-sm text-subtle">
+        Already have an account?{" "}
+        <Link href="/login" className="font-medium text-primary hover:underline">
+          Log in
+        </Link>
       </div>
-
-      {/* Sign in link */}
-      <Link
-        href="/login"
-        id="signup-login-link"
-        className="flex items-center justify-center w-full py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200"
-        style={{
-          background: "rgba(99,102,241,0.08)",
-          border: "1px solid rgba(99,102,241,0.2)",
-          color: "rgba(165,180,252,0.9)",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLAnchorElement).style.background = "rgba(99,102,241,0.14)";
-          (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(99,102,241,0.4)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLAnchorElement).style.background = "rgba(99,102,241,0.08)";
-          (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(99,102,241,0.2)";
-        }}
-      >
-        Sign in instead
-      </Link>
     </div>
   );
 }

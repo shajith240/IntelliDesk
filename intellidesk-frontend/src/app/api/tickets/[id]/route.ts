@@ -1,8 +1,7 @@
+// Ticket detail endpoint: fetches a single ticket with relations (contacts, emails, responses, SLA status) and allows field updates.
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getTicketSLAStatus } from "@/lib/pipeline/sla-tracker";
-import { findSimilarTickets } from "@/lib/pipeline/deduplicator";
-import { queryVectors } from "@/lib/pinecone/client";
 import { requireAuth } from "@/lib/auth/helpers";
 import { getOrgId } from "@/lib/auth/org-context";
 
@@ -46,23 +45,6 @@ export async function GET(
 		const slaStatus = await getTicketSLAStatus(id);
 
 		// AI classification is stored directly on the ticket as JSONB
-
-		// Get similar tickets
-		let similarTickets: Array<{
-			ticket_id: string;
-			score: number;
-			ticket_number?: string;
-			subject?: string;
-		}> = [];
-		// Only search for similar tickets if we have the embedding
-		try {
-			const vecResult = await queryVectors("tickets", [], 1);
-			if (vecResult.length > 0) {
-				// We'll get similar tickets from the API instead
-			}
-		} catch {
-			// Silently skip similar tickets if vector search fails
-		}
 
 		// Get similar tickets from the database using category match
 		const { data: relatedTickets } = await supabaseAdmin
@@ -126,8 +108,62 @@ export async function PATCH(
 			);
 		}
 
+		// Validate status
+		if (updates.status !== undefined) {
+			const validStatuses = ["New", "In Progress", "Resolved", "Closed"];
+			if (!validStatuses.includes(updates.status as string)) {
+				return NextResponse.json(
+					{ error: "Invalid status" },
+					{ status: 400 },
+				);
+			}
+		}
+
+		// Validate severity
+		if (updates.severity !== undefined) {
+			const validSeverities = ["P1", "P2", "P3", "P4"];
+			if (!validSeverities.includes(updates.severity as string)) {
+				return NextResponse.json(
+					{ error: "Invalid priority" },
+					{ status: 400 },
+				);
+			}
+		}
+
+		// Validate assigned_agent if provided
+		if (updates.assigned_agent !== undefined && updates.assigned_agent !== null) {
+			const assignedValue = updates.assigned_agent;
+			if (typeof assignedValue !== "string") {
+				return NextResponse.json(
+					{ error: "Invalid assignee value" },
+					{ status: 400 },
+				);
+			}
+
+			const { data: assignee } = await supabaseAdmin
+				.from("users")
+				.select("id")
+				.eq("id", assignedValue)
+				.eq("organization_id", orgId)
+				.eq("is_active", true)
+				.maybeSingle();
+
+			if (!assignee) {
+				return NextResponse.json(
+					{
+						error:
+							"Assignee must be an active member of your organization",
+					},
+					{ status: 400 },
+				);
+			}
+		}
+
 		// Auto-set resolved_at when status changes to resolved/closed
-		if (updates.status === "Resolved" || updates.status === "Closed") {
+		if (
+			updates.status === "Resolved" ||
+			updates.status === "Closed"
+		) {
 			updates.sla_resolved_at = new Date().toISOString();
 		}
 
@@ -147,7 +183,7 @@ export async function PATCH(
 			entity_type: "ticket",
 			entity_id: id,
 			action: "ticket_updated",
-			details: { updates, updated_by: "agent" },
+			details: { updates, updated_by: session.user.id },
 		});
 
 		return NextResponse.json({ ticket: data });

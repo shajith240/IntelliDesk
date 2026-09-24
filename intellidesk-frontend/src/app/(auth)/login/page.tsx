@@ -1,33 +1,53 @@
-// ============================================================================
-// SEARCH: LOGIN_PAGE
-// IntelliDesk AI - Login Page
-// Premium glassmorphism login form with NextAuth credentials provider
-// ============================================================================
-
 "use client";
+// Login page with email/password form; validates callbackUrl to prevent open redirects.
 
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input, Label, FieldMessage } from "@/components/ui/field";
+import { SectionMessage } from "@/components/ui/section-message";
+import { Skeleton } from "@/components/ui/skeleton";
 
-// ============================================================================
-// SEARCH: LOGIN_FORM
-// ============================================================================
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const errorMessageRef = useRef<HTMLDivElement>(null);
+
+  const callbackUrlParam = searchParams.get("callbackUrl");
+  const callbackUrl =
+    callbackUrlParam && /^\/[^/\\]/.test(callbackUrlParam)
+      ? callbackUrlParam
+      : "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [touched, setTouched] = useState({ email: false, password: false });
 
-  async function handleSubmit(e: React.FormEvent) {
+  const emailInvalid = Boolean(touched.email && !email);
+  const emailFormatInvalid = Boolean(touched.email && email && !email.includes("@"));
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submitting) return;
     setError("");
-    setLoading(true);
+
+    const emailMissingOrBad = !email || !email.includes("@");
+    if (emailMissingOrBad || !password) {
+      setTouched({ email: true, password: true });
+      const form = e.currentTarget;
+      requestAnimationFrame(() => {
+        form.querySelector<HTMLInputElement>(emailMissingOrBad ? "#email" : "#password")?.focus();
+      });
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
       const result = await signIn("credentials", {
@@ -36,256 +56,146 @@ function LoginForm() {
         redirect: false,
       });
 
-      if (result?.error) {
-        setError("Invalid email or password. Please try again.");
+      if (!result || result.error || result.ok === false) {
+        setError("Incorrect email or password.");
+        requestAnimationFrame(() => {
+          errorMessageRef.current?.focus();
+        });
       } else {
         router.push(callbackUrl);
         router.refresh();
       }
     } catch {
       setError("Something went wrong. Please try again.");
+      requestAnimationFrame(() => {
+        errorMessageRef.current?.focus();
+      });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <div
-      className="w-full rounded-2xl p-8"
-      style={{
-        background: "hsla(28,8%,11%,0.85)",
-        border: "1px solid hsla(174,54%,56%,0.18)",
-        boxShadow:
-          "0 0 40px hsla(174,54%,56%,0.06), 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
-        backdropFilter: "blur(20px)",
-      }}
-    >
-      {/* Header */}
+    <div className="rounded-lg border border-border bg-raised p-8 shadow-raised">
       <div className="mb-8">
-        <h1
-          className="text-2xl font-bold mb-1"
-          style={{ color: "rgba(226,232,240,0.95)" }}
-        >
-          Welcome back
-        </h1>
-        <p className="text-sm" style={{ color: "rgba(148,163,184,0.8)" }}>
-          Sign in to your IntelliDesk account
-        </p>
+        <h1 className="text-xl font-semibold text-foreground">Log in to IntelliDesk</h1>
+        <p className="mt-1 text-sm text-subtle">Use your workspace account.</p>
       </div>
 
-      {/* Error message */}
       {error && (
         <div
-          className="flex items-center gap-2.5 rounded-xl px-4 py-3 mb-6 text-sm"
-          style={{
-            background: "rgba(239, 68, 68, 0.1)",
-            border: "1px solid rgba(239, 68, 68, 0.3)",
-            color: "rgba(252, 165, 165, 0.95)",
-          }}
+          ref={errorMessageRef}
+          tabIndex={-1}
+          className="mb-6"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="w-4 h-4 shrink-0"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          {error}
+          <SectionMessage appearance="error">
+            {error}
+          </SectionMessage>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Email field */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="login-email"
-            className="block text-sm font-medium"
-            style={{ color: "rgba(203,213,225,0.9)" }}
-          >
-            Email address
-          </label>
-          <input
-            id="login-email"
+      <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
+        <div>
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
             type="email"
             autoComplete="email"
-            required
+            placeholder="you@company.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com"
-            className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200"
-            style={{
-              background: "rgba(15,23,42,0.8)",
-              border: "1px solid rgba(71, 85, 105, 0.5)",
-              color: "rgba(226,232,240,0.95)",
-              caretColor: "#818cf8",
-            }}
-            onFocus={(e) => {
-              e.target.style.border = "1px solid hsla(174,54%,56%,0.55)";
-              e.target.style.boxShadow = "0 0 0 3px hsla(174,54%,56%,0.12)";
-            }}
-            onBlur={(e) => {
-              e.target.style.border = "1px solid rgba(71, 85, 105, 0.5)";
-              e.target.style.boxShadow = "none";
-            }}
-            suppressHydrationWarning
-          />
-        </div>
-
-        {/* Password field */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label
-              htmlFor="login-password"
-              className="block text-sm font-medium"
-              style={{ color: "rgba(203,213,225,0.9)" }}
-            >
-              Password
-            </label>
-          </div>
-          <input
-            id="login-password"
-            type="password"
-            autoComplete="current-password"
+            onBlur={() => setTouched((prev) => ({ ...prev, email: true }))}
+            invalid={emailInvalid || emailFormatInvalid}
+            aria-describedby={
+              emailInvalid
+                ? "email-error-empty"
+                : emailFormatInvalid
+                  ? "email-error-format"
+                  : undefined
+            }
             required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200"
-            style={{
-              background: "rgba(15,23,42,0.8)",
-              border: "1px solid rgba(71, 85, 105, 0.5)",
-              color: "rgba(226,232,240,0.95)",
-              caretColor: "#818cf8",
-            }}
-            onFocus={(e) => {
-              e.target.style.border = "1px solid rgba(99,102,241,0.6)";
-              e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)";
-            }}
-            onBlur={(e) => {
-              e.target.style.border = "1px solid rgba(71, 85, 105, 0.5)";
-              e.target.style.boxShadow = "none";
-            }}
-            suppressHydrationWarning
           />
+          {emailInvalid && (
+            <FieldMessage id="email-error-empty" tone="error">
+              Email is required
+            </FieldMessage>
+          )}
+          {emailFormatInvalid && (
+            <FieldMessage id="email-error-format" tone="error">
+              Enter a valid email address
+            </FieldMessage>
+          )}
         </div>
 
-        {/* Submit button */}
-        <button
-          id="login-submit-btn"
-          type="submit"
-          disabled={loading}
-          className="w-full py-3 px-4 rounded-xl text-sm font-semibold transition-all duration-200 relative overflow-hidden"
-          style={{
-            background: loading
-              ? "hsla(174,54%,56%,0.45)"
-              : "linear-gradient(135deg, hsl(174,54%,52%), hsl(174,60%,40%))",
-            color: "#fff",
-            boxShadow: loading
-              ? "none"
-              : "0 0 20px hsla(174,54%,56%,0.30), 0 4px 15px rgba(0,0,0,0.3)",
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-          onMouseEnter={(e) => {
-            if (!loading) {
-              (e.target as HTMLButtonElement).style.boxShadow =
-                "0 0 30px hsla(174,54%,56%,0.45), 0 6px 20px rgba(0,0,0,0.3)";
-              (e.target as HTMLButtonElement).style.transform = "translateY(-1px)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!loading) {
-              (e.target as HTMLButtonElement).style.boxShadow =
-                "0 0 20px hsla(174,54%,56%,0.30), 0 4px 15px rgba(0,0,0,0.3)";
-              (e.target as HTMLButtonElement).style.transform = "translateY(0)";
-            }
-          }}
-          suppressHydrationWarning
-        >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg
-                className="animate-spin w-4 h-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-              Signing in...
-            </span>
-          ) : (
-            "Sign in"
+        <div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+          </div>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
+              invalid={touched.password && !password}
+              aria-describedby={touched.password && !password ? "password-error" : undefined}
+              className="pr-10"
+              required
+            />
+            <Button
+              type="button"
+              variant="subtle"
+              size="icon-sm"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-subtle hover:text-foreground"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            </Button>
+          </div>
+          {touched.password && !password && (
+            <FieldMessage id="password-error" tone="error">
+              Password is required
+            </FieldMessage>
           )}
-        </button>
+        </div>
+
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full"
+          loading={submitting}
+        >
+          Log in
+        </Button>
       </form>
 
-      {/* Divider */}
-      <div className="flex items-center gap-4 my-6">
-        <div className="flex-1 h-px" style={{ background: "rgba(51,65,85,0.6)" }} />
-        <span className="text-xs" style={{ color: "rgba(100,116,139,0.8)" }}>
-          New to IntelliDesk?
-        </span>
-        <div className="flex-1 h-px" style={{ background: "rgba(51,65,85,0.6)" }} />
+      <div className="mt-6 text-center text-sm text-subtle">
+        New to IntelliDesk?{" "}
+        <Link href="/signup" className="font-medium text-primary hover:underline">
+          Create a workspace
+        </Link>
       </div>
-
-      {/* Sign up link */}
-      <Link
-        href="/signup"
-        id="login-signup-link"
-        className="flex items-center justify-center w-full py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200"
-        style={{
-          background: "hsla(174,54%,56%,0.07)",
-          border: "1px solid hsla(174,54%,56%,0.18)",
-          color: "hsl(174,54%,72%)",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLAnchorElement).style.background = "hsla(174,54%,56%,0.13)";
-          (e.currentTarget as HTMLAnchorElement).style.borderColor = "hsla(174,54%,56%,0.35)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLAnchorElement).style.background = "hsla(174,54%,56%,0.07)";
-          (e.currentTarget as HTMLAnchorElement).style.borderColor = "hsla(174,54%,56%,0.18)";
-        }}
-      >
-        Create an account
-      </Link>
     </div>
   );
 }
 
-// ============================================================================
-// SEARCH: LOGIN_PAGE_EXPORT
-// ============================================================================
 export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="w-full rounded-2xl p-8 animate-pulse"
-          style={{
-            background: "rgba(15, 23, 42, 0.7)",
-            border: "1px solid rgba(99, 102, 241, 0.2)",
-          }}
-        >
-          <div className="h-7 w-32 rounded-lg mb-2" style={{ background: "rgba(51,65,85,0.5)" }} />
-          <div className="h-4 w-48 rounded-lg" style={{ background: "rgba(51,65,85,0.3)" }} />
+        <div className="rounded-lg border border-border bg-raised p-8 shadow-raised">
+          <Skeleton className="mb-6 h-6 w-40" />
+          <Skeleton className="mb-8 h-4 w-56" />
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
         </div>
       }
     >

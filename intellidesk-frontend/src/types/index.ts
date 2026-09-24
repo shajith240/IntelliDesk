@@ -391,5 +391,3 @@ export interface AIAnalysis {
 	sentiment: string;
 }
 
-// Re-export frontend ticket types for backward compatibility
-export * from './ticket';

@@ -24,7 +24,10 @@ export function getPinecone(): Pinecone {
 
 export function getIndex() {
 	const pc = getPinecone();
-	return pc.index(process.env.PINECONE_INDEX || "intellidesk");
+	const host = process.env.PINECONE_HOST?.trim();
+	return host
+		? pc.index({ host })
+		: pc.index(process.env.PINECONE_INDEX || "intellidesk");
 }
 
 export async function upsertVectors(

@@ -1,13 +1,17 @@
-import { NextResponse } from "next/server";
+// Email queue processor: Vercel cron job that reprocesses unprocessed emails from the queue (used for retries and seed data).
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { processEmail } from "@/lib/pipeline/processor";
+import { verifyCronRequest } from "@/lib/auth/cron";
 import type { RawEmail } from "@/types";
 
-/**
- * POST /api/emails/process-queue
- * Process all unprocessed emails sitting in the emails table (e.g. from seed).
- */
-export async function POST() {
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
+async function handle(req: NextRequest) {
+	const denied = verifyCronRequest(req);
+	if (denied) return denied;
+
 	try {
 		const { data: unprocessed, error } = await supabaseAdmin
 			.from("emails")
@@ -81,4 +85,12 @@ export async function POST() {
 			{ status: 500 },
 		);
 	}
+}
+
+export async function GET(req: NextRequest) {
+	return handle(req);
+}
+
+export async function POST(req: NextRequest) {
+	return handle(req);
 }

@@ -1,13 +1,17 @@
+// Email polling endpoint: Vercel cron job that pulls new messages from IMAP for each org with email configured.
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { pollNewEmails } from "@/lib/email/imap";
 import { processEmail } from "@/lib/pipeline/processor";
+import { verifyCronRequest } from "@/lib/auth/cron";
 
-/**
- * POST /api/emails/poll
- * Polls IMAP only for organizations that have connected their email via Settings.
- */
-export async function POST(req: NextRequest) {
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
+async function handle(req: NextRequest) {
+	const denied = verifyCronRequest(req);
+	if (denied) return denied;
+
 	try {
 		// Only poll orgs that have email_config set
 		const { data: orgs } = await supabaseAdmin
@@ -54,4 +58,12 @@ export async function POST(req: NextRequest) {
 			{ status: 500 },
 		);
 	}
+}
+
+export async function GET(req: NextRequest) {
+	return handle(req);
+}
+
+export async function POST(req: NextRequest) {
+	return handle(req);
 }

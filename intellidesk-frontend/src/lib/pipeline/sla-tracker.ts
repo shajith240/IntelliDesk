@@ -197,7 +197,7 @@ export async function getSLAAlerts(orgId?: string): Promise<SLAStatus[]> {
 /**
  * Get SLA metrics summary for dashboard
  */
-export async function getSLAMetrics(orgId?: string): Promise<{
+export async function getSLAMetrics(orgId?: string, precomputedAlerts?: SLAStatus[]): Promise<{
 	total_open: number;
 	breached: number;
 	at_risk: number;
@@ -205,7 +205,7 @@ export async function getSLAMetrics(orgId?: string): Promise<{
 	avg_first_response_minutes: number | null;
 	avg_resolution_minutes: number | null;
 }> {
-	const alerts = await getSLAAlerts(orgId);
+	const alerts = precomputedAlerts ?? (await getSLAAlerts(orgId));
 
 	let openQuery = supabaseAdmin
 		.from("tickets")
