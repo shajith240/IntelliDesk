@@ -1,0 +1,99 @@
+GROUND TRUTH (measured 2026-09-24, via shell commands against the actual repo — do not recompute, do not deviate)
+================================================================================
+API route files (src/app/api/**/route.ts):        20
+App Router pages (src/app/**/page.tsx):            9
+App Router layouts (src/app/**/layout.tsx):        3
+UI primitive files (src/components/ui):           23
+App-shell/layout components (src/components/layout): 12
+Feature domains (src/features/*):                  7  (analytics, auth, command-center,
+                                                        knowledge-base, queue, settings,
+                                                        ticket-workspace)
+Feature files total:                              31
+Server-only files (src/server/**/*.ts):           19
+Shared hooks (src/hooks):                          3
+Shared lib files (src/lib):                        4
+Type definition files (src/types):                 2
+DB migrations (supabase/migrations):               5
+Automated test files:                              0  (no test suite exists — document honestly)
+Total .ts/.tsx files under src/:                 129
+DB tables (from migrations):                      12  (organizations, users, accounts, contacts,
+                                                        teams, tickets, emails, ticket_emails,
+                                                        sla_policies, faqs, auto_responses, audit_logs)
+TODO/FIXME/DEPRECATED markers in src/:              0 (none found)
+
+Dependency versions (package.json, exact):
+  next 16.1.4 · react 19.2.3 · typescript ^5 · tailwindcss ^4
+  next-auth ^5.0.0-beta.30 · @supabase/supabase-js ^2.108.2
+  @google/generative-ai ^0.24.1 · @pinecone-database/pinecone ^7.1.0
+  swr ^2.5.1 · zod ^4.3.6
+
+API routes (method — path, relative to src/app/api/):
+  —        auth/[...nextauth]/route.ts        (NextAuth handler)
+  POST     auth/signup/route.ts
+  DELETE   cleanup/route.ts                    (dev-only, checks NODE_ENV)
+  GET      customers/route.ts
+  GET      dashboard/route.ts
+  POST     emails/bulk/route.ts
+  POST     emails/ingest/route.ts              (bearer-secret, no session)
+  GET/POST emails/poll/route.ts                (bearer-secret, cron)
+  GET/POST emails/process-queue/route.ts       (bearer-secret, cron)
+  PUT/DELETE faqs/[id]/route.ts
+  GET/POST faqs/route.ts
+  PATCH/POST migrate/route.ts                  (dev-only)
+  POST     respond/route.ts
+  GET      search/route.ts
+  POST/PATCH/PUT seed/route.ts                 (dev-only)
+  POST     seed/test-emails/route.ts           (dev-only)
+  GET/POST/DELETE settings/email-config/route.ts
+  GET      team/route.ts
+  GET/PATCH tickets/[id]/route.ts
+  GET      tickets/route.ts
+
+Pages (src/app/**/page.tsx):
+  (auth)/login, (auth)/signup, dashboard, dashboard/analytics, dashboard/knowledge-base,
+  dashboard/my-work, dashboard/queue, dashboard/settings, and src/app/page.tsx (redirects to /dashboard)
+
+Domains confirmed ABSENT (checked directly — do not invent pages for these):
+  No payments/Stripe. No websockets/realtime (SWR polling only, 30s interval).
+  No background job queue (cron endpoints are HTTP-triggered, not a queue).
+  No CLI. No mobile client. No search engine besides Pinecone.
+
+Auth model: NextAuth v5, credentials provider (email+bcrypt), JWT session (30-day maxAge).
+  Session shape: { id, email, name, role: "admin"|"agent"|"viewer", organization_id, image? }
+  Every ticket/org-scoped route calls requireAuth()+getOrgId() (or auth() directly) and filters by organization_id.
+  Cron/webhook routes (emails/poll, emails/process-queue, emails/ingest) use a bearer-secret
+  check instead of a session (src/server/auth/cron.ts), and fail closed (503) if the secret
+  env var is unset.
+
+Recent git history (top of log, oldest of these shown last):
+  08357c7 redesign ticket workspace, add animated auth hero, deepen dark theme
+  53b5072 refactor: reorganize project into src/features + src/server layering
+  dcb3fff redesign frontend as a Jira-style support operations workspace
+  b3e7b2b ui: switch primary to cyan-teal
+  66befee ui: pastel palette + slide-over drawer + new fonts + landing page glow-up
+  aa8ad2d fix(pipeline): repair embedding dims, wire SMTP auto-send, org-scope FAQ retrieval
+  247a751 fix: overhaul dashboard layout, fix global CSS reset, add user dropdown
+  (older commits are earlier scaffolding/prototyping, superseded by the above)
+
+PAGE LIST (14 files, all in all-about-project/, all copy template.html exactly)
+================================================================================
+1. index.html                          — Start here: what the project is, how to use this site, page index
+2. architecture.html                   — System Architecture Overview
+3. data-model.html                     — Data Model & Database Schema
+4. auth-security.html                  — Authentication & Security
+5. api-routes.html                     — API & Backend Routes
+6. frontend-architecture.html          — Frontend Architecture (features/, components/, hooks, state)
+7. design-system.html                  — Design System & Styling (tokens, dark theme, motion)
+8. feature-walkthrough-pipeline.html   — E2E walkthrough #1: email arrives -> ticket -> AI classification -> draft
+9. feature-walkthrough-agent.html      — E2E walkthrough #2: agent opens ticket -> reviews AI draft -> sends reply
+10. engineering-decisions.html         — Key engineering decisions & trade-offs (written by orchestrator directly)
+11. bugs-lessons.html                  — Bugs fixed & lessons learned this session (written by orchestrator directly)
+12. testing.html                       — Testing strategy (honest: no automated suite yet; what verification exists)
+13. deployment.html                    — Deployment & DevOps (Vercel, cron, env vars)
+14. integrations.html                  — External services (Supabase, Pinecone, Gemini, IMAP/SMTP)
+
+Pages 10 and 11 are written directly by the orchestrator (first-hand knowledge of the changes
+made this session, with exact reasoning) rather than delegated, to avoid a subagent having to
+reconstruct intent from diffs alone.
+
+Pages 2-9 and 12-14 are delegated to Haiku subagents in grounded pairs (see dispatch below).

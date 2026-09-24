@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frontend Architecture — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Frontend Architecture</h1>
+    <p class="page-intro">How the React/Next.js frontend is organized: data fetching patterns, state management, the app shell layout, and the feature folder structure. The frontend polls the API every 30 seconds rather than using realtime push.</p>
+
+    <h2>Data fetching &amp; state</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How is data fetched from the API? Are there realtime subscriptions?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The app uses SWR (stale-while-revalidate) for client-side data fetching with polling, not realtime push. Every API fetch is wrapped with a <code>refreshInterval: 30_000</code> option, and the app revalidates on focus and after mutations. There are no WebSockets, subscriptions, or Vercel KV realtime — just standard HTTP polling at a 30-second interval.</p>
+        <pre><code>const liveOptions = {
+  refreshInterval: REFRESH_INTERVAL_MS,
+  revalidateOnFocus: true,
+  keepPreviousData: true,
+} as const;</code></pre>
+        <span class="source-cite">src/hooks/use-api.ts:16-20; REFRESH_INTERVAL_MS = 30_000 from src/lib/sync-status.ts:6</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the SWR hook suite cover?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Five main hooks abstract the most common API calls: <code>useDashboard()</code> (stats and metrics), <code>useTickets(query)</code> (the queue list with filters/sort/page), <code>useTicket(id)</code> (a single ticket detail — accepts null to skip fetching), <code>useTeam()</code> (active team members), and <code>useRefreshAll()</code> (a function to revalidate every cached <code>/api/*</code> request after a mutation or when the user clicks Refresh).</p>
+        <pre><code>export function useTickets(query: TicketListQuery) {
+  return useSWR&lt;TicketListResponse&gt;(ticketsKey(query), apiGet, liveOptions);
+}
+
+export function useRefreshAll() {
+  const { mutate } = useSWRConfig();
+  return useCallback(
+    () => mutate((key) => typeof key === "string" && key.startsWith("/api/")),
+    [mutate],
+  );
+}</code></pre>
+        <span class="source-cite">src/hooks/use-api.ts:22-62</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does sync status get shown to the user, and what states are tracked?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Every API call (via <code>apiGet</code> and <code>apiSend</code>) records success or failure to an external store using <code>useSyncExternalStore</code>, not React state. The store tracks <code>lastSuccessAt</code>, <code>lastError</code>, <code>consecutiveFailures</code>, and <code>browserOnline</code>, and emits to listening components. A selector function <code>deriveSyncState(snapshot, now)</code> derives the user-facing label from the snapshot: "offline" if <code>browserOnline === false</code> or 3+ consecutive failures, "reconnecting" if 1–2 failures, "stale" if no sync in 75 seconds (2.5× the 30s interval), or "synced".</p>
+        <pre><code>export function deriveSyncState(s: SyncSnapshot, now: number): SyncState {
+  if (!s.browserOnline) return "offline";
+  if (s.consecutiveFailures >= 3) return "offline";
+  if (s.consecutiveFailures > 0) return "reconnecting";
+  if (s.lastSuccessAt === null) return "connecting";
+  if (now - s.lastSuccessAt > REFRESH_INTERVAL_MS * 2.5) return "stale";
+  return "synced";
+}</code></pre>
+        <span class="source-cite">src/lib/sync-status.ts (entire file); states defined at line 8</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the API client handle errors and record failures?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>apiGet()</code> wraps <code>fetch()</code> and catches network errors and non-2xx responses. When a fetch fails (network down or timeout), it throws <code>ApiRequestError("Network unavailable...", 0)</code> and calls <code>recordSyncFailure("Network unavailable")</code>. When the response is non-2xx, it reads the server's JSON <code>error</code> field (or falls back to <code>statusText</code>), constructs an <code>ApiRequestError</code> with the message and status code, and records the failure. On success, it calls <code>recordSyncSuccess()</code> to reset the consecutive-failures counter.</p>
+        <pre><code>if (!res.ok) {
+  const message = await readError(res);
+  recordSyncFailure(message);
+  throw new ApiRequestError(message, res.status);
+}
+const data = (await res.json()) as T;
+recordSyncSuccess();
+return data;</code></pre>
+        <span class="source-cite">src/lib/api-client.ts:27-44</span>
+      </div>
+    </div>
+
+    <h2>Layout &amp; shell</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the app shell structured?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The app shell wraps every page and consists of: a sticky <code>TopBar</code> (56px height, always visible), a collapsible sidebar (on desktop, toggleable to the left; on mobile, a drawer Sheet), and a main content area. The shell state (sidebar open/closed, mobile nav open/closed, command palette open/closed) is managed by <code>ShellProvider</code> and <code>useShell()</code>. The sidebar uses localStorage to persist the collapsed/expanded state across sessions. A skip-to-content link is always first in the tab order for keyboard navigation.</p>
+        <span class="source-cite">src/components/layout/app-shell.tsx; src/components/layout/shell-context.tsx (entire files)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the ticket workspace stay mounted instead of being a separate route?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The ticket details panel is not a route; it lives as a slide-over drawer on the same page as the queue list. The open ticket id is persisted in the <code>?ticket=&lt;id&gt;</code> URL search param via <code>useTicketParam()</code>, so opening a ticket updates the URL without navigating. Closing the param closes the drawer. This pattern lets the user browse the queue while keeping the same URL intact for back/forward and refresh, and avoids unmounting/remounting the queue list when opening a ticket.</p>
+        <pre><code>export function useTicketParam() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const ticketId = searchParams.get("ticket");
+
+  const setTicket = useCallback((id: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) params.set("ticket", id);
+    else params.delete("ticket");
+    const qs = params.toString();
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    if (id) router.push(href, { scroll: false });
+    else router.replace(href, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  return { ticketId, openTicket, closeTicket };
+}</code></pre>
+        <span class="source-cite">src/hooks/use-ticket-param.ts (entire file)</span>
+      </div>
+    </div>
+
+    <h2>Feature organization</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What is the folder structure inside a feature domain?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Each feature lives under <code>src/features/&lt;domain&gt;/</code> and is subdivided into: <code>components/</code> (React components used by this feature), <code>hooks/</code> (feature-specific hooks), and <code>lib/</code> (business logic, utilities, types). Shared UI primitives live in <code>src/components/ui/</code>, shared hooks in <code>src/hooks/</code>, and shared utilities in <code>src/lib/</code>. The import direction is enforced: <code>app → features → shared</code>. One documented exception: <code>command-center</code> imports <code>queue</code>'s <code>WorkQueue</code> component.</p>
+        <span class="source-cite">src/features/queue/ contains components/ (queue-list.tsx, queue-filters.tsx, work-queue.tsx, queue-skeleton.tsx), hooks/ (use-queue-state.ts), and lib/ (grid.ts) — demonstrating the pattern</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the queue filter state work with URL parameters?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p><code>useQueueState(scope, pageSize)</code> reads and writes all queue filter, sort, and page state to URL search params. Status, priority, category, search query, sort field, sort order, and page are all persisted in the URL, so filtering survives refresh and back/forward. The hook debounces search input by 300ms to avoid hammering the API while typing. Some scopes (e.g., "incoming") lock the status filter (always "New"), and changes reset the page number to 1.</p>
+        <pre><code>const debounceRef = useRef&lt;ReturnType&lt;typeof setTimeout&gt; | null&gt;(null);
+const setSearch = useCallback(
+  (value: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      writeParams({ q: value.trim() || null }, true);
+    }, 300);
+  },
+  [writeParams],
+);</code></pre>
+        <span class="source-cite">src/features/queue/hooks/use-queue-state.ts:124-133</span>
+      </div>
+    </div>
+
+    <h2>Performance &amp; constraints</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Does the app enable the React Compiler, and what does that mean for state updates?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Yes, the app enables <code>reactCompiler: true</code> in <code>next.config.ts</code>. The React Compiler (Forget) automatically memoizes component output and fine-grained dependencies, reducing unnecessary re-renders. This introduces one key constraint: useEffect with a sync setState (setting state directly in the effect body, not in a callback) violates the compiler's expectation that effects have no early returns or complex control flow tied to state. Effects must either be properly async or dispatch to a callback (useCallback); any sync setState in an effect body will likely cause a linting error.</p>
+        <pre><code>const nextConfig: NextConfig = {
+  reactCompiler: true,
+};</code></pre>
+        <span class="source-cite">next.config.ts:5</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the queue table adjust its column layout without breaking responsiveness?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The queue table uses CSS container queries (<code>@container</code> and <code>@min-[Xpx]:</code>) instead of viewport breakpoints (<code>md:</code>, <code>lg:</code>) to size columns against the table's own rendered width. The <code>ROW_GRID</code> template in <code>src/features/queue/lib/grid.ts</code> defines four breakpoints: 560px (ticket number + severity + title only), 860px (adds customer and AI confidence), 1100px (adds updated-at), and 1240px (adds category). Low-value columns drop in order as the container narrows, so the same component never produces horizontal scroll regardless of whether it's rendered full-width or nested next to a sidebar.</p>
+        <span class="source-cite">src/features/queue/lib/grid.ts:7-11</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How often does the SLA countdown update on the screen?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The current time is fetched with <code>useNow(intervalMs = 30_000)</code>, which re-renders every 30 seconds by default. This is paired with SLA due-date calculations and "x ago" relative timestamps. Calling <code>useNow()</code> with a smaller interval (e.g., <code>useNow(1000)</code> for countdown mode) is possible, but the default is 30 seconds to avoid excessive re-renders.</p>
+        <pre><code>export function useNow(intervalMs = 30_000): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}</code></pre>
+        <span class="source-cite">src/hooks/use-now.ts (entire file)</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

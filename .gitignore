@@ -53,3 +53,6 @@ supabase_schema.sql
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Supabase CLI local cache
+supabase/.temp/

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bugs &amp; Lessons Learned — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+    <h1>Bugs Fixed &amp; Lessons Learned</h1>
+    <p class="page-intro">Concrete bugs found and fixed during this project, with the root cause and the fix.
+      Framed as "what broke, why, how it was found, how it was fixed" — the shape interviewers usually want.</p>
+
+    <h2>CSS &amp; layout bugs</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">A global focus-ring style kept appearing where components explicitly said <code>outline-none</code> — what caused it?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p><strong>Symptom:</strong> the command palette's search input and the queue's search box showed a thick
+          blue focus outline even though their own classes included <code>outline-none</code> / a custom thin focus
+          ring. It happened inconsistently — some inputs were affected, some weren't.</p>
+        <p><strong>Root cause:</strong> the project's global <code>:focus-visible</code> rule (2px solid ring on
+          every focusable element) was written directly in <code>globals.css</code>, outside any Tailwind
+          <code>@layer</code>. In Tailwind v4's cascade, un-layered CSS has higher priority than utility classes
+          emitted inside Tailwind's own layers — so the global rule was beating component-level
+          <code>outline-none</code>/<code>focus-visible:ring-*</code> utilities regardless of source order, which is
+          why it looked "random."</p>
+        <p><strong>Fix:</strong> moved the base rules (box-sizing reset, body defaults, the focus-visible ring,
+          selection color) into an explicit <code>@layer base</code> block, so component utility classes — which
+          Tailwind emits into a later layer — can override it as intended.</p>
+        <pre><code>/* In a layer so component utilities (outline-none, focus-visible:ring-*) can override these. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}</code></pre>
+        <span class="source-cite">src/app/globals.css:202 — @layer base wrapping the reset/focus rules</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Why did the SLA risk panel and the queue table both develop horizontal scrolling / overlapping content at narrow widths, and how was it fixed?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><strong>Symptom:</strong> at 390px viewport width, the SLA risk panel's rail and the Command Center's grid
+          had visible horizontal page scroll; the panel's "Open" button and SLA badge could visually collide.</p>
+        <p><strong>Root cause:</strong> a CSS grid declared only a wide breakpoint's column template
+          (e.g. <code>xl:grid-cols-[minmax(0,1fr)_360px]</code>) with nothing for the base/mobile case. Without an
+          explicit base <code>grid-template-columns</code>, the grid falls back to an implicit, content-sized auto
+          column, which doesn't shrink below its content's natural width — producing overflow instead of wrapping.</p>
+        <p><strong>Fix:</strong> every such grid was given an explicit single-column base template
+          (<code>grid-cols-[minmax(0,1fr)]</code>) before the wider breakpoint kicks in, and the SLA panel's rows
+          were restructured with <code>min-w-0 truncate</code> on the text sibling of any fixed-width button so long
+          content truncates instead of pushing the button out of view.</p>
+        <pre><code>className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2"</code></pre>
+        <span class="source-cite">src/features/command-center/components/command-center.tsx:101; the same base-track fix was applied to src/components/command-center/CommandCenterFallback.tsx, src/features/analytics/components/analytics.tsx, and src/features/settings/components/mailbox-form.tsx</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">The ticket queue used to require horizontal scrolling on narrow screens. What was the actual fix, not just "make it responsive"?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The original queue was a fixed-width HTML <code>&lt;table&gt;</code> wrapped in <code>overflow-x-auto</code>,
+          which is the standard "just let it scroll" escape hatch — but the product requirement was that it must
+          never scroll horizontally, at any width, in any container. The fix replaced the table with a
+          <code>&lt;ul&gt;</code> of rows using CSS Grid with Tailwind v4 container queries
+          (<code>@container</code> on the wrapper; <code>@min-[560px]:grid-cols-[...]</code>,
+          <code>@min-[860px]:...</code>, <code>@min-[1100px]:...</code>, <code>@min-[1240px]:...</code> on the row
+          template), so columns are sized against the queue's own rendered width rather than the viewport. Below the
+          first tier it renders as a 2-line card instead of a row. The column template is defined once in a shared
+          module and imported by both the real rows and the loading skeleton, so they can't silently drift apart.</p>
+        <span class="source-cite">src/features/queue/lib/grid.ts — ROW_GRID / HIDE_860 / HIDE_1100 / HIDE_1240, imported by both queue-list.tsx and queue-skeleton.tsx</span>
+      </div>
+    </div>
+
+    <h2>React &amp; state bugs</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">A ticket's conversation heading had a broken accessible label and a broken test selector — what was wrong?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><strong>Symptom:</strong> a Playwright locator for the conversation heading resolved to 37 matching, mostly
+          hidden elements instead of one.</p>
+        <p><strong>Root cause:</strong> the ticket workspace renders up to three parallel responsive layouts (desktop
+          3-column, tablet, and a mobile tabbed layout) simultaneously in the DOM, toggling visibility with CSS rather
+          than unmounting the inactive ones. The conversation column's heading used a hardcoded string id
+          (<code>id="conversation-heading"</code>) for its <code>aria-labelledby</code> target — fine for one
+          instance, but every responsive layout variant rendered its own copy of the same component, producing
+          multiple elements with the same <code>id</code> in the document at once, which is invalid HTML and breaks
+          both the accessibility tree and any selector that assumes uniqueness.</p>
+        <p><strong>Fix:</strong> replaced the hardcoded string with React's <code>useId()</code>, which generates a
+          unique id per component instance.</p>
+        <pre><code>const headingId = useId();
+// ...
+&lt;section aria-labelledby={headingId}&gt;
+  &lt;h2 id={headingId}&gt;...</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/conversation-column.tsx:51 (useId), :77-78 (usage)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is double-submission prevented when an agent clicks "Send response" on a ticket reply, and why is a boolean return value from <code>send()</code> significant?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Sending a reply is a real, irreversible side effect — it emails a customer and marks the ticket resolved —
+          so the send path has two layers of protection: a <code>useRef</code> in-flight flag checked synchronously
+          at the top of <code>send()</code> (refs, unlike state, update immediately without waiting for a re-render,
+          which matters if the button is clicked twice within the same tick), and the button itself is disabled while
+          a request is outstanding.</p>
+        <p>The confirmation dialog originally closed unconditionally after calling <code>send()</code>; the fix made
+          <code>send()</code> return a <code>Promise&lt;boolean&gt;</code> — <code>true</code> only on a verified
+          successful response — so the dialog closes on success and stays open, showing the server's error message,
+          on failure. Closing on click regardless of outcome would have hidden a failed send from the agent while the
+          ticket silently remained unresolved.</p>
+        <pre><code>const sendingRef = useRef(false);
+const send = useCallback(async (): Promise&lt;boolean&gt; =&gt; {
+	if (!pending || sendingRef.current || status === "sending") return false;
+	...
+	sendingRef.current = true;
+	...
+} finally {
+	sendingRef.current = false;
+}</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:90 (sendingRef), :95-96 (Promise&lt;boolean&gt; signature and guard)</span>
+      </div>
+    </div>
+
+    <h2>Investigations that turned out not to be code bugs</h2>
+
+    <div class="qa-item">
+      <div class="qa-question"><code>/api/dashboard</code> was observed taking 33–75 seconds on one occasion. What was the actual cause, and how was it diagnosed?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Rather than assuming the route's own logic was the bottleneck, each of the dashboard's underlying Supabase
+          queries was timed individually and directly (bypassing the Next.js route) using the service-role client in
+          a standalone script. Every individual query — ticket counts, SLA policies, recent audit log rows — came
+          back in roughly 280–370ms, both during the slow observation and afterward. A raw fetch to the Supabase REST
+          root also returned in under 150ms. This ruled out the application code (a slow query, an N+1, a missing
+          index) and pointed to a transient network/infrastructure condition on Supabase's side; a repeat request
+          minutes later completed in about 2 seconds, the expected range for the route's combined queries.</p>
+        <p>Lesson: time the dependency directly before assuming the bug is in your own code, especially for a latency
+          spike that doesn't reproduce consistently.</p>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Why does running the production build locally with <code>npm start</code> require setting <code>AUTH_TRUST_HOST=true</code>, when neither Vercel nor <code>npm run dev</code> need it?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Auth.js (NextAuth v5) rejects requests whose <code>Host</code> header doesn't match a trusted value unless
+          it can determine the deployment is on a known-trusted platform. Vercel sets the trust automatically at the
+          platform level, and the Next.js dev server is exempted; a plain local production server (<code>next start</code>)
+          is neither, so it needs the escape hatch explicitly. This surfaced as login silently failing (redirecting
+          back to <code>/login</code> with no visible session) the first time the production build was run locally
+          for testing, traced by reading the server log, which had an explicit <code>UntrustedHost</code> error.</p>
+      </div>
+    </div>
+
+    <h2>Security fixes</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What was wrong with the original <code>/api/emails/poll</code> and <code>/api/emails/process-queue</code> endpoints, and how was it found?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Both endpoints — which trigger real IMAP polling and email processing — had no authentication check at
+          all and were reachable by anyone who knew the URL; <code>/api/emails/ingest</code> accepted an
+          <code>organization_id</code> directly from the unauthenticated request body, meaning a caller could write
+          data into any organization's ticket queue by simply naming its id. This was found by reading the route
+          handlers directly rather than assuming existing endpoints were already gated, alongside the sibling
+          question of what the outbound cron target should even be. The fix added a shared bearer-secret check
+          (see the Engineering Decisions page for <code>verifyBearerSecret</code>) in front of all three routes,
+          each keyed to its own secret so the polling/queue-processing secret and the inbound-ingest secret are
+          independently rotatable.</p>
+        <span class="source-cite">src/server/auth/cron.ts; guards added to src/app/api/emails/poll/route.ts, src/app/api/emails/process-queue/route.ts, src/app/api/emails/ingest/route.ts</span>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>General pattern across this list</strong>
+      Most of these bugs were found by directly measuring or directly reading — timing each query by hand instead of
+      guessing, reading the actual route handler instead of assuming it was already guarded, reading the CSS cascade
+      order instead of assuming "outline-none should just work." None were found by a test suite, because none
+      exists yet — see the Testing Strategy page for what that implies and what a first test suite for this project
+      should prioritize.
+    </div>
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

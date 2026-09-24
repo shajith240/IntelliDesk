@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design System &amp; Styling — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Design System &amp; Styling</h1>
+    <p class="page-intro">The token architecture, light/dark mode implementation, motion system, and how the UI component library uses class-variance-authority and token utilities to build composable, accessible components.</p>
+
+    <h2>Design tokens &amp; theming</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How are color tokens structured, and what format are they in?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Every color token is defined as an HSL triplet (hue, saturation, lightness) on the <code>:root</code> pseudo-class for light mode and <code>.dark</code> class for dark mode. This format allows composition with alpha without redefining colors: <code>hsl(var(--primary) / 0.5)</code> yields the primary color at 50% opacity. The tokens include surfaces (background, sunken, raised, overlay), text (foreground, subtle, subtlest, on-bold), borders, fills, brand colors, semantic colors (danger, warning, success, info, discovery, orange), and priority colors (highest through low).</p>
+        <pre><code>:root {
+  color-scheme: light;
+  --background: 0 0% 100%;
+  --foreground: 218 54% 19.6%;
+  --text-subtle: 218 24% 35.1%;
+  --primary: 215 90% 47.1%;
+  --danger: 4 64.1% 48%;
+  --success: 155 64.9% 38%;
+}</code></pre>
+        <span class="source-cite">src/app/globals.css:12-74 (light mode); :76-129 (dark mode)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How do tokens map to Tailwind utilities?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>@theme inline</code> block in globals.css maps every HSL token to a Tailwind color name prefixed with <code>--color-</code>. For example, <code>--color-primary: hsl(var(--primary));</code> makes <code>bg-primary</code>, <code>text-primary</code>, <code>border-primary</code>, etc. available as Tailwind utilities. This single mapping layer means design decisions live only in the token definitions; components never write raw hex or Tailwind palette colors. Non-color tokens (radius, shadows, easing, fonts) are also defined in <code>@theme inline</code>.</p>
+        <pre><code>@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --ease-out: cubic-bezier(0.15, 1, 0.3, 1);
+}</code></pre>
+        <span class="source-cite">src/app/globals.css:131-195</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is dark mode implemented?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Dark mode is class-based, not OS-preference-based. The <code>next-themes</code> library sets the <code>.dark</code> class on <code>&lt;html&gt;</code>, and globals.css defines a custom variant <code>@custom-variant dark (&:where(.dark, .dark *))</code> so the <code>dark:</code> prefix in Tailwind utilities follows the class, not <code>prefers-color-scheme: dark</code>. When <code>.dark</code> is present, all token values on the <code>.dark</code> pseudo-class override the <code>:root</code> definitions, re-computing the entire palette for the dark theme in one go.</p>
+        <span class="source-cite">src/app/globals.css:10 (custom variant); :76-129 (.dark token overrides)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What are the actual HSL values for the dark theme's primary color?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>In light mode, <code>--primary: 215 90% 47.1%</code> (a darker blue). In dark mode (inside <code>.dark</code>), <code>--primary: 218 100.0% 65.1%</code> (a much brighter, more saturated blue). The light-mode surfaces are white/off-white; dark-mode surfaces are very dark navy: <code>--background: 220 13.0% 4.5%</code> and <code>--surface-sunken: 210 14.3% 2.7%</code>. The dark theme uses navy-tinted elevation shadows (white borders at low opacity) rather than black shadows.</p>
+        <pre><code>:root {
+  --primary: 215 90% 47.1%;
+  --background: 0 0% 100%;
+}
+
+.dark {
+  --primary: 218 100.0% 65.1%;
+  --background: 220 13.0% 4.5%;
+  --elevation-raised: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.6);
+}</code></pre>
+        <span class="source-cite">src/app/globals.css (light mode at 12-74; dark mode at 76-129)</span>
+      </div>
+    </div>
+
+    <h2>Motion &amp; accessibility</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What is the motion system, and how does it handle reduced motion?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>All animations run for 100–150ms with the global easing function <code>var(--ease-out): cubic-bezier(0.15, 1, 0.3, 1)</code>, a snappy ease-out curve. The library includes named keyframes for common transitions: fade-in/out (opacity), pop-in/out (scale + translate), dialog-in (slide + scale), sheet-in/out-left/right (translate), and toast-in. These are applied via Radix UI component <code>data-state</code> attributes (e.g., <code>.anim-pop[data-state="open"]</code>). Under <code>prefers-reduced-motion: reduce</code>, every animation and transition duration is collapsed to 0.01ms, and iteration count is set to 1, effectively disabling motion entirely. Motion never carries semantic meaning on its own.</p>
+        <pre><code>@keyframes id-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+.anim-pop[data-state="open"], .anim-pop[data-state="delayed-open"] { animation: id-pop-in 150ms var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}</code></pre>
+        <span class="source-cite">src/app/globals.css:240-308</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the focus-visible outline look like?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Every focusable element gets a 2px solid outline in the ring color (<code>hsl(var(--ring))</code>, which is a blue in light mode <code>215 97.4% 55.1%</code> and bright blue in dark mode <code>218 100.0% 71.6%</code>), with a 2px offset. This is set globally in <code>@layer base</code> via <code>:focus-visible</code>, so all native and custom interactive elements inherit it without needing per-component focus styling.</p>
+        <pre><code>:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}</code></pre>
+        <span class="source-cite">src/app/globals.css:218-221</span>
+      </div>
+    </div>
+
+    <h2>Component patterns</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How do components use <code>cva</code> and <code>cn()</code> to build variants?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>cva</code> (class-variance-authority) defines a component's variant matrix (e.g., a Button with variant="primary" and size="lg"). Each variant option maps to a set of Tailwind utilities as a string, and cva merges them on the fly. The resulting class string is then passed to <code>cn()</code>, which uses <code>clsx</code> for conditional joining and <code>tailwind-merge</code> for conflict resolution (e.g., if a variant sets <code>bg-fill</code> and a caller passes <code>bg-primary</code>, the latter wins). This pattern keeps component styling declarative and isolated from markup.</p>
+        <pre><code>const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-1.5 ...",
+  {
+    variants: {
+      variant: {
+        primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
+        danger: "bg-danger text-on-bold hover:bg-danger/90",
+      },
+      size: {
+        sm: "h-7 px-2 text-[13px]",
+        lg: "h-10 px-4",
+      },
+    },
+  },
+);
+
+const Button = React.forwardRef(({ variant, size, className, ...props }, ref) => (
+  &lt;button className={cn(buttonVariants({ variant, size, className }))} {...props} /&gt;
+));</code></pre>
+        <span class="source-cite">src/components/ui/button.tsx (entire file)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the <code>cn()</code> utility do?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p><code>cn(...inputs)</code> is a small wrapper combining <code>clsx</code> (for conditional class joining) and <code>tailwind-merge</code> (for resolving Tailwind conflicts). It merges arrays, objects, and template strings while removing duplicates and resolving specificity conflicts, so passing <code>cn("bg-fill", "bg-primary")</code> yields <code>bg-primary</code>. Every component and utility function in the codebase uses <code>cn()</code> to build className props safely.</p>
+        <pre><code>export function cn(...inputs: ClassValue[]): string {
+  return twMerge(clsx(inputs));
+}</code></pre>
+        <span class="source-cite">src/lib/utils.ts (entire file)</span>
+      </div>
+    </div>
+
+    <h2>Specific components &amp; patterns</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the SLA badge display time remaining or breach state?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>SlaBadge</code> component accepts a due timestamp and an optional completion timestamp, and reads the SLA state (met, breached, warning, or no policy). If met, it shows a green checkmark and "Met". If breached (past due), it shows a red alert icon and the overdue duration in negative notation (e.g., <code>-3h</code>). If at risk, it shows a yellow clock and time remaining (e.g., <code>45m</code>). The badge is fixed-width (68px), never wraps, and uses a tabular font for alignment. The icon and text are paired; color is never used alone to convey state.</p>
+        <pre><code>export function SlaBadge({ due, completedAt, now, target, className }: SlaBadgeProps) {
+  const reading = readSla(due, completedAt, now);
+  const base = "inline-flex h-5 w-[68px] shrink-0 items-center gap-1 rounded-sm px-1.5 font-mono text-[11px] font-medium leading-none tabular whitespace-nowrap";
+
+  if (reading.tone === "met") {
+    return &lt;span className={cn(base, "text-success-text", className)} title={full}&gt;
+      &lt;Check className="h-3 w-3" /&gt;
+      &lt;span&gt;Met&lt;/span&gt;
+    &lt;/span&gt;;
+  }
+}</code></pre>
+        <span class="source-cite">src/components/ui/sla-badge.tsx (entire file)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the confidence meter represent AI output quality?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>ConfidenceMeter</code> displays a 5-segment proportional bar filled in proportion to a 0–100% confidence score. Each of the 5 segments fills 20% of the bar. A 90% score fills 4.5 segments. The meter is colored by band: green ≥85% (high confidence), blue ≥70% (moderate, spot-check), amber ≥50% (low, review recommended), red below (very low, review required). The <code>confidenceBand(value)</code> function returns both the fill color and a text label, so the meter and any accompanying text never disagree. The component is accessible via ARIA attributes (<code>role="meter"</code>, <code>aria-valuenow</code>, etc.).</p>
+        <pre><code>export function confidenceBand(value: number) {
+  if (value >= 85) return { fill: "bg-success", text: "text-success-text", label: "high", summary: "High confidence" };
+  if (value >= 70) return { fill: "bg-info", text: "text-info-text", label: "moderate", summary: "Moderate confidence — spot-check" };
+  if (value >= 50) return { fill: "bg-warning", text: "text-warning-text", label: "low, review recommended", ... };
+  return { fill: "bg-danger", text: "text-danger-text", label: "very low, review required", ... };
+}</code></pre>
+        <span class="source-cite">src/components/ui/confidence-meter.tsx:16-33</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What semantic colors exist, and what do they mean?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Each semantic color has a bold utility (e.g., <code>bg-danger</code>), a subtle background (e.g., <code>bg-danger-subtle text-danger-text</code>), and a text variant. <code>danger</code> (red) is for SLA breaches and destructive actions. <code>warning</code> (orange/amber) is for SLA at-risk and attention-needed states. <code>success</code> (green) is for resolved tickets and SLA met. <code>info</code> (blue) is for in-progress and informational states. <code>discovery</code> (purple) is reserved for anything suggested by AI, always paired with an explicit "Suggested by AI" or "AI draft" text label. <code>orange</code> is used for P2 (high) priority. Every color is also defined with Jira status equivalents: "New" is grey (no semantic), "In Progress" is blue (info-subtle), "Resolved/Closed" is green (success-subtle).</p>
+        <span class="source-cite">docs/colors-reference.md (entire file); src/app/globals.css:44-67 (light) and 103-124 (dark)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is priority conveyed without relying on color alone?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Priority is never shown by color alone. P1 (Highest, red) uses a double chevron up icon. P2 (High, orange) uses a single chevron up. P3 (Medium, golden) uses an equals sign. P4 (Low, blue) uses a chevron down. The <code>PriorityIcon</code> component pairs each icon shape with the corresponding <code>text-priority-*</code> color utility, so users and screen readers both perceive the priority. This multi-modal approach satisfies color-blind accessibility and WCAG AA contrast requirements.</p>
+        <span class="source-cite">docs/colors-reference.md: "Priority is never shown by color alone. `PriorityIcon` pairs each color with a distinct shape."</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What are the radius and elevation token values?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Radius tokens are 3px (lozenges like status badges), 4px (controls like buttons and inputs), 8px (panels and cards), and 12px (dialogs). Elevation is provided by two shadow presets: <code>shadow-raised</code> for sticky headers and cards, and <code>shadow-overlay</code> for menus and dialogs. In light mode, shadows are navy-tinted. In dark mode, they use white borders at low opacity (e.g., <code>1px rgba(255, 255, 255, 0.04)</code>) for a softer, less heavy appearance. The global <code>@layer base</code> applies <code>box-sizing: border-box</code> to all elements.</p>
+        <pre><code>--radius-sm: 3px;
+--radius-md: 4px;
+--radius-lg: 8px;
+--radius-xl: 12px;
+
+--elevation-raised: 0 1px 1px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
+--elevation-overlay: 0 8px 12px rgba(9, 30, 66, 0.15), 0 0 1px rgba(9, 30, 66, 0.31);</code></pre>
+        <span class="source-cite">src/app/globals.css:179-188 (light mode); 126-127 (dark mode)</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

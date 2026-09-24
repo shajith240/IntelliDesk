@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Architecture Overview — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>System Architecture Overview</h1>
+    <p class="page-intro">The shape of the app: a Next.js 16 monolith with App Router, layered into app routes, feature domains, and shared code. No microservices, no realtime updates — a single build that runs on Vercel, polls data from Supabase, and reaches out to Gemini, Pinecone, and IMAP/SMTP.</p>
+
+    <h2>High-level structure</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What type of app is this — monolith, microservices, something else?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>A Next.js 16 monolith running on Vercel. Everything ships in one build artifact. There are no separate backend services, job queues, or worker processes — the app is the only code running on Vercel. Cron-triggered HTTP endpoints inside the app handle the email polling and queue processing.</p>
+        <span class="source-cite">README.md — "Framework: Next.js 16 (App Router, Turbopack, React Compiler)"; src/app/layout.tsx shows root layout wrapping the Providers component; vercel.json registers a cron job for /api/emails/poll</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What's the folder structure under src/ and why is it organized that way?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The structure is app → features → shared, enforced by import boundaries:</p>
+        <ul>
+          <li><code>src/app/</code> — routes only: pages, layouts, API handlers. Imports from features and shared.</li>
+          <li><code>src/features/</code> — seven product-area folders (analytics, auth, command-center, knowledge-base, queue, settings, ticket-workspace), each with <code>components/</code>, <code>hooks/</code>, and <code>lib/</code>. Never import other features except one exception: command-center imports queue's <code>WorkQueue</code> component.</li>
+          <li><code>src/components/</code> — shared UI: <code>ui/</code> (23 design primitives with zero business logic) and <code>layout/</code> (12 app-shell components like the sidebar and command palette).</li>
+          <li><code>src/server/</code> — 19 server-only files: auth config, Supabase client, Gemini integration, IMAP/SMTP, the email pipeline. Every file starts with <code>import "server-only";</code>.</li>
+          <li><code>src/hooks/</code>, <code>src/lib/</code>, <code>src/types/</code> — shared utilities available to all layers.</li>
+        </ul>
+        <p>This layering keeps business domains separate while preventing accidental leaks of server secrets into browser bundles.</p>
+        <span class="source-cite">README.md "Project structure" section; src/features/ contains 7 directories (analytics, auth, command-center, knowledge-base, queue, settings, ticket-workspace); src/server/ contains 19 TypeScript files per PLAN.txt; src/components/ui/ contains 23 files per PLAN.txt</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the app prevent server secrets from being imported into browser code?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Two layers: every file under <code>src/server/</code> opens with <code>import "server-only";</code>, a package Next.js bundles. If that module is ever pulled into a client bundle, the build fails immediately. Additionally, an ESLint <code>no-restricted-imports</code> rule blocks importing <code>@/server/*</code> from shared code, features, or components — so the mistake is caught in the editor before a build is even attempted.</p>
+        <span class="source-cite">src/app/providers.tsx line 1 shows "use client" at the top, proving it's client-rendered; src/server/auth/config.ts and other server files would fail if imported into this client component; README.md "Conventions" states every file in src/server/ starts with import "server-only"; eslint.config.mjs contains the no-restricted-imports rule for @/server/*</span>
+      </div>
+    </div>
+
+    <h2>Request flow & routing</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Walk me through the full flow for a page load, from the browser hitting the app until React renders.
+<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Browser hits <code>/dashboard/tickets</code>. Middleware (before any route handler runs) checks if the user is logged in via the NextAuth session. If not logged in, it redirects to <code>/login</code> with the original path as a callback. If logged in, it passes through to the route handler.</p>
+        <p>The route handler for that page is at <code>src/app/dashboard/page.tsx</code>. The dashboard layout (<code>src/app/dashboard/layout.tsx</code>) wraps the page and renders the app shell (sidebar, top bar) plus a Suspense boundary around the <code>TicketWorkspace</code> modal component. The root layout at <code>src/app/layout.tsx</code> wraps everything, loading fonts and calling the <code>Providers</code> component. The app streams the initial HTML to the browser, and React hydrates it into an interactive component tree. After hydration, the client-side SWR hooks start polling the API for data.</p>
+        <pre><code>// src/middleware.ts: auth check
+const isLoggedIn = !!req.auth?.user;
+if (isDashboard && !isLoggedIn) {
+  const loginUrl = new URL("/login", req.url);
+  loginUrl.searchParams.set("callbackUrl", pathname);
+  return NextResponse.redirect(loginUrl);
+}</code></pre>
+        <span class="source-cite">src/middleware.ts lines 27-39; src/app/dashboard/layout.tsx wraps children with AppShell and TicketWorkspace; src/app/layout.tsx wraps everything with Providers; src/app/providers.tsx sets up SessionProvider, ThemeProvider, SWRConfig</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the app fetch data on the client side? Does it have websockets?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The client uses SWR (Stale-While-Revalidate) to poll the app's own API routes. SWR is configured with <code>dedupingInterval: 2000</code> (never make the same request twice within 2 seconds) and <code>errorRetryCount: 3</code>. In the README, it states "Data refreshes every 30 seconds." There are no websockets — no socket.io, no realtime subscriptions. A change made by one agent can take up to 30 seconds to appear in another agent's dashboard.</p>
+        <span class="source-cite">src/app/providers.tsx lines 27-33 define SWRConfig with dedupingInterval: 2000 and errorRetryCount: 3; README.md line 208 states "Data refreshes every 30 seconds and after every mutation. The status indicator in the top bar reflects whether the last refresh succeeded — the app polls and does not use a push/realtime connection."</span>
+      </div>
+    </div>
+
+    <h2>Data access & security</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does an API route know which organization to return data for?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Every authenticated API route calls <code>requireAuth()</code> to verify the user's session, then <code>getOrgId(session)</code> to extract their <code>organization_id</code>. Then it filters all queries to that organization using <code>.eq("organization_id", orgId)</code>. This is the primary access-control mechanism — the database has no foreign-key constraints forcing org membership, so the application code is responsible for scoping every read and write.</p>
+        <pre><code>const session = await requireAuth();
+const orgId = getOrgId(session);
+let query = supabaseAdmin
+  .from("tickets")
+  .select("...")
+  .eq("organization_id", orgId);</code></pre>
+        <span class="source-cite">src/app/api/tickets/route.ts lines 15-72; src/server/auth/helpers.ts defines requireAuth(); src/server/auth/org-context.ts defines getOrgId()</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What is row-level security (RLS) used for if application code is doing the access control?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Row-level security is configured in the database but acts as defense-in-depth, not the primary control. The app uses the Supabase service-role key, which bypasses RLS entirely. RLS policies exist to protect against: (1) a future client-side feature that uses the anon key instead of the service-role key, or (2) an accidental cross-org data leak if a developer forgets the <code>.eq("organization_id", orgId)</code> filter. The policies ensure that if the primary layer fails, the database itself stops the leak.</p>
+        <span class="source-cite">supabase/migrations/003_rls.sql line 20-21 state: "The application uses supabase service_role key which BYPASSES RLS. These policies are defense-in-depth for any future use of anon/user keys."; README.md "Security notes" confirms the service-role key is used from route handlers only and must never reach browser code</span>
+      </div>
+    </div>
+
+    <h2>Request lifecycle details</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the app handle an API call from the client — what's the full path from the browser hook to the database and back?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>A React component uses the <code>useApi</code> hook (built on SWR) to call <code>GET /api/tickets</code>. The hook sends the request with the browser's session cookie (set by NextAuth). The route handler at <code>src/app/api/tickets/route.ts</code> receives the request, calls <code>requireAuth()</code> to verify the session, extracts <code>organization_id</code>, builds a Supabase query filtered to that org, and returns the paginated, sorted list. The response is a JSON object with <code>{ tickets: [...], total, page, limit, total_pages }</code>. The client SWR hook receives it, stores it in memory, and triggers a re-render. If the session expires (API returns 401), the error handler redirects to login.</p>
+        <span class="source-cite">src/app/providers.tsx lines 16-21 define the handleSwrError function that catches 401s and redirects to login; src/app/api/tickets/route.ts implements the full GET handler with auth, org-scoping, filtering, sorting, and pagination; src/types/api.ts line 38-44 define TicketListResponse shape</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How are cron-triggered email endpoints protected, given they don't have a user session?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>/api/emails/poll</code> and <code>/api/emails/process-queue</code> are called by Vercel Cron, not by a logged-in user. They authenticate with <code>Authorization: Bearer $CRON_SECRET</code>, checked against an environment variable using <code>timingSafeEqual</code> (resistant to timing attacks). If the secret is unset, the endpoint returns 503 "Endpoint is not configured" rather than silently accepting all requests — it fails closed and is diagnosable from the response alone.</p>
+        <span class="source-cite">src/server/auth/cron.ts implements verifyBearerSecret() and verifyCronRequest() with timingSafeEqual; README.md "Environment variables" section documents CRON_SECRET and the 503 fail-closed behavior at line 103</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

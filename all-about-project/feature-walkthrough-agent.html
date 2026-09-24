@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Opens & Sends Response — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Agent Opens Ticket & Sends Response: End-to-End Flow</h1>
+    <p class="page-intro">Trace how an agent opens a ticket from the list, reviews the AI-generated draft reply, edits it, and sends the response to the customer. Follow the state management, validation, email sending, and the exact success and failure messages the user sees.</p>
+
+    <h2>Step 1: Opening a Ticket via URL Parameter</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does clicking a ticket open it in the workspace?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The ticket ID is stored in the URL query parameter <code>?ticket=&lt;id&gt;</code>. When an agent clicks a ticket, the <code>useTicketParam()</code> hook reads <code>searchParams.get("ticket")</code> and updates the URL via <code>router.push()</code>, triggering a re-render. The <code>TicketWorkspace</code> component conditionally opens a Sheet drawer if ticketId is present. This approach persists the open ticket across browser refresh and back/forward navigation. Closing the drawer removes the ticket param from the URL.</p>
+        <pre><code>// src/hooks/use-ticket-param.ts
+export function useTicketParam() {
+	const router = useRouter();
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+	const ticketId = searchParams.get("ticket");
+
+	const setTicket = useCallback(
+		(id: string | null) => {
+			const params = new URLSearchParams(searchParams.toString());
+			if (id) params.set("ticket", id);
+			else params.delete("ticket");
+			const qs = params.toString();
+			const href = qs ? `${pathname}?${qs}` : pathname;
+			if (id) router.push(href, { scroll: false });
+			else router.replace(href, { scroll: false });
+		},
+		[pathname, router, searchParams],
+	);
+
+	return { ticketId, openTicket: (id) => setTicket(id), closeTicket: () => setTicket(null) };
+}</code></pre>
+        <span class="source-cite">src/hooks/use-ticket-param.ts:7-30</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What happens while the ticket details are loading?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The <code>TicketWorkspace</code> component uses <code>useTicket(ticketId)</code> (an SWR hook) to fetch <code>GET /api/tickets/[id]</code>. While loading (<code>isLoading=true</code>), a WorkspaceSkeleton is rendered with placeholder lines. If an error occurs, an ErrorState component is shown with an optional "Retry" button. The drawer remains open during loading; only once the ticket data arrives is the WorkspaceView rendered.</p>
+        <pre><code>// src/features/ticket-workspace/components/ticket-workspace.tsx:16-80
+const { data, error, isLoading, mutate } = useTicket(ticketId);
+return (
+	&lt;Sheet open={!!ticketId} onOpenChange={handleOpenChange}&gt;
+		&lt;SheetContent side="right" className="w-full p-0"&gt;
+			{!data && isLoading && &lt;WorkspaceSkeleton /&gt;}
+			{!data && !isLoading && error && &lt;ErrorState ... /&gt;}
+			{data && &lt;WorkspaceView detail={data} ... /&gt;}
+		&lt;/SheetContent&gt;
+	&lt;/Sheet&gt;
+);</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/ticket-workspace.tsx:16-80</span>
+      </div>
+    </div>
+
+    <h2>Step 2: Finding and Displaying the AI Draft</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the system identify which AI draft to show the agent?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The ticket's <code>auto_responses</code> array contains all pending and sent responses. The <code>useReplyDraft()</code> hook filters for unsent responses (sent=false), sorts by created_at descending, and returns the latest one as <code>pending</code>. If no unsent response exists, <code>pending</code> is null. This pattern ensures the UI always shows the most recent AI-generated draft, and prevents stale drafts from being displayed if a new one was regenerated server-side.</p>
+        <pre><code>// src/features/ticket-workspace/hooks/use-reply-draft.ts:13-46
+function latestByCreatedAt(rows: AutoResponseRow[]): AutoResponseRow | null {
+	if (rows.length === 0) return null;
+	return rows.reduce((latest, row) =>
+		new Date(row.created_at).getTime() > new Date(latest.created_at).getTime() ? row : latest,
+	);
+}
+
+export function useReplyDraft(detail: TicketDetailResponse) {
+	const ticket = detail.ticket;
+	const pending = latestByCreatedAt(ticket.auto_responses.filter((r) => !r.sent));
+	const lastSent = latestByCreatedAt(ticket.auto_responses.filter((r) => r.sent));
+	const recipient = findRecipient(ticket);
+
+	const storageKey = pending ? `intellidesk.draft.${ticket.id}.${pending.id}` : null;</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:13-46</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the draft text stored and recovered across page refreshes?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Text edits are saved to browser localStorage under a key like <code>intellidesk.draft.&lt;ticket_id&gt;.&lt;response_id&gt;</code>. On initial load, if localStorage has a value for that key, it's used; otherwise the AI's <code>response_text</code> is used. If the user edits the text (making it differ from the AI's original), the edited version is persisted to localStorage. Closing and reopening the ticket (or switching between tickets) recovers the locally-stored draft. If localStorage is unavailable (private mode, quota exceeded), edits still work in memory for the current session but don't persist. A "Restore AI Draft" button lets the agent revert to the original AI text.</p>
+        <pre><code>// src/features/ticket-workspace/hooks/use-reply-draft.ts:20-82
+const storageKey = pending ? `intellidesk.draft.${ticket.id}.${pending.id}` : null;
+
+const [tracked, setTracked] = useState<{ key: string | null; text: string }>(() => ({
+	key: storageKey,
+	text: storageKey && pending ? (readStored(storageKey) ?? pending.response_text) : "",
+}));
+
+const setText = useCallback((next: string) => {
+	setTracked({ key: storageKey, text: next });
+	if (!storageKey) return;
+	try {
+		if (pending && next === pending.response_text) {
+			window.localStorage.removeItem(storageKey);
+		} else {
+			window.localStorage.setItem(storageKey, next);
+		}
+	} catch {
+		// Best effort only — edits still work in memory for this session.
+	}
+}, [storageKey, pending]);</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:42-82</span>
+      </div>
+    </div>
+
+    <h2>Step 3: Sending the Response</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What validation happens before sending a response?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Client-side validation in <code>useReplyDraft.send()</code>: text must not be empty after trimming, and must be ≤ 20,000 characters. Server-side validation in <code>POST /api/respond</code>: the response_id (or ticket_id if response_id not provided) must resolve to an unsent auto_response row owned by the caller's organization; response_text must not be empty and must be ≤ 20,000 characters. If any validation fails, a 400 error is returned with a descriptive message shown to the user.</p>
+        <pre><code>// Client-side (src/features/ticket-workspace/hooks/use-reply-draft.ts:95-107)
+const send = useCallback(async (): Promise<boolean> => {
+	if (!pending || sendingRef.current || status === "sending") return false;
+	const trimmed = text.trim();
+	if (!trimmed) {
+		setStatus("error");
+		setErrorMessage("Response text cannot be empty.");
+		return false;
+	}
+	if (trimmed.length > MAX_LENGTH) {
+		setStatus("error");
+		setErrorMessage("Response text is too long (max 20,000 characters).");
+		return false;
+	}
+
+// Server-side (src/app/api/respond/route.ts:15-38)
+const responseText = typeof body.response_text === "string" ? body.response_text.trim() : "";
+if (!body.response_id && !body.ticket_id) {
+	return NextResponse.json({ error: "Missing response_id or ticket_id" }, { status: 400 });
+}
+if (!responseText) {
+	return NextResponse.json({ error: "Response text cannot be empty" }, { status: 400 });
+}
+if (responseText.length > 20000) {
+	return NextResponse.json({ error: "Response text is too long" }, { status: 400 });
+}</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:95-107; src/app/api/respond/route.ts:14-38</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What exactly happens when the response is sent via the API?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The flow is: (1) Validate session and get organization_id, (2) Find the auto_response row by response_id or ticket_id (must be unsent and in the caller's org), (3) Fetch the email row to get the customer's from_address, (4) Fetch the organization's SMTP config, (5) Call sendEmail() to email the customer with the response text (wrapped in HTML, in-reply-to the original email), (6) Update auto_responses row: set sent=true, sent_at=now, response_text=trimmed_user_text, (7) Update tickets row: set status="Resolved", sla_resolved_at=now, and if sla_first_response_at is null, set it to now (marking the first response time), (8) Insert audit_logs entry with action="response_sent" and response details, (9) Return 200 success. If email sending fails (SMTP error), return 502. If any database update fails, return 500.</p>
+        <pre><code>// src/app/api/respond/route.ts:40-127
+const { data: responses } = await responseQuery;
+const autoResponse = responses?.[0];
+if (error || !autoResponse) {
+	return NextResponse.json({ error: "No unsent response found for this ticket" }, { status: 404 });
+}
+
+const ticket = autoResponse.tickets as { id: string; ticket_number: string; subject: string };
+const email = autoResponse.emails as { from_address: string; message_id: string | null; subject: string };
+
+const { data: orgData } = await supabaseAdmin.from("organizations")
+	.select("email_config").eq("id", orgId).single();
+
+const sent = await sendEmail({
+	to: email.from_address,
+	subject: `Re: ${email.subject} [${ticket.ticket_number}]`,
+	html: `<div style="font-family: Arial, sans-serif;...">
+	text: responseText,
+	inReplyTo: email.message_id || undefined,
+	smtpConfig: orgData?.email_config?.smtp || undefined,
+});
+if (!sent) {
+	return NextResponse.json(
+		{ error: "Email could not be sent. Check the organization's SMTP configuration." },
+		{ status: 502 },
+	);
+}
+
+const sentAt = new Date().toISOString();
+await supabaseAdmin.from("auto_responses")
+	.update({ sent: true, sent_at: sentAt, response_text: responseText })
+	.eq("id", autoResponse.id);
+
+const { data: ticketData } = await supabaseAdmin.from("tickets")
+	.select("sla_first_response_at").eq("id", ticket.id).single();
+
+const ticketUpdate: Record<string, string> = {
+	status: "Resolved",
+	sla_resolved_at: sentAt,
+};
+if (!ticketData.sla_first_response_at) {
+	ticketUpdate.sla_first_response_at = sentAt;
+}
+await supabaseAdmin.from("tickets").update(ticketUpdate).eq("id", ticket.id);
+
+await supabaseAdmin.from("audit_logs").insert({
+	organization_id: orgId,
+	ticket_id: ticket.id,
+	action: "response_sent",
+	details: { response_id: autoResponse.id, to: email.from_address, edited: true },
+});</code></pre>
+        <span class="source-cite">src/app/api/respond/route.ts:40-139</span>
+      </div>
+    </div>
+
+    <h2>Step 4: Success and Error Handling</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What user-facing messages does the agent see on success and on each failure?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>On success: a green success toast appears with the title "Response sent to {recipient}" and the description "The ticket is now Resolved." The draft is cleared from localStorage, the status moves to "sent", and all unrelated data is refreshed via refreshAll(). On specific errors: (1) 400 validation error: the exact error message from the server is shown in both toast and the dialog, e.g., "Response text cannot be empty", (2) 404 "not found": "This draft was already sent or no longer exists. Refresh the ticket to see its current state.", (3) 502 SMTP error: "The email server rejected the message. Check the mailbox settings (SMTP) and try again.", (4) 0 (network offline): "You're offline. Your reply is kept here — try again when you're back online.", (5) 500 or unknown: "Sending failed. Your reply is kept here — try again." All error messages keep the draft text in the composer so the user's edits aren't lost.</p>
+        <pre><code>// src/features/ticket-workspace/hooks/use-reply-draft.ts:125-152
+} catch (error) {
+	let message = "Sending failed. Your reply is kept here — try again.";
+	if (error instanceof ApiRequestError) {
+		if (error.status === 400) message = error.message;
+		else if (error.status === 404)
+			message = "This draft was already sent or no longer exists. Refresh the ticket to see its current state.";
+		else if (error.status === 502)
+			message = "The email server rejected the message. Check the mailbox settings (SMTP) and try again.";
+		else if (error.status === 0)
+			message = "You're offline. Your reply is kept here — try again when you're back online.";
+	}
+	setStatus("error");
+	setErrorMessage(message);
+	toast({ tone: "error", title: "Send failed", description: message });
+	return false;
+}</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:133-149</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What happens if the agent closes the ticket without sending?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>If the agent has unsaved edits (isDirty=true, meaning the text differs from the AI's original), a confirmation dialog appears: "Close this ticket? Your reply edits stay saved on this device." If the agent chooses "Close", the ticket drawer closes but the localStorage draft persists. On reopening the ticket, the locally-stored text is recovered. If there are no unsaved edits, the drawer closes immediately without prompting.</p>
+        <span class="source-cite">src/features/ticket-workspace/components/ticket-workspace.tsx:18-29</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What is shown in the send confirmation dialog before the email is sent?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The SendConfirmDialog displays: (1) To: the customer's email address, (2) Subject: "Re: {original_subject} [{ticket_number}]", (3) Ticket: the ticket number, (4) Length: character count of the response, (5) A scrollable preview of the full response text, (6) If there was a send error, an error message in red, (7) Cancel and Send Response buttons. While sending (draft.status="sending"), the buttons are disabled and the Send button shows a loading spinner. Pressing Escape or clicking outside does not close the dialog while sending.</p>
+        <pre><code>// src/features/ticket-workspace/components/send-confirm-dialog.tsx:18-82
+export function SendConfirmDialog({
+	open, onOpenChange, draft, recipient, subject, ticketNumber,
+}: SendConfirmDialogProps) {
+	const sending = draft.status === "sending";
+
+	return (
+		<Dialog open={open} onOpenChange={(next) => sending ? null : onOpenChange(next)}>
+			<DialogContent title="Send this response?" description="This emails the customer and marks the ticket Resolved. It can't be undone." size="md">
+				<dl className="grid grid-cols-[80px_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+					<dt>To</dt>
+					<dd>{recipient ?? "unknown"}</dd>
+					<dt>Subject</dt>
+					<dd>Re: {subject} [{ticketNumber}]</dd>
+					<dt>Ticket</dt>
+					<dd>{ticketNumber}</dd>
+					<dt>Length</dt>
+					<dd>{draft.text.length.toLocaleString()} characters</dd>
+				</dl>
+				<div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border bg-sunken p-3">
+					{draft.text}
+				</div>
+				{draft.status === "error" && draft.errorMessage && (
+					<SectionMessage appearance="error">{draft.errorMessage}</SectionMessage>
+				)}
+				<DialogFooter>
+					<Button variant="subtle" disabled={sending}>Cancel</Button>
+					<Button variant="primary" loading={sending} onClick={async () => {
+						if (await draft.send()) onOpenChange(false);
+					}}>Send response</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/send-confirm-dialog.tsx:18-82</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What database state changes occur after a successful send?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Three tables are updated atomically in order: (1) <code>auto_responses</code>: the response row is updated with sent=true, sent_at={current_timestamp}, and response_text={agent's_edited_text} (so the exact text the agent sent is preserved, not the original AI text), (2) <code>tickets</code>: status="Resolved" and sla_resolved_at={current_timestamp}. If sla_first_response_at is null (first response), it's also set to now, (3) <code>audit_logs</code>: a new entry is created with action="response_sent", ticket_id, and details including response_id, recipient email, and edited=true flag. None of these updates cascade or affect other tickets or emails.</p>
+        <span class="source-cite">src/app/api/respond/route.ts:99-139</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

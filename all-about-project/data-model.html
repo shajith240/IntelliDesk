@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Model &amp; Database Schema — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Data Model &amp; Database Schema</h1>
+    <p class="page-intro">PostgreSQL via Supabase. Twelve tables connected by organization-scoped foreign keys, with row-level security as a defense-in-depth layer, and a single service-role connection from the app to the database. Migrations are numbered, stable, and applied in order.</p>
+
+    <h2>Table structure & relationships</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What are the 12 tables and how are they related?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The database is organized around organizations and their membership:</p>
+        <ul>
+          <li><code>organizations</code> — top-level tenant. Each org has a <code>name</code>, <code>slug</code> (unique URL-safe id), <code>domain</code>, <code>plan</code>, and <code>max_agents</code>.</li>
+          <li><code>users</code> — belong to one organization. Schema: id, organization_id (FK), email, name, password_hash, role (admin/agent/viewer), is_active, created_at, updated_at.</li>
+          <li><code>accounts</code> — customer companies. Scoped to org. Schema: id, domain, company_name, tier (Gold/Silver/Bronze), csm_name/email, plan, location.</li>
+          <li><code>contacts</code> — individual customers tied to accounts. Schema: id, account_id (FK), email, name, role, department, phone, is_lead, lead_status.</li>
+          <li><code>teams</code> — support teams within an org. Schema: id, organization_id (FK), name, description, category_routing (array of categories).</li>
+          <li><code>tickets</code> — the main entity. Belong to org, account, and contact. Schema includes status, category, severity (P1-P4), ai_confidence, summary, assigned_agent, assigned_team, SLA timestamps.</li>
+          <li><code>emails</code> — individual messages. Scoped to org. Schema: message_id, from_address, to_address, subject, body_text, body_html, received_at, processed, is_spam, language, embedding_id.</li>
+          <li><code>ticket_emails</code> — join table linking tickets to emails. Schema: ticket_id (FK), email_id (FK), relationship (original/reply/forward/duplicate).</li>
+          <li><code>sla_policies</code> — global defaults, not org-scoped. Four rows: one per severity (P1-P4), each with first_response_minutes and resolution_minutes.</li>
+          <li><code>faqs</code> — knowledge base articles, scoped to org. Schema: question, answer, category, solution_steps (array), video_url, success_rate, times_used, embedding_id.</li>
+          <li><code>auto_responses</code> — candidate replies generated by the pipeline, scoped to org. Schema: ticket_id (FK), email_id (FK), response_text, match_type (perfect/partial/none), match_score, cited_faq_ids, sent, sent_at.</li>
+          <li><code>audit_logs</code> — append-only history, scoped to org. Schema: ticket_id (FK), action, details (JSONB), performed_by, created_at.</li>
+        </ul>
+        <span class="source-cite">supabase/migrations/001_initial_schema.sql defines the first 10 tables; 002_auth.sql adds organizations and users, then ALTERs the first 10 to add organization_id columns; PLAN.txt lists all 12 in "DB tables"</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Show me a real CREATE TABLE excerpt from the schema.<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Here's the tickets table from migration 001, before organization_id was added:</p>
+        <pre><code>CREATE TABLE tickets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ticket_number TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'New' CHECK (status IN ('New', 'In Progress', 'Resolved', 'Closed')),
+  category TEXT,
+  subcategory TEXT,
+  severity TEXT NOT NULL DEFAULT 'P3' CHECK (severity IN ('P1', 'P2', 'P3', 'P4')),
+  ai_confidence REAL,
+  subject TEXT NOT NULL DEFAULT '',
+  summary TEXT,
+  account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  assigned_team TEXT,
+  assigned_agent TEXT,
+  sla_first_response_due TIMESTAMPTZ,
+  sla_resolution_due TIMESTAMPTZ,
+  sla_first_response_at TIMESTAMPTZ,
+  sla_resolved_at TIMESTAMPTZ,
+  sla_breach BOOLEAN DEFAULT FALSE,
+  escalation_count INT DEFAULT 0,
+  auto_response_sent BOOLEAN DEFAULT FALSE,
+  auto_response_type TEXT CHECK (auto_response_type IN ('perfect', 'partial', 'none')),
+  is_flagged_for_review BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);</code></pre>
+        <span class="source-cite">supabase/migrations/001_initial_schema.sql lines 80-106; supabase/migrations/002_auth.sql line 43 adds the organization_id column later</span>
+      </div>
+    </div>
+
+    <h2>Multi-tenancy & access control</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the app prevent one organization's data from leaking to another?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The primary control is in application code: every query that touches organization data calls <code>requireAuth()</code> to verify the session, then <code>getOrgId(session)</code> to extract the user's org, then filters with <code>.eq("organization_id", orgId)</code>. This pattern is enforced across all routes; there is no unscoped read path.</p>
+        <p>Row-level security provides a second layer but is not the primary control. The app uses the Supabase service-role key, which bypasses RLS entirely. RLS policies exist to defend against accidents: if a developer forgets the org-scoping filter, the database itself stops the leak. The policies are defined so that even if an anon or user key were used (unlikely with the current auth model), RLS would enforce org membership.</p>
+        <span class="source-cite">src/app/api/tickets/route.ts lines 15-72 show the requireAuth() → getOrgId() → .eq("organization_id", orgId) pattern; supabase/migrations/003_rls.sql lines 19-21 state: "The application uses supabase service_role key which BYPASSES RLS. These policies are defense-in-depth for any future use of anon/user keys."; README.md "Security notes" confirms this architecture</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Where are the IMAP/SMTP mailbox credentials stored, and how are they accessed?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Each organization can configure up to one IMAP/SMTP mailbox from the Settings page. The credentials are stored in a JSONB column <code>email_config</code> on the <code>organizations</code> table with the structure: <code>{ "imap": { "host": "...", "port": 993, "user": "...", "pass": "..." }, "smtp": { "host": "...", "port": 587, "user": "...", "pass": "..." } }</code>. These are server-only secrets — they're fetched by the email pipeline (on cron) and the settings page (for admin viewing), both of which run only server-side. There's no equivalent to this data in the browser.</p>
+        <span class="source-cite">supabase/migrations/004_email_config.sql defines the email_config JSONB column on organizations with the exact structure documented; README.md lines 107-108 document that "Mailbox credentials (IMAP/SMTP) are configured per organization from the app's Settings page, not from environment variables; they are stored in Supabase."</span>
+      </div>
+    </div>
+
+    <h2>Indexes, triggers, and constraints</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the ticket_number generated, and what ensures it's always unique?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Ticket numbers are auto-generated before insert by a PostgreSQL trigger. The sequence <code>ticket_number_seq</code> starts at 1 and increments on each new ticket. A trigger function formats it as <code>'TKT-' || LPAD(nextval('ticket_number_seq')::TEXT, 5, '0')</code>, producing TKT-00001, TKT-00002, etc. The <code>ticket_number</code> column has a UNIQUE constraint, so if two tickets somehow tried to insert the same number, the database would reject the second. A second trigger updates the <code>updated_at</code> timestamp on every write.</p>
+        <span class="source-cite">supabase/migrations/001_initial_schema.sql lines 165-180 define the ticket_number_seq sequence and the generate_ticket_number() trigger; lines 191-194 define the set_updated_at trigger</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What indexes exist on the tables and why?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Indexes are added on frequently filtered columns. For example:</p>
+        <ul>
+          <li><code>idx_tickets_org</code> on <code>tickets(organization_id)</code> — every query filters to one org.</li>
+          <li><code>idx_tickets_status</code> on <code>tickets(status)</code> — the ticket list is filtered by status.</li>
+          <li><code>idx_tickets_severity</code> on <code>tickets(severity)</code> — SLA alert computation groups by severity.</li>
+          <li><code>idx_emails_processed</code> on <code>emails(processed)</code> — the email pipeline looks for unprocessed messages.</li>
+          <li><code>idx_contacts_email</code> on <code>contacts(email)</code> — customer deduplication looks up existing contacts by email.</li>
+          <li><code>idx_users_org</code> on <code>users(organization_id)</code> — team member listings are org-scoped.</li>
+        </ul>
+        <p>No composite indexes or partial indexes are used; all are simple B-tree indexes on a single column.</p>
+        <span class="source-cite">supabase/migrations/001_initial_schema.sql and 002_auth.sql define all indexes; they follow a naming pattern idx_&lt;table&gt;_&lt;column&gt;</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Are there foreign-key constraints between all related tables?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Most critical relationships have foreign keys with <code>ON DELETE CASCADE</code> or <code>ON DELETE SET NULL</code>. For example, <code>ticket_id UUID REFERENCES tickets(id) ON DELETE CASCADE</code> means if a ticket is deleted, all its related ticket_emails and auto_responses are deleted too. However, <code>assigned_agent TEXT</code> on tickets is just a TEXT column, not a foreign key to users — so the application code is responsible for validating that the assigned agent belongs to the same organization. This is why the API route for updating an assignee checks org membership before accepting the assignment.</p>
+        <span class="source-cite">supabase/migrations/001_initial_schema.sql shows ticket_emails with ON DELETE CASCADE (line 115); auto_responses with ON DELETE CASCADE (line 142); src/app/api/tickets/[id]/route.ts validates assigned agent membership in the PATCH handler before allowing the update</span>
+      </div>
+    </div>
+
+    <h2>TypeScript types & API responses</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How do the TypeScript type definitions mirror the database schema?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Every table has a corresponding TypeScript interface in <code>src/types/index.ts</code>. For instance, the Ticket interface has fields that match the table columns: <code>id</code>, <code>ticket_number</code>, <code>status</code>, <code>severity</code>, <code>ai_confidence</code>, <code>subject</code>, <code>summary</code>, plus joinable fields like <code>account?: Account</code> and <code>emails?: TicketEmail[]</code> that reflect the foreign keys. Enums like <code>TicketStatus</code> and <code>Severity</code> map to the CHECK constraints in SQL (e.g., status IN ('New', 'In Progress', 'Resolved', 'Closed')).</p>
+        <span class="source-cite">src/types/index.ts defines Organization (lines 37-46), User (lines 48-61), Ticket (lines 113-143), and the other 9 entities; each maps to a table in the schema; Enums like TicketStatus (line 8) and Severity (line 10) match SQL CHECK constraints</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does an API response for a ticket list look like?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The GET /api/tickets response is a TicketListResponse object with: <code>{ tickets: TicketListItem[], total: number, page: number, limit: number, total_pages: number }</code>. Each TicketListItem is a Ticket with the account and contact joined in, and optional fields like email threads. The response is paginated; by default it returns 20 per page, with a maximum of 100. The client can sort by created_at, updated_at, severity, or status, and can filter by status, severity, category, assigned agent, and search terms.</p>
+        <span class="source-cite">src/types/api.ts lines 38-44 define TicketListResponse; TicketListItem is defined at lines 33-36; src/app/api/tickets/route.ts implements the sorting, filtering, and pagination logic</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

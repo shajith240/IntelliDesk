@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deployment &amp; DevOps — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Deployment &amp; DevOps</h1>
+    <p class="page-intro">How this application is deployed to Vercel, how scheduled jobs are configured, and what environment variables and local vs. production differences apply.</p>
+
+    <h2>Vercel deployment model</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How is this application deployed to Vercel?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The app is a standard Next.js application deployed to Vercel using its default configuration:</p>
+        <ul>
+          <li><strong>Repository root</strong> — The app lives at the repository root, not in a subfolder. Vercel's default "Root Directory" setting points to the repo root, so no custom path is needed.</li>
+          <li><strong>Framework preset</strong> — Next.js (automatically detected by Vercel).</li>
+          <li><strong>Build command</strong> — <code>npm run build</code> (default for Next.js); the build runs <code>next build</code>, which produces a production-optimized bundle with the React Compiler enabled.</li>
+          <li><strong>No static export</strong> — The app requires route handlers, server-side authentication, and dynamic data from Supabase, so static export is not used.</li>
+          <li><strong>Runtime features</strong> — Next.js App Router, dynamic routes, API routes, middleware, and cron jobs are all supported.</li>
+        </ul>
+        <span class="source-cite">README.md "Deploying to Vercel" section, lines 212-219; next.config.ts</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is <code>NEXTAUTH_URL</code> configured differently in development vs. production?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>NEXTAUTH_URL</code> environment variable tells NextAuth where the app is running, so it can validate redirect URLs and session cookies:</p>
+        <ul>
+          <li><strong>Local development</strong> — <code>NEXTAUTH_URL=http://localhost:3000</code> (set in <code>.env.local</code>).</li>
+          <li><strong>Production</strong> — <code>NEXTAUTH_URL</code> must be set to the deployed Vercel URL (e.g., <code>https://intellidesk-ai.vercel.app</code>) in the Vercel dashboard under Settings → Environment Variables.</li>
+        </ul>
+        <p>If <code>NEXTAUTH_URL</code> is not set correctly, NextAuth will reject sign-in requests and return a "NEXTAUTH_URL is not set" error. Vercel automatically sets <code>AUTH_TRUST_HOST=true</code> at runtime, so Auth.js trusts Vercel's request headers; no manual configuration is needed there.</p>
+        <span class="source-cite">.env.example line 9; README.md line 105 (AUTH_TRUST_HOST note)</span>
+      </div>
+    </div>
+
+    <h2>Scheduled cron jobs</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the email polling cron job configured?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Vercel Cron reads the schedule from <code>vercel.json</code> in the repository root:</p>
+        <pre><code>{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [{ "path": "/api/emails/poll", "schedule": "0 6 * * *" }]
+}</code></pre>
+        <p>This configures a daily trigger at 06:00 UTC. Vercel automatically sends an <code>Authorization: Bearer $CRON_SECRET</code> header to the endpoint; the secret is read from the environment variables you set in the Vercel dashboard. The endpoint checks that header via the <code>verifyCronRequest()</code> function and fails closed (503) if the secret is not configured.</p>
+        <p>The schedule format is POSIX cron syntax (minute hour day month day-of-week, all in UTC). The Vercel Hobby plan only allows a single daily schedule; Pro and higher plans support more frequent schedules (e.g., <code>*/10 * * * *</code> for every 10 minutes).</p>
+        <span class="source-cite">vercel.json lines 1-4; README.md line 216</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the <code>/api/emails/poll</code> endpoint do when the cron job runs?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The endpoint is defined in <code>src/app/api/emails/poll/route.ts</code>. When called by Vercel Cron (or manually via curl with the <code>CRON_SECRET</code>), it:</p>
+        <ul>
+          <li>Verifies the bearer token matches <code>CRON_SECRET</code> using timing-safe comparison (no timing-side-channel vulnerability).</li>
+          <li>Polls every organization's IMAP mailbox connection (stored in Supabase under <code>email_config</code>).</li>
+          <li>For each new unseen email, parses it, extracts the From/To/Subject, checks for spam/duplicates, and identifies the customer thread.</li>
+          <li>Creates or updates a ticket in the <code>tickets</code> table, storing the email with its SLA due dates computed from the org's policies.</li>
+          <li>Generates an AI classification (category, priority, sentiment) and an embedding via Gemini.</li>
+          <li>Stores the embedding in Pinecone under the org's namespace for later retrieval during reply drafting.</li>
+          <li>Logs every step to the <code>audit_logs</code> table.</li>
+        </ul>
+        <p>The endpoint has a 60-second max duration in Next.js; any emails not processed in that time are picked up by the next scheduled run.</p>
+        <span class="source-cite">README.md "Email pipeline" section, lines 148-165</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Why does the cron endpoint fail with 503 instead of 401 if the secret is missing?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>By design, if <code>CRON_SECRET</code> is unset in the environment, the endpoint returns <code>503 Endpoint is not configured</code> rather than silently accepting all requests or returning a generic 401 that looks like "you sent the wrong secret."</p>
+        <p>This "fail closed" approach makes misconfiguration immediately obvious: if someone deploys without setting the secret, the cron job will fail loudly and visibly in the Vercel dashboard, rather than silently skipping email polling. The 503 status also signals to Vercel that the job should be retried, so it doesn't give up after one failure.</p>
+        <span class="source-cite">src/server/auth/cron.ts — verifyBearerSecret() implementation; README.md line 103 (secret required, fails with 503)</span>
+      </div>
+    </div>
+
+    <h2>Environment variables by purpose</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What environment variables are required for the app to run, grouped by purpose?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><strong>Supabase (database and auth storage):</strong></p>
+        <ul>
+          <li><code>NEXT_PUBLIC_SUPABASE_URL</code> — Project URL (public, safe to commit in .env.local)</li>
+          <li><code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> — Public API key for auth flows (public)</li>
+          <li><code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> — Publishable key (public)</li>
+          <li><code>SUPABASE_SERVICE_ROLE_KEY</code> — Secret key for unrestricted database access from route handlers (server-only, never in browser)</li>
+        </ul>
+        <p><strong>NextAuth (session management):</strong></p>
+        <ul>
+          <li><code>NEXTAUTH_SECRET</code> — Random secret for signing JWT sessions; generate with <code>openssl rand -base64 32</code></li>
+          <li><code>NEXTAUTH_URL</code> — Canonical app URL (e.g., <code>http://localhost:3000</code> locally, <code>https://app.vercel.app</code> in production)</li>
+        </ul>
+        <p><strong>Google Gemini (classification and embeddings):</strong></p>
+        <ul>
+          <li><code>GEMINI_API_KEY</code> — API key from Google AI Studio (server-only)</li>
+        </ul>
+        <p><strong>Pinecone (vector search):</strong></p>
+        <ul>
+          <li><code>PINECONE_API_KEY</code> — API key (server-only)</li>
+          <li><code>PINECONE_INDEX</code> — Index name (e.g., "intellidesk")</li>
+          <li><code>PINECONE_HOST</code> — Optional: direct index host URL from the Pinecone console</li>
+          <li><code>PINECONE_EMBEDDING_DIMENSIONS</code> — Dimension count (3072 for Gemini embedding model; must match index creation)</li>
+        </ul>
+        <p><strong>Cron and webhooks (scheduled jobs):</strong></p>
+        <ul>
+          <li><code>CRON_SECRET</code> — Bearer token for Vercel Cron to call <code>/api/emails/poll</code> and <code>/api/emails/process-queue</code> (server-only); generate with <code>openssl rand -hex 32</code></li>
+          <li><code>EMAIL_INGEST_SECRET</code> — Bearer token for external mail relay to call <code>/api/emails/ingest</code> webhook (server-only); generate with <code>openssl rand -hex 32</code></li>
+        </ul>
+        <p><strong>Optional development features:</strong></p>
+        <ul>
+          <li><code>NEXT_PUBLIC_DEMO_MODE</code> — If true, shows "Load sample tickets" action in empty states (local development only)</li>
+          <li><code>IMAP_USER</code> — Optional: local IMAP user email for filtering self-sent emails during testing</li>
+        </ul>
+        <span class="source-cite">README.md "Environment variables" section, lines 69-102; .env.example</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What is the difference between public and server-only environment variables?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p><strong>Public variables</strong> (prefixed with <code>NEXT_PUBLIC_</code>) are compiled into the client-side JavaScript bundle and are safe to commit to version control. Examples: Supabase URL and public keys, which are safe because Supabase has row-level security (RLS) policies that enforce per-user/per-org access control.</p>
+        <p><strong>Server-only variables</strong> (no prefix) are never sent to the browser; they are available only to route handlers and server-side functions. Examples: <code>SUPABASE_SERVICE_ROLE_KEY</code> (bypasses RLS), <code>GEMINI_API_KEY</code>, and <code>CRON_SECRET</code>. These must be set in the Vercel dashboard, never committed to git.</p>
+        <p>The Next.js build will not fail if you accidentally use a server-only variable on the client, but the <code>server-only</code> package and ESLint's <code>no-restricted-imports</code> rule catch the mistake at lint time.</p>
+        <span class="source-cite">README.md line 71</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What happens if you run <code>npm start</code> locally without setting <code>AUTH_TRUST_HOST</code>?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>When running a production Next.js build outside of Vercel (via <code>npm start</code>), Auth.js (NextAuth v5) checks the request's Host header against the configured <code>NEXTAUTH_URL</code>. If they don't match, it rejects the request as a potential host header injection attack.</p>
+        <p>Setting <code>AUTH_TRUST_HOST=true` disables this check and tells Auth.js to trust the Host header. This is necessary when running a production build locally or in a non-Vercel environment:</p>
+        <pre><code>AUTH_TRUST_HOST=true npm start</code></pre>
+        <p>Vercel automatically sets <code>AUTH_TRUST_HOST=true</code> at runtime, so the variable doesn't need to be configured in the Vercel dashboard. Local development with <code>npm run dev` handles it automatically as well.</p>
+        <span class="source-cite">README.md line 105</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

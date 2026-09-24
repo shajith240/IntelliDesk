@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API &amp; Backend Routes — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>API &amp; Backend Routes</h1>
+    <p class="page-intro">The 20 API endpoint handlers, focusing on the most complex: ticket CRUD, dashboard aggregation, email polling and processing, response sending, and FAQ management. All protected routes enforce authentication and organization-scoped filtering; webhook routes use bearer tokens. Three routes are dev-only and blocked in production.</p>
+
+    <h2>Ticket Management</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What does GET /api/tickets return and how does filtering work?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Returns a paginated list of tickets for the authenticated user's organization. Supports filtering by status (New, In Progress, Resolved, Closed), severity (P1–P4), category, and search (in subject/ticket_number/summary). Pagination defaults to page 1, limit 20, max 100. Sorting is by created_at (default), updated_at, severity, status, or ticket_number. The response includes related contact and account objects via Supabase select joins.</p>
+        <p>SLA due dates are computed at read time if missing, by fetching sla_policies once and calculating <code>created_at + policy_minutes</code> for each ticket.</p>
+        <pre><code>{
+  "tickets": [...],
+  "total": 42,
+  "page": 1,
+  "limit": 20,
+  "total_pages": 3
+}</code></pre>
+        <span class="source-cite">src/app/api/tickets/route.ts:15-179 (GET handler with filtering, pagination, SLA fill-in)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What validation does PATCH /api/tickets/[id] perform on updates?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Only these fields are allowed to be updated: status, severity, category, assigned_team, assigned_agent, sla_first_response_at, sla_resolved_at. Status is validated against the enum [New, In Progress, Resolved, Closed]; severity against [P1, P2, P3, P4]. If assigned_agent is set to a non-null user ID, a lookup query checks that the user exists in the same organization, is active, and has is_active=true. If null (unassigning), no lookup is required. Changing status to Resolved or Closed auto-sets sla_resolved_at to now. All updates are org-scoped; a ticket from org A cannot be updated if you belong to org B.</p>
+        <span class="source-cite">src/app/api/tickets/[id]/route.ts:87-160 (PATCH handler, whitelist, validation, assignee active-membership check)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What data does GET /api/tickets/[id] return?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Returns a single ticket with full relations: contact details (name, email, role, phone), account tier and company, ticket-email associations and full email bodies, and auto-responses. Also computes and returns SLA status (whether first-response and resolution deadlines have been met, and if either is overdue) and finds up to 5 related tickets by category for the user to reference.</p>
+        <pre><code>{
+  "ticket": { id, subject, severity, status, ... },
+  "sla": { first_response_ok, resolution_ok, ... },
+  "similar_tickets": [...]
+}</code></pre>
+        <span class="source-cite">src/app/api/tickets/[id]/route.ts:8-71 (GET handler with full joins and SLA computation)</span>
+      </div>
+    </div>
+
+    <h2>Dashboard &amp; Aggregation</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the dashboard query structured to avoid N+1 problems?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>GET /api/dashboard kicks off the slowest queries (SLA metrics and audit-log activity) immediately as promises, rather than awaiting them sequentially. It then runs 11 independent count/fetch queries in a single <code>Promise.all()</code>, so they execute in parallel. After those complete, the SLA promise and metrics promise (which depends on SLA) are awaited. For the activity feed, after the activity rows are fetched, a single batched query retrieves all referenced ticket numbers and subjects at once using <code>.in("id", ticketIds)</code>, not a loop. The response includes ticket counts (total, open, resolved today, awaiting review), breakdowns by category/severity/status, average AI confidence, SLA metrics, SLA alerts with customer names, and recent activity.</p>
+        <span class="source-cite">src/app/api/dashboard/route.ts:21-209 (parallel SLA, Promise.all batch, batched ticket lookups for activity enrichment)</span>
+      </div>
+    </div>
+
+    <h2>Email Processing &amp; Webhook Routes</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the email polling endpoint work and why is it safe to call repeatedly?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>GET/POST /api/emails/poll (bearer-token auth, Vercel Cron) iterates over all organizations that have email_config set, calls <code>pollNewEmails()</code> to fetch unseen messages from IMAP, and processes each email through the pipeline. To avoid rate-limit hits on AI services, there's a 4-second delay between emails. The endpoint is idempotent: running it twice fetches the same unseen messages again and processes them again (the pipeline is responsible for detecting duplicates at a lower level). It's safe to call repeatedly because it doesn't modify state in a way that breaks if called twice.</p>
+        <pre><code>export async function GET(req: NextRequest) {
+  return handle(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handle(req);
+}</code></pre>
+        <span class="source-cite">src/app/api/emails/poll/route.ts:63-69 (GET and POST both supported for Vercel Cron flexibility); lines 11-61 (polling logic, per-email rate limiting)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the email queue processor do and when would it be called?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>GET/POST /api/emails/process-queue (bearer-token auth, Vercel Cron) fetches up to 50 unprocessed emails from the database (where processed=false), reprocesses them through the pipeline, and marks them as processed. This is used for retries when an email failed on first attempt, and for processing test/seed emails. Unlike poll which fetches from IMAP, this one consumes a local queue. It applies a 2-second rate limit between emails to avoid overwhelming AI services. The response includes a summary: total processed, how many succeeded/duplicated/spammed/errored.</p>
+        <span class="source-cite">src/app/api/emails/process-queue/route.ts:11-96 (queue processing, rate limiting, status aggregation)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What is POST /api/emails/ingest and how does it differ from poll?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>POST /api/emails/ingest (bearer-token auth) accepts incoming emails from an external email relay service. The request body contains a raw email (from_address, subject, body_text, etc.) and organization_id, and must include these required fields: from_address, subject, received_at, organization_id. The endpoint immediately processes the email through the pipeline and returns the result. Unlike poll (which iterates organizations) or process-queue (which works from a local queue), ingest is called by an external service pushing emails in real-time. It's org-scoped by the organization_id in the payload, not extracted from a session.</p>
+        <span class="source-cite">src/app/api/emails/ingest/route.ts:7-63</span>
+      </div>
+    </div>
+
+    <h2>Response &amp; FAQ Management</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does POST /api/respond work and what validation does it perform?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Sends an email reply to a customer and marks the response as sent. Requires either response_id or ticket_id, and a non-empty response_text (max 20,000 chars). It fetches the unsent auto_response record, extracts the ticket and original email, loads the org's SMTP config, sends the email via SMTP with proper In-Reply-To headers, updates the response to sent=true and stores the response_text, then auto-sets the ticket status to Resolved and backfills sla_first_response_at if it was null. All updates are org-scoped and the response query filters sent=false and organization_id before accepting the record.</p>
+        <pre><code>if (responseText.length > 20000) {
+  return NextResponse.json(
+    { error: "Response text is too long" },
+    { status: 400 },
+  );
+}</code></pre>
+        <span class="source-cite">src/app/api/respond/route.ts:8-153 (POST handler, validation, email sending, ticket/response updates)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What is the request/response shape for FAQ management endpoints?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>GET /api/faqs returns paginated FAQs (default limit 20, max 100) for the org, supports filtering by category and full-text search in question/answer. POST /api/faqs creates a new FAQ, requires question, answer, and category fields, generates an embedding for the Q+A, and upserts the vector into Pinecone under the org's namespaced FAQ index. The response includes the created FAQ object with its id. PUT and DELETE /api/faqs/[id] are not shown in the PLAN.txt route table; check if the impl exists or note as not implemented.</p>
+        <pre><code>// POST request
+{ "question": "...", "answer": "...", "category": "..." }
+
+// GET response
+{ "faqs": [...], "total": 12, "page": 1, "limit": 20 }</code></pre>
+        <span class="source-cite">src/app/api/faqs/route.ts:9-112 (GET pagination, POST with embedding generation)</span>
+      </div>
+    </div>
+
+    <h2>Development-Only Routes</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Which routes are blocked in production and why?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Three routes check <code>NODE_ENV</code> and return 404 in production: DELETE /api/cleanup (deletes all tickets, emails, responses, audit logs, and Pinecone vectors; used to reset after importing junk), PATCH/POST /api/migrate (runs migrations), and POST /api/seed (seeds test data; POST /api/seed/test-emails is also dev-only). These are guarded because they're irreversible and dangerous if called in production. In development, they return normally; in production, they return a plain 404 so external callers get no hint that these endpoints exist.</p>
+        <pre><code>export async function DELETE() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }</code></pre>
+        <span class="source-cite">src/app/api/cleanup/route.ts:12-15 (NODE_ENV guard pattern); PLAN.txt rows 33, 42, 45-46 (cleanup, migrate, seed, seed/test-emails listed as dev-only)</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

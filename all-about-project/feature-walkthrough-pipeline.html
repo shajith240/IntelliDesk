@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email → Ticket → AI Draft — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Email → Ticket → AI Draft: End-to-End Pipeline</h1>
+    <p class="page-intro">Trace a single incoming customer email through the entire processing pipeline: from ingestion, spam detection, and deduplication, through AI classification and ticket creation, to draft response generation. Understand what database tables are written in what order, and which decisions determine whether a ticket is auto-classified or flagged for human review.</p>
+
+    <h2>Step 1: Email Ingestion (Webhook or Cron)</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does an email enter the system—via webhook or cron?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Two entry points exist, both secured by bearer-secret authentication rather than session auth. <code>POST /api/emails/ingest</code> is a webhook endpoint called directly by an external email relay service; <code>GET/POST /api/emails/poll</code> is a Vercel Cron endpoint that pulls new messages from IMAP on a schedule for each organization that has email configured. Both routes call <code>processEmail()</code> from the processor pipeline. Ingest fails closed with 503 if the secret environment variable is unset; poll silently skips orgs without IMAP credentials rather than erroring.</p>
+        <pre><code>// src/app/api/emails/ingest/route.ts — webhook ingestion
+export async function POST(req: NextRequest) {
+	const denied = verifyBearerSecret(
+		req,
+		process.env.EMAIL_INGEST_SECRET,
+		"EMAIL_INGEST_SECRET",
+	);
+	if (denied) return denied;
+	const body = await req.json();
+	// ... validate required fields ...
+	const result = await processEmail(rawEmail, orgId);</code></pre>
+        <span class="source-cite">src/app/api/emails/ingest/route.ts:7-51; src/app/api/emails/poll/route.ts:11-69</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What fields are required in an ingest webhook payload?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Four fields must be present: <code>from_address</code>, <code>subject</code>, <code>received_at</code>, and <code>organization_id</code>. All other fields (message_id, from_name, to_address, cc, body_text, body_html, etc.) are optional and default to empty string or null. The route validates required fields and rejects with 400 if any are missing.</p>
+        <span class="source-cite">src/app/api/emails/ingest/route.ts:19-31</span>
+      </div>
+    </div>
+
+    <h2>Step 2–5: Pipeline Orchestration and AI Classification</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What is the exact sequence of operations inside the email processor?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The processor runs 11 sequential steps in this order: (0) clean email body, (1) quick spam check by pattern/regex, (2) generate embedding, (3) check for duplicates, (4) detect thread (reply-to/in-reply-to), (5) AI classification by Gemini, (5b) skip ticket if AI flags as spam, (6) customer identification, (7) save email to DB, (8) store embedding in Pinecone, (9) create or update ticket, (10) generate and conditionally send auto-response, (11) audit log. If any step fails, an error response is returned and the failed email is saved for retry.</p>
+        <pre><code>// src/server/pipeline/processor.ts — the 11-step pipeline
+export async function processEmail(rawEmail: RawEmail, orgId: string): Promise<PipelineResult> {
+	// 0. Clean body
+	const cleanBody = cleanEmailBody(rawEmail.body_text || rawEmail.body_html || "");
+	// 1. Quick local spam check
+	if (isLikelySpam(...)) { return spam_result; }
+	// 2. Generate embedding for dedup and search
+	const embedding = await generateEmailEmbedding(rawEmail.subject, cleanBody);
+	// 3. Check for duplicates
+	const dupResult = await checkDuplicate(...);
+	if (dupResult.is_duplicate) { return duplicate_result; }
+	// 4. Thread detection
+	const threadResult = await detectThread(...);
+	// 5. AI Classification
+	const classification = await classifyEmail(...);
+	// 5b. Skip if AI flagged spam
+	if (classification.is_spam) { return ai_spam_result; }
+	// 6. Customer identification
+	const customer = await identifyCustomer(...);
+	// 7. Save email to database
+	const savedEmailId = await saveEmailToDb(...);
+	// 8. Store embedding in Pinecone
+	await upsertVectors(...);
+	// 9. Create or update ticket
+	// 10. Auto-response generation
+	// 11. Audit log</code></pre>
+        <span class="source-cite">src/server/pipeline/processor.ts:22-351</span>
+      </div>
+    </div>
+
+    <h2>Step 3: Deduplication</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the system detect duplicate emails?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Two methods are used in order: first, an exact Message-ID lookup (if the incoming email has one and a non-spam prior email with the same Message-ID already exists in Pinecone, it's a duplicate). Second, semantic similarity search via Pinecone: if the embedding matches another email from the same sender within the last 72 hours with a similarity score ≥ 0.85, it's flagged as a duplicate. If either check matches, the result includes the duplicate_of ID and similarity score.</p>
+        <pre><code>const DEDUP_SIMILARITY_THRESHOLD = 0.85;
+const DEDUP_TIME_WINDOW_HOURS = 72;
+
+export async function checkDuplicate(messageId: string | null, fromAddress: string,
+	embedding: number[], receivedAt: Date, orgId: string): Promise<DeduplicationResult> {
+	// 1. Exact message-id match
+	if (messageId) {
+		const { data: existing } = await supabaseAdmin.from("emails")
+			.select("id, is_spam").eq("message_id", messageId)
+			.eq("organization_id", orgId).single();
+		if (existing && !existing.is_spam) {
+			return { is_duplicate: true, similarity_score: 1.0, method: "message_id" };
+		}
+	}
+	// 2. Semantic similarity
+	const results = await queryVectors(orgNamespace(orgId, "emails"), embedding, 5,
+		{ from_address: fromAddress, timestamp: { $gte: cutoffTimestamp } });
+	if (results && results[0]?.score >= DEDUP_SIMILARITY_THRESHOLD) {
+		return { is_duplicate: true, similarity_score: results[0].score, method: "semantic" };
+	}
+	return { is_duplicate: false, ... };</code></pre>
+        <span class="source-cite">src/server/pipeline/deduplicator.ts:7-74</span>
+      </div>
+    </div>
+
+    <h2>Step 4: Customer Identification</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the system identify which customer account an email belongs to?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The system tries three strategies in order, each creating a contact/account if needed: (1) exact email match in existing contacts for this org, (2) domain match against existing accounts (if email domain matches an account's domain, create a new contact under that account), (3) new lead (extract name and company from email signature, create both account and contact as Bronze tier). The result includes contact_id, account_id, account_name, account_tier, and the method used.</p>
+        <pre><code>// src/server/pipeline/customer-identifier.ts
+export async function identifyCustomer(fromAddress: string, fromName: string | null,
+	bodyText: string, orgId: string): Promise<CustomerIdentificationResult> {
+	const emailDomain = fromAddress.split("@")[1]?.toLowerCase();
+	// 1. Exact contact match
+	const { data: existingContact } = await supabaseAdmin.from("contacts")
+		.select("id, name, email, role, account_id, accounts(...)")
+		.eq("email", fromAddress.toLowerCase())
+		.eq("accounts.organization_id", orgId).single();
+	if (existingContact) { return { is_existing: true, contact_id: ..., method: "email_match" }; }
+	// 2. Domain match
+	if (emailDomain) {
+		const { data: account } = await supabaseAdmin.from("accounts")
+			.select("id, company_name, domain, tier").eq("domain", emailDomain)
+			.eq("organization_id", orgId).single();
+		if (account) { /* create new contact under existing account */ }
+	}
+	// 3. New lead
+	const { data: newAccount } = await supabaseAdmin.from("accounts")
+		.insert({ organization_id: orgId, company_name, domain, tier: "Bronze" })
+		.select("id").single();</code></pre>
+        <span class="source-cite">src/server/pipeline/customer-identifier.ts:10-135</span>
+      </div>
+    </div>
+
+    <h2>Step 5: AI Classification</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the Gemini classification prompt return, and how is it parsed?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The classification prompt sends the email (from, subject, body) to Gemini and asks for a JSON object with these fields: is_spam (boolean), category (one of 9 predefined values like "Technical Support", "Billing/Invoice", etc.), severity (P1–P4), language (english/hindi/mixed/other), sentiment (positive/neutral/negative/angry), confidence (0–1), summary (1–2 sentences), key_entities (array), suggested_tags (array), requires_human_review (boolean), and reasoning (brief explanation). The response is parsed as JSON, with markdown code fences stripped. Invalid or missing fields are replaced with safe defaults (category→"General Inquiry", severity→"P3", confidence→0).</p>
+        <pre><code>const CLASSIFICATION_PROMPT = `You are an AI email classifier for a B2B SaaS helpdesk.
+Analyze the following email and return a JSON object with these fields:
+{
+  "is_spam": boolean,
+  "category": one of ["Technical Support", "Access Request", "Billing/Invoice", ...],
+  "severity": one of ["P1", "P2", "P3", "P4"],
+  "confidence": number between 0 and 1,
+  "requires_human_review": boolean,
+  ...
+}`;
+
+const text = await geminiGenerate(CLASSIFICATION_PROMPT, emailContent);
+const jsonStr = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+const parsed = JSON.parse(jsonStr);
+const classification: ClassificationResult = {
+	is_spam: Boolean(parsed.is_spam),
+	category: VALID_CATEGORIES.includes(parsed.category) ? parsed.category : "General Inquiry",
+	severity: VALID_SEVERITIES.includes(parsed.severity) ? parsed.severity : "P3",
+	confidence: Math.min(1, Math.max(0, Number(parsed.confidence) || 0.5)),
+	requires_human_review: parsed.confidence < 0.8 || Boolean(parsed.requires_human_review),
+	...
+};</code></pre>
+        <span class="source-cite">src/server/gemini/classify.ts:20-126</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What triggers the "flagged for human review" flag on a ticket?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>A ticket is flagged for human review (<code>is_flagged_for_review: true</code>) if either the Gemini model's <code>requires_human_review</code> field is true OR the confidence score is below 0.8. This decision is made in the classification function and stored on the ticket row when created.</p>
+        <pre><code>requires_human_review: parsed.confidence < 0.8 || Boolean(parsed.requires_human_review),
+
+// When creating ticket:
+is_flagged_for_review: classification.requires_human_review || false,</code></pre>
+        <span class="source-cite">src/server/gemini/classify.ts:103-104; src/server/pipeline/processor.ts:200</span>
+      </div>
+    </div>
+
+    <h2>Step 6–7: Embeddings and Ticket Creation</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How are embeddings generated and stored?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Email embeddings are generated by Gemini's <code>gemini-embedding-001</code> model, which natively returns 3072 dimensions. The SDK does not expose dimensionality control, so the code downscales via Matryoshka truncation (the model is trained for this) to match the Pinecone index dimension (default 768, configurable via <code>PINECONE_EMBEDDING_DIMENSIONS</code). After truncation, embeddings are re-normalized to unit length. The email embedding is stored in Pinecone under the namespace <code>orgs/{orgId}/emails</code> with metadata (from_address, category, severity, timestamp). A separate embedding is also stored under <code>orgs/{orgId}/tickets</code> when a new ticket is created.</p>
+        <pre><code>function toTargetDimension(values: number[]): number[] {
+	const sliced = values.length > EMBEDDING_DIMENSIONS ? values.slice(0, EMBEDDING_DIMENSIONS) : values;
+	const norm = Math.sqrt(sliced.reduce((sum, v) => sum + v * v, 0)) || 1;
+	return sliced.map((v) => v / norm);
+}
+
+export async function generateEmbedding(text: string): Promise<number[]> {
+	const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+	const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
+	const result = await model.embedContent(text);
+	return toTargetDimension(result.embedding.values);
+}</code></pre>
+        <span class="source-cite">src/server/gemini/embeddings.ts:12-29; src/server/db/pinecone.ts:11-32</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What happens when a new ticket is created versus when an email is added to an existing thread?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>If the email is detected as a new thread (not a reply to an existing ticket), a new ticket row is created with all the classification data, and the email is linked with relationship="original". If it's a reply to an existing ticket, only a ticket_emails link is created with relationship="reply", and the existing ticket's severity is updated if the new email has higher priority. Both paths store the embedding and create audit logs.</p>
+        <pre><code>// src/server/pipeline/processor.ts:154-242
+if (threadResult.is_thread && threadResult.existing_ticket_id) {
+	// Add to existing ticket
+	ticketId = threadResult.existing_ticket_id;
+	await supabaseAdmin.from("ticket_emails").insert({
+		ticket_id: ticketId, email_id: savedEmailId, relationship: "reply",
+	});
+	// Update ticket severity if new email is higher priority
+	if (severityOrder[classification.severity] < severityOrder[existingTicket.severity]) {
+		await supabaseAdmin.from("tickets").update({ severity: classification.severity }).eq("id", ticketId);
+	}
+} else {
+	// Create new ticket
+	const { data: newTicket } = await supabaseAdmin.from("tickets").insert({
+		organization_id: orgId,
+		subject: rawEmail.subject,
+		summary: classification.summary,
+		status: "New",
+		severity: classification.severity,
+		category: classification.category,
+		ai_confidence: classification.confidence,
+		is_flagged_for_review: classification.requires_human_review || false,
+		ai_classification: { /* full classification object */ },
+	}).select("id, ticket_number").single();
+	// Link email with relationship="original"
+	await supabaseAdmin.from("ticket_emails").insert({
+		ticket_id: ticketId, email_id: savedEmailId, relationship: "original",
+	});
+}</code></pre>
+        <span class="source-cite">src/server/pipeline/processor.ts:157-242</span>
+      </div>
+    </div>
+
+    <h2>Step 8: Auto-Response Generation</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">When and how is an auto-response generated?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Auto-responses are generated for non-spam emails with P3 or P4 severity only (P1/P2 never auto-respond). The function generates an embedding from the email subject and body, then semantically searches for matching FAQs by category. If the top match has similarity ≥ 0.9 (perfect match), the response is auto-sent; if 0.7–0.9 (partial match), it's saved as a draft suggestion for the agent; if &lt;0.7, no response is generated. A Gemini call personalizes each suggested response using the top 3 matching FAQ answers. The auto-response record is saved to the database with <code>sent: true/false</code> and <code>response_type: "auto"|"suggest"|"none"</code>.</p>
+        <pre><code>// src/server/gemini/respond.ts:18-116
+export async function generateAutoResponse(emailSubject: string, emailBody: string,
+	category: string, severity: Severity, customerName: string | undefined,
+	accountTier: string | null | undefined, orgId: string): Promise<AutoResponseResult> {
+	// Don't auto-respond to P1/P2
+	if (severity === "P1" || severity === "P2") {
+		return { should_respond: false, response_type: "none", ... };
+	}
+	// Semantic search for matching FAQs
+	const embedding = await generateEmbedding(queryText);
+	const faqResults = await queryVectors(orgNamespace(orgId, "faqs"), embedding, 5, { category });
+	const topMatch = faqMatches[0];
+	if (!topMatch || topMatch.score < 0.7) {
+		return { should_respond: false, response_type: "none", ... };
+	}
+	const response = await generatePersonalizedResponse(...);
+	if (topMatch.score >= 0.9) {
+		return { should_respond: true, response_type: "auto", response_text: response, ... };
+	}
+	return { should_respond: true, response_type: "suggest", response_text: response, ... };
+}</code></pre>
+        <span class="source-cite">src/server/gemini/respond.ts:18-116; src/server/pipeline/processor.ts:244-295</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What database rows are written during email processing, and in what order?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The order is: (1) <code>emails</code> row (upsert, for dedup safety), (2) <code>tickets</code> row (if new thread), (3) <code>ticket_emails</code> links (relationship: "original" or "reply"), (4) <code>auto_responses</code> row (if applicable, with sent=true/false), (5) <code>audit_logs</code> entry (with full classification and processing metadata). Pinecone vectors are stored in parallel with step 1. If an email is marked spam at step 1, only the email row is written and processing stops. If classified as spam by AI (step 5), the email row is updated with is_spam=true and processing stops before ticket creation.</p>
+        <span class="source-cite">src/server/pipeline/processor.ts:130-322</span>
+      </div>
+    </div>
+
+    <h2>Step 9: Pipeline Result and Error Handling</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the pipeline return on success, and what error cases can occur?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>On success, <code>processEmail()</code> returns an object with status="processed", email_id, ticket_id, ticket_number, classification, thread, customer, auto_response_sent, and processing_time_ms. On failure at any step, the function catches the error, saves a failed email (with processed=false) for retry, and returns status="error" with the error message. Spam-detected and duplicate-detected emails return status="spam" or status="duplicate" with the detection method and similarity score. The HTTP route responds with 200 on success (even if status is "spam" or "duplicate"), and 500 only if the entire request processing fails.</p>
+        <pre><code>// src/server/pipeline/processor.ts:324-351
+return {
+	email_id: savedEmailId,
+	ticket_id: ticketId,
+	ticket_number: ticketNumber,
+	status: "processed",
+	classification,
+	thread: threadResult,
+	customer,
+	auto_response_sent: autoResponseSent,
+	message: `Email processed → ${threadResult.is_thread ? "added to" : "created"} ticket ${ticketNumber}`,
+	processing_time_ms: Date.now() - startTime,
+};
+
+// On error:
+catch (error) {
+	console.error("Pipeline error:", error);
+	await saveEmailToDb(emailId, rawEmail, orgId, { processed: false }).catch(() => {});
+	return {
+		email_id: emailId,
+		status: "error",
+		message: `Processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+		processing_time_ms: Date.now() - startTime,
+	};
+}</code></pre>
+        <span class="source-cite">src/server/pipeline/processor.ts:324-350</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

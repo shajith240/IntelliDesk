@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Authentication &amp; Security — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Authentication &amp; Security</h1>
+    <p class="page-intro">How the application authenticates users, enforces organization-scoped access, and secures webhook endpoints. NextAuth v5 with credentials provider, JWT sessions, and multi-tenant isolation via organization_id checks on every route.</p>
+
+    <h2>Session &amp; User Roles</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the session object contain?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>After login, the session shape includes the user's id, email, name, role, organization_id, and optional avatar image. The role field is an enum: <code>admin</code>, <code>agent</code>, or <code>viewer</code>. All authenticated requests carry this session object through the auth() middleware.</p>
+        <pre><code>interface Session {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: "admin" | "agent" | "viewer";
+    organization_id: string;
+    image?: string | null;
+  };
+}</code></pre>
+        <span class="source-cite">src/server/auth/config.ts:8-23 (Session interface augmentation)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the session created and stored?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>NextAuth v5 uses a JWT strategy with a 30-day maxAge. When a user logs in via the credentials provider (email + password verified against bcryptjs hash), the user data is returned and then encoded into a JWT token. On every request, the JWT is decoded to reconstruct the session object. The JWT callbacks enrich the token with <code>role</code> and <code>organization_id</code>, and the session callback copies those fields from the token into the session object that route handlers receive.</p>
+        <pre><code>session: {
+  strategy: "jwt",
+  maxAge: 30 * 24 * 60 * 60, // 30 days
+},</code></pre>
+        <span class="source-cite">src/server/auth/config.ts:36-39</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the password verified during login?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The credentials provider queries the user by email (case-insensitive, trimmed), fetches the stored <code>password_hash</code>, and uses bcryptjs's <code>compare()</code> function to check if the plaintext password matches the hash. The hash was created when the user was invited or signed up; passwords are never stored in plaintext. If verification fails or the user is marked inactive, login returns null and the request fails.</p>
+        <pre><code>const isValid = await compare(password, user.password_hash);
+if (!isValid) {
+  return null;
+}</code></pre>
+        <span class="source-cite">src/server/auth/config.ts:71-74</span>
+      </div>
+    </div>
+
+    <h2>Organization Scoping &amp; Multi-Tenancy</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Why is organization_id critical to the data model?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Every row in every data table (tickets, emails, users, faqs, etc.) is tagged with an organization_id. This enforces multi-tenant isolation: an agent in Organization A cannot see, modify, or query tickets belonging to Organization B because every API route filters results with <code>.eq("organization_id", orgId)</code> before returning. Without this check, a malicious user could simply change the organization_id in their session token or guess other org IDs to access data they shouldn't see.</p>
+        <p>The pattern is consistent across all protected routes: extract orgId from the session, then filter the Supabase query by that organization.</p>
+        <span class="source-cite">src/app/api/tickets/route.ts:19-72 (org-scoped queries); src/server/auth/org-context.ts (getOrgId helper)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the getOrgId helper prevent accidental data leaks?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>getOrgId()</code> function extracts organization_id from the session and throws if it's missing. This ensures that any route using it fails hard (500 error) rather than silently proceeding without an org filter, which would be a critical security bug. Throwing is better than silently defaulting because a missing organization_id should never happen for a valid authenticated session — if it does, something is wrong and the operator should know immediately.</p>
+        <pre><code>export function getOrgId(session: Session): string {
+  const orgId = session.user?.organization_id;
+  if (!orgId) {
+    throw new Error("Session missing organization_id");
+  }
+  return orgId;
+}</code></pre>
+        <span class="source-cite">src/server/auth/org-context.ts:8-14</span>
+      </div>
+    </div>
+
+    <h2>Webhook &amp; Cron Authentication</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Why do webhook endpoints use bearer tokens instead of session auth?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Cron jobs and external webhooks (email ingest, email polling, queue processing) are not user-initiated requests with a logged-in session. Instead, they authenticate via a bearer token in the Authorization header, checked against a secret environment variable. This is the standard pattern for server-to-server communication. Three routes use this pattern: <code>/api/emails/ingest</code> (accepts emails from external service), <code>/api/emails/poll</code> (Vercel Cron), and <code>/api/emails/process-queue</code> (Vercel Cron).</p>
+        <span class="source-cite">src/middleware.ts:16-19 (three routes whitelisted as public-api); src/server/auth/cron.ts (verifyBearerSecret function)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does bearer token verification prevent timing attacks?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The <code>verifyBearerSecret()</code> function uses Node.js's built-in <code>timingSafeEqual</code> to compare the incoming Authorization header against the expected secret. Regular string comparison (<code>===</code>) can leak information through timing side-channels: if the first byte is wrong, the comparison fails faster than if the first byte is correct but the second is wrong. The safe comparison always takes the same time regardless of which byte differs, preventing an attacker from reverse-engineering the secret one byte at a time. Importantly, the lengths are compared first—if they differ, the function returns false immediately without calling timingSafeEqual.</p>
+        <pre><code>let isValid = false;
+if (authHeader.length === expected.length) {
+  try {
+    isValid = timingSafeEqual(
+      Buffer.from(authHeader),
+      Buffer.from(expected),
+    );
+  } catch {
+    isValid = false;
+  }
+}</code></pre>
+        <span class="source-cite">src/server/auth/cron.ts:27-36</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What happens if a webhook secret environment variable is missing?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Instead of silently accepting all requests (dangerous) or returning a generic 401 Unauthorized, the endpoint returns <code>503 Endpoint is not configured</code>. This fail-closed behavior signals that the deployment is misconfigured and must be fixed before the endpoint works. A 503 is also distinct from 401, so logs and monitoring can identify configuration errors separately from actual authentication failures.</p>
+        <pre><code>if (!secret) {
+  console.error(`${name} is not configured`);
+  return NextResponse.json(
+    { error: "Endpoint is not configured" },
+    { status: 503 },
+  );
+}</code></pre>
+        <span class="source-cite">src/server/auth/cron.ts:15-20</span>
+      </div>
+    </div>
+
+    <h2>Login &amp; Route Protection</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the login page prevent open-redirect attacks?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The login form accepts a <code>callbackUrl</code> query parameter to redirect users after login. However, it validates the URL with a regex before using it: <code>/^\/[^/\\]/</code>. This ensures the URL starts with a single forward slash, contains no backslashes, and has at least one more character after the slash, meaning it must be a relative path within the app (e.g., <code>/dashboard</code>) and not an external URL like <code>https://attacker.com</code>. If the validation fails, the default fallback is <code>/dashboard</code>.</p>
+        <pre><code>const callbackUrl =
+  callbackUrlParam && /^\/[^/\\]/.test(callbackUrlParam)
+    ? callbackUrlParam
+    : "/dashboard";</code></pre>
+        <span class="source-cite">src/app/(auth)/login/page.tsx:20-23</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How are dashboard routes protected from unauthenticated access?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The Next.js middleware (at <code>src/middleware.ts</code>) runs on every request. For routes under <code>/dashboard</code>, it checks if the user has a session. If not, it redirects to <code>/login?callbackUrl=/dashboard/...</code>, preserving the original path so the user is sent to the right page after logging in. Auth pages (<code>/login</code>, <code>/signup</code>) are allowed for unauthenticated users; if a logged-in user tries to visit them, they're redirected to <code>/dashboard</code>.</p>
+        <span class="source-cite">src/middleware.ts:11-42</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How do API routes enforce authentication?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Every protected API route calls <code>requireAuth()</code> as the first step. This function calls NextAuth's <code>auth()</code> to get the session, and returns a 401 response if there's no session. After confirming authentication, routes call <code>getOrgId()</code> to extract and validate the organization_id, then filter all queries by that org. Webhook routes (poll, process-queue, ingest) skip this and call <code>verifyCronRequest()</code> instead, which checks the bearer token.</p>
+        <pre><code>const session = await requireAuth();
+if (session instanceof NextResponse) return session;
+const orgId = getOrgId(session);</code></pre>
+        <span class="source-cite">src/server/auth/helpers.ts:12-18; src/app/api/tickets/route.ts:16-19</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

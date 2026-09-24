@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>External Services &amp; Integrations — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>External Services &amp; Integrations</h1>
+    <p class="page-intro">The four external services that power this application: Supabase for data persistence, Pinecone for semantic search, Google Gemini for AI classification and embeddings, and IMAP/SMTP for email ingestion and sending. Each is accessed via a server-only client initialized as a singleton.</p>
+
+    <h2>Supabase (PostgreSQL database)</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How is Supabase used in this application?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Supabase provides the PostgreSQL database and storage for all persistent data: organizations, users, tickets, emails, SLA policies, knowledge-base articles, and audit logs. The app uses the Supabase service-role client (not the anon key) from all route handlers, which bypasses row-level security policies and requires explicit organization filtering in every query.</p>
+        <p>Row-level security (RLS) policies in the database prevent unauthorized access at the SQL layer as a defense-in-depth measure. Mailbox credentials (IMAP/SMTP) are also stored in Supabase under <code>email_config</code>, encrypted at rest and fetched per-organization when the cron job runs.</p>
+        <span class="source-cite">README.md "Database" section; src/server/db/supabase.ts</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the Supabase service-role client initialized?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The Supabase client is initialized as a lazy singleton using a Proxy pattern in <code>src/server/db/supabase.ts</code>:</p>
+        <pre><code>import "server-only";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+let _supabaseAdmin: SupabaseClient | null = null;
+
+function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabaseAdmin) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    _supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+  }
+  return _supabaseAdmin;
+}
+
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getSupabaseAdmin();
+    const value = (client as unknown as Record<string | symbol, unknown>)[prop];
+    if (typeof value === "function") {
+      return value.bind(client);
+    }
+    return value;
+  },
+});</code></pre>
+        <p>The Proxy intercepts property access and returns the singleton client. This pattern ensures the client is initialized on first use and reused thereafter, reducing connection overhead in serverless functions. Every function call is bound to the client instance.</p>
+        <span class="source-cite">src/server/db/supabase.ts lines 1-25; package @supabase/supabase-js ^2.108.2</span>
+      </div>
+    </div>
+
+    <h2>Pinecone (vector search)</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What is Pinecone used for, and how is it configured?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Pinecone stores vector embeddings of every ticket and knowledge-base article, indexed by organization namespace. During the email pipeline, each new ticket's embedding (generated by Gemini) is upserted to Pinecone. When drafting a reply, the pipeline queries Pinecone for the top 5 most similar knowledge-base articles and uses them to prompt Gemini for a reply draft.</p>
+        <p>Configuration is split between environment variables:</p>
+        <ul>
+          <li><code>PINECONE_API_KEY</code> — API authentication</li>
+          <li><code>PINECONE_INDEX</code> — Index name (default "intellidesk")</li>
+          <li><code>PINECONE_HOST</code> — Optional direct index host for performance (Pinecone provides this in the console)</li>
+          <li><code>PINECONE_EMBEDDING_DIMENSIONS</code> — Must match both the index creation dimension and Gemini's embedding model output (currently 3072 for gemini-embedding-001)</li>
+        </ul>
+        <span class="source-cite">src/server/db/pinecone.ts; README.md lines 82-85</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does Pinecone enforce embedding dimension correctness?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Before upserting or querying, the Pinecone client validates vector dimensions against <code>EMBEDDING_DIMENSIONS</code>. This prevents silent mismatches between the index and incoming vectors:</p>
+        <pre><code>export const EMBEDDING_DIMENSIONS = Number(
+  process.env.PINECONE_EMBEDDING_DIMENSIONS || 768,
+);
+
+export async function upsertVectors(
+  namespace: string,
+  vectors: {
+    id: string;
+    values: number[];
+    metadata: RecordMetadata;
+  }[],
+) {
+  // Validate vector dimensions before upserting
+  for (const v of vectors) {
+    if (v.values.length !== EMBEDDING_DIMENSIONS) {
+      throw new Error(
+        `Vector dimension mismatch: expected ${EMBEDDING_DIMENSIONS}, got ${v.values.length}. ` +
+        `Ensure you are using gemini-embedding-001 which produces ${EMBEDDING_DIMENSIONS}-dimensional vectors.`
+      );
+    }
+  }
+  // ... upsert proceeds
+}</code></pre>
+        <p>If a vector dimension is incorrect (e.g., a different embedding model produces 1024 dimensions instead of 3072), the error is thrown immediately with a helpful message before any data is written. Query vectors are similarly validated.</p>
+        <span class="source-cite">src/server/db/pinecone.ts lines 11-55; package @pinecone-database/pinecone ^7.1.0</span>
+      </div>
+    </div>
+
+    <h2>Google Gemini (AI classification and embeddings)</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What does Gemini do in this application, and how is it used?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Gemini is used for three tasks:</p>
+        <ul>
+          <li><strong>Message classification</strong> — Every incoming email is sent to Gemini with a structured prompt to classify its category (Technical Support, Billing/Invoice, etc.), priority (P1-P4), sentiment, and confidence score. The response is stored on the ticket.</li>
+          <li><strong>Embeddings</strong> — Each ticket and FAQ article is embedded via Gemini's embedding model (<code>gemini-embedding-001</code>) to produce a 3072-dimensional vector, which is stored in Pinecone for semantic search.</li>
+          <li><strong>Reply drafting</strong> — When an agent opens a ticket, the pipeline queries Pinecone for the top knowledge-base articles, sends them to Gemini with the ticket context, and generates a draft response. The agent reviews and confirms before sending.</li>
+        </ul>
+        <span class="source-cite">README.md lines 28-29, 45; src/server/gemini/client.ts</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the Gemini client initialized?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The Gemini client uses a similar lazy-singleton pattern to Supabase:</p>
+        <pre><code>import "server-only";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+let genAI: GoogleGenerativeAI | null = null;
+
+export function getGenAI(): GoogleGenerativeAI {
+  if (!genAI) {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+  }
+  return genAI;
+}
+
+export function getModel(modelName: string = "gemini-2.5-flash") {
+  return getGenAI().getGenerativeModel({ model: modelName });
+}</code></pre>
+        <p>The <code>getModel()</code> helper abstracts model selection, defaulting to <code>gemini-2.5-flash</code> but allowing override. This avoids instantiating the client multiple times across different route handlers.</p>
+        <span class="source-cite">src/server/gemini/client.ts; package @google/generative-ai ^0.24.1</span>
+      </div>
+    </div>
+
+    <h2>Email (IMAP and SMTP)</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the application ingest emails via IMAP?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>pollNewEmails()</code> function in <code>src/server/email/imap.ts</code> runs on every cron job invocation:</p>
+        <ul>
+          <li>Fetches the organization's IMAP configuration from Supabase (<code>email_config</code> table).</li>
+          <li>Connects to the mailbox via the <code>imapflow</code> library (pure IMAP, no OAuth relay).</li>
+          <li>Queries unseen emails from the last 2 days (to avoid bulk-importing old inbox history on first run).</li>
+          <li>For each message, uses <code>mailparser</code>'s <code>simpleParser()</code> to extract headers, body (text + HTML), from/to/subject, references, and message ID.</li>
+          <li>Marks the email as seen in the mailbox (best-effort; failures are logged and don't block).</li>
+          <li>Returns a <code>RawEmail</code> object for pipeline processing.</li>
+        </ul>
+        <p>The <code>processedUIDs</code> in-memory set tracks emails that were parsed successfully to avoid re-processing if the mailbox's seen flag doesn't persist (edge case on slow connections).</p>
+        <span class="source-cite">src/server/email/imap.ts lines 57-141; packages imapflow (pure IMAP) + mailparser</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the application send replies via SMTP?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>sendEmail()</code> function in <code>src/server/email/smtp.ts</code> uses nodemailer to send email replies:</p>
+        <pre><code>export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
+  const transporter = getTransporter(options.smtpConfig);
+  if (!transporter) {
+    console.warn("SMTP credentials not configured, skipping send");
+    return false;
+  }
+
+  const user = options.smtpConfig!.user;
+
+  try {
+    await transporter.sendMail({
+      from: `"IntelliDesk AI Support" <${user}>`,
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+      inReplyTo: options.inReplyTo,
+      references: options.references?.join(" "),
+    });
+    return true;
+  } catch (err) {
+    console.error("SMTP send error:", err);
+    return false;
+  }
+}</code></pre>
+        <p>The function returns <code>true</code> on success or <code>false</code> if credentials are missing. SMTP configuration (host, port, username, password) comes from the organization's <code>email_config</code> row in Supabase, not from environment variables. The <code>inReplyTo</code> and <code>references</code> headers preserve the email thread.</p>
+        <span class="source-cite">src/server/email/smtp.ts lines 33-57; package nodemailer</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What email parsing utilities exist for cleaning and extracting data?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The <code>src/server/email/parser.ts</code> module provides several utilities for processing email content:</p>
+        <ul>
+          <li><strong><code>stripHtml()</code></strong> — Removes HTML tags and entities, leaving plain text for embedding and classification.</li>
+          <li><strong><code>cleanEmailBody()</code></strong> — Removes quoted replies and forward markers (lines starting with "&gt;" or "On ... wrote:") to isolate the new message content.</li>
+          <li><strong><code>extractSignature()</code></strong> — Extracts the sender's name, role, company, email, and phone from the signature block using regex patterns.</li>
+          <li><strong><code>isLikelySpam()</code></strong> — Scores the email against keywords and sender patterns (marketing, automated, newsletters) and returns true if spam confidence is high. This avoids creating tickets for unwanted emails.</li>
+          <li><strong><code>normalizeSubject()</code></strong> — Removes "Re:", "Fwd:", and bracketed tags from the subject to identify threads correctly.</li>
+          <li><strong><code>detectLanguage()</code></strong> — Detects if the email body contains Hindi (Devanagari) characters, returning "hindi", "mixed", or "english".</li>
+          <li><strong><code>extractTicketReferences()</code></strong> — Finds ticket numbers in the email body using patterns like "#12345", "Ticket-123", or "TKT-00001".</li>
+        </ul>
+        <span class="source-cite">src/server/email/parser.ts</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>
