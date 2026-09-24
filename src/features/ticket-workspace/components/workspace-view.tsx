@@ -1,15 +1,14 @@
 "use client";
 
-// Main ticket workspace layout; responsive three-column (desktop), two-column (tablet), or tabbed (mobile).
+// Ticket workspace layout: conversation with a docked composer beside a collapsible sidebar; tabs on mobile.
 import { useEffect, useState } from "react";
-import { AiAnalysisColumn } from "./ai-analysis-column";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useReplyDraft } from "@/features/ticket-workspace/hooks/use-reply-draft";
 import { ConversationColumn } from "./conversation-column";
-import { DetailsColumn } from "./details-column";
 import { ReplyComposer } from "./reply-composer";
 import { SendConfirmDialog } from "./send-confirm-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TicketSidebar } from "./ticket-sidebar";
 import { WorkspaceHeader } from "./workspace-header";
-import { useReplyDraft } from "@/features/ticket-workspace/hooks/use-reply-draft";
 import type { TicketDetailResponse } from "@/types/api";
 
 interface WorkspaceViewProps {
@@ -31,81 +30,52 @@ export function WorkspaceView({ detail, onOpenTicket, onClose, onDirtyChange }: 
 		onDirtyChange(draft.isDirty);
 	}, [draft.isDirty, onDirtyChange]);
 
-	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<WorkspaceHeader ticket={ticket} onClose={onClose} />
-
-			<div className="hidden min-h-0 flex-1 xl:grid xl:grid-cols-[minmax(0,1fr)_360px_320px]">
-				<div className="min-h-0 overflow-y-auto px-6 py-5">
-					<ConversationColumn ticket={ticket} draft={draft} onRequestSend={() => setSendDialogOpen(true)} />
-				</div>
-				<div className="min-h-0 overflow-y-auto border-l border-border bg-sunken px-4 py-5">
-					<AiAnalysisColumn
-						ticket={ticket}
-						similarTickets={similar_tickets}
-						pending={draft.pending}
-						lastSent={draft.lastSent}
-						onOpenTicket={onOpenTicket}
-					/>
-				</div>
-				<div className="min-h-0 overflow-y-auto border-l border-border px-4 py-5">
-					<DetailsColumn ticket={ticket} sla={sla} />
+	const main = (
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6">
+				<div className="mx-auto max-w-[760px]">
+					<ConversationColumn ticket={ticket} />
 				</div>
 			</div>
+			<div className="shrink-0 border-t border-border bg-raised px-4 py-3 sm:px-8">
+				<div className="mx-auto max-w-[760px]">
+					<ReplyComposer draft={draft} recipient={draft.recipient} onRequestSend={() => setSendDialogOpen(true)} />
+				</div>
+			</div>
+		</div>
+	);
 
-			<div className="hidden min-h-0 flex-1 md:grid md:grid-cols-[minmax(0,1fr)_340px] xl:hidden">
-				<div className="min-h-0 overflow-y-auto px-6 py-5">
-					<ConversationColumn ticket={ticket} draft={draft} onRequestSend={() => setSendDialogOpen(true)} />
-				</div>
-				<div className="min-h-0 overflow-y-auto border-l border-border px-4 py-5">
-					<AiAnalysisColumn
-						ticket={ticket}
-						similarTickets={similar_tickets}
-						pending={draft.pending}
-						lastSent={draft.lastSent}
-						onOpenTicket={onOpenTicket}
-					/>
-					<div className="mt-6 border-t border-border pt-5">
-						<DetailsColumn ticket={ticket} sla={sla} />
-					</div>
-				</div>
+	const sidebar = (
+		<TicketSidebar
+			ticket={ticket}
+			sla={sla}
+			similarTickets={similar_tickets}
+			evidence={draft.pending ?? draft.lastSent}
+			onOpenTicket={onOpenTicket}
+		/>
+	);
+
+	return (
+		<div className="flex h-full min-h-0 flex-col bg-background">
+			<WorkspaceHeader ticket={ticket} onClose={onClose} />
+
+			<div className="hidden min-h-0 flex-1 md:grid md:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
+				<div className="flex min-h-0 flex-col">{main}</div>
+				<aside aria-label="Ticket details" className="min-h-0 overflow-y-auto border-l border-border bg-raised">
+					{sidebar}
+				</aside>
 			</div>
 
 			<Tabs defaultValue="conversation" className="flex min-h-0 flex-1 flex-col md:hidden">
 				<TabsList className="px-3">
 					<TabsTrigger value="conversation">Conversation</TabsTrigger>
-					<TabsTrigger value="ai">AI analysis</TabsTrigger>
 					<TabsTrigger value="details">Details</TabsTrigger>
 				</TabsList>
-				<TabsContent value="conversation" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-					<ConversationColumn
-						ticket={ticket}
-						draft={draft}
-						onRequestSend={() => setSendDialogOpen(true)}
-						hideComposer
-					/>
-					<div className="mt-8 border-t border-border pt-6">
-						<ReplyComposer
-							draft={draft}
-							recipient={draft.recipient}
-							subject={ticket.subject}
-							ticketNumber={ticket.ticket_number}
-							onRequestSend={() => setSendDialogOpen(true)}
-							compactActions
-						/>
-					</div>
+				<TabsContent value="conversation" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+					{main}
 				</TabsContent>
-				<TabsContent value="ai" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-					<AiAnalysisColumn
-						ticket={ticket}
-						similarTickets={similar_tickets}
-						pending={draft.pending}
-						lastSent={draft.lastSent}
-						onOpenTicket={onOpenTicket}
-					/>
-				</TabsContent>
-				<TabsContent value="details" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-					<DetailsColumn ticket={ticket} sla={sla} />
+				<TabsContent value="details" className="min-h-0 flex-1 overflow-y-auto bg-raised">
+					{sidebar}
 				</TabsContent>
 			</Tabs>
 

@@ -1,24 +1,16 @@
 "use client";
 
-// Email conversation thread. Customer bodies are untrusted, so they render as plain text (HTML is converted to text).
-import { useMemo } from "react";
+// Ticket title and email thread. Customer bodies are untrusted, so they render as plain text (HTML is converted to text).
+import { useId, useMemo } from "react";
 import { MailX } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Lozenge, StatusLozenge } from "@/components/ui/lozenge";
 import { PriorityIcon } from "@/components/ui/priority-icon";
+import { cn } from "@/lib/utils";
 import { formatDateTime, formatRelative } from "@/lib/ticket-meta";
-import { ReplyComposer } from "./reply-composer";
-import type { ReplyDraft } from "@/features/ticket-workspace/hooks/use-reply-draft";
+import { AiSummaryCard } from "./ai-summary-card";
 import type { TicketDetail, TicketEmailRow } from "@/types/api";
-
-interface ConversationColumnProps {
-	ticket: TicketDetail;
-	draft: ReplyDraft;
-	onRequestSend: () => void;
-	/** Mobile renders its own composer with a sticky action bar below this column. */
-	hideComposer?: boolean;
-}
 
 function bodyTextFor(row: TicketEmailRow): string {
 	const email = row.emails;
@@ -30,7 +22,14 @@ function bodyTextFor(row: TicketEmailRow): string {
 	return "";
 }
 
-export function ConversationColumn({ ticket, draft, onRequestSend, hideComposer = false }: ConversationColumnProps) {
+const RELATIONSHIP_LABEL: Record<string, string> = {
+	original: "Original",
+	reply: "Reply",
+	forward: "Forward",
+	duplicate: "Duplicate",
+};
+
+export function ConversationColumn({ ticket }: { ticket: TicketDetail }) {
 	const rows = useMemo(
 		() =>
 			ticket.ticket_emails
@@ -47,123 +46,90 @@ export function ConversationColumn({ ticket, draft, onRequestSend, hideComposer 
 		return map;
 	}, [rows]);
 
-	const original = rows.find((row) => row.relationship === "original") ?? rows[0];
-	const thread = rows.filter((row) => row !== original);
+	const customer = ticket.contacts?.name ?? ticket.contacts?.email ?? null;
+	// Rendered once per responsive layout, so the heading id must be unique per instance.
+	const headingId = useId();
 
 	return (
-		<div>
-			<h1 className="text-2xl font-semibold tracking-[-0.01em] text-foreground">{ticket.subject}</h1>
-			<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-subtle">
-				<PriorityIcon severity={ticket.severity} showLabel />
-				<StatusLozenge status={ticket.status} />
-				<time dateTime={ticket.created_at} title={formatDateTime(ticket.created_at)}>
-					Opened {formatRelative(ticket.created_at)}
-				</time>
-				{ticket.category && <span>{ticket.category}</span>}
-			</div>
-
-			<div className="mt-4 flex items-start gap-3 rounded-lg border border-border bg-raised p-3">
-				<Avatar name={ticket.contacts?.name ?? ticket.contacts?.email ?? null} size="md" />
-				<div className="min-w-0 text-sm">
-					<p className="font-medium text-foreground">
-						{ticket.contacts?.name ?? ticket.contacts?.email ?? "Unknown contact"}
-					</p>
-					{ticket.contacts?.name && <p className="text-subtle">{ticket.contacts.email}</p>}
-					<p className="text-subtle">
-						{[ticket.contacts?.role, ticket.contacts?.phone].filter(Boolean).join(" · ")}
-					</p>
-					{ticket.accounts && (
-						<p className="mt-1 flex items-center gap-1.5 text-subtle">
-							{ticket.accounts.company_name}
-							<Lozenge>{ticket.accounts.tier}</Lozenge>
-						</p>
-					)}
+		<div className="space-y-6">
+			<div>
+				<h1 className="text-[22px] font-semibold leading-snug tracking-[-0.015em] text-foreground text-balance">
+					{ticket.subject}
+				</h1>
+				<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-subtle">
+					<PriorityIcon severity={ticket.severity} showLabel />
+					<StatusLozenge status={ticket.status} />
+					{ticket.category && <span>{ticket.category}</span>}
+					<span aria-hidden="true" className="text-border-bold">
+						·
+					</span>
+					<span>
+						{customer ? `${customer} opened this ` : "Opened "}
+						<time dateTime={ticket.created_at} title={formatDateTime(ticket.created_at)}>
+							{formatRelative(ticket.created_at)}
+						</time>
+					</span>
 				</div>
 			</div>
 
-			<div className="mt-5">
-				{rows.length === 0 && (
-					<EmptyState size="sm" icon={MailX} title="No email content stored" />
-				)}
+			<AiSummaryCard ticket={ticket} />
 
-				{original && (
-					<MessageBlock
-						row={original}
-						heading="Original message"
-						body={bodies.get(original.email_id) ?? ""}
-					/>
-				)}
+			<section aria-labelledby={headingId}>
+				<h2 id={headingId} className="flex items-center gap-2 text-sm font-semibold text-foreground">
+					Conversation
+					<span className="text-xs font-normal tabular text-subtlest">{rows.length}</span>
+				</h2>
 
-				{thread.length > 0 && (
-					<div className="mt-4">
-						<h2 className="text-sm font-semibold text-foreground">Thread history ({thread.length})</h2>
-						<div className="mt-2 space-y-2">
-							{thread.map((row) => (
-								<details key={row.email_id} className="rounded-md border border-border">
-									<summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm">
-										<span className="min-w-0 flex-1 truncate text-foreground">
-											{row.emails!.from_name || row.emails!.from_address}
-										</span>
-										<Lozenge>{row.relationship}</Lozenge>
-										<time
-											className="text-xs text-subtlest"
-											dateTime={row.emails!.received_at}
-											title={formatDateTime(row.emails!.received_at)}
-										>
-											{formatRelative(row.emails!.received_at)}
-										</time>
-									</summary>
-									<div className="border-t border-border px-3 py-2">
-										{row.emails!.language && row.emails!.language !== "en" && (
-											<Lozenge className="mb-2">{row.emails!.language}</Lozenge>
-										)}
-										<p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
-											{bodies.get(row.email_id) ?? ""}
-										</p>
-									</div>
-								</details>
-							))}
-						</div>
-					</div>
+				{rows.length === 0 ? (
+					<EmptyState className="mt-3" size="sm" icon={MailX} title="No email content stored" />
+				) : (
+					<ol className="mt-3 space-y-3">
+						{rows.map((row, index) => (
+							<li key={row.email_id}>
+								<MessageCard
+									row={row}
+									body={bodies.get(row.email_id) ?? ""}
+									// Older messages start collapsed so the latest one is readable without scrolling.
+									defaultOpen={index === rows.length - 1 || rows.length <= 2}
+								/>
+							</li>
+						))}
+					</ol>
 				)}
-			</div>
-
-			{!hideComposer && (
-				<div className="mt-8 border-t border-border pt-6">
-					<ReplyComposer
-						draft={draft}
-						recipient={draft.recipient}
-						subject={ticket.subject}
-						ticketNumber={ticket.ticket_number}
-						onRequestSend={onRequestSend}
-					/>
-				</div>
-			)}
+			</section>
 		</div>
 	);
 }
 
-function MessageBlock({
-	row,
-	heading,
-	body,
-}: {
-	row: TicketEmailRow;
-	heading: string;
-	body: string;
-}) {
+function MessageCard({ row, body, defaultOpen }: { row: TicketEmailRow; body: string; defaultOpen: boolean }) {
 	const email = row.emails!;
+	const sender = email.from_name || email.from_address;
+	const preview = body.replace(/\s+/g, " ").trim();
+
 	return (
-		<div>
-			<h2 className="text-sm font-semibold text-foreground">{heading}</h2>
-			<div className="mt-2 flex items-center justify-between gap-2">
-				<span className="text-sm font-medium text-foreground">{email.from_name || email.from_address}</span>
-				<time className="text-xs text-subtlest" dateTime={email.received_at} title={formatDateTime(email.received_at)}>
-					{formatRelative(email.received_at)}
-				</time>
-			</div>
-			{email.language && email.language !== "en" && <Lozenge className="mt-1">{email.language}</Lozenge>}
-			<p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-foreground">{body}</p>
-		</div>
+		<details open={defaultOpen} className="group rounded-lg border border-border bg-raised">
+			<summary className="flex cursor-pointer list-none items-start gap-3 rounded-lg px-4 py-3 hover:bg-fill/60">
+				<Avatar name={sender} size="md" />
+				<div className="min-w-0 flex-1">
+					<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+						<span className="text-sm font-semibold text-foreground">{sender}</span>
+						{email.from_name && <span className="truncate text-xs text-subtle">{email.from_address}</span>}
+						{row.relationship !== "original" && (
+							<Lozenge>{RELATIONSHIP_LABEL[row.relationship] ?? row.relationship}</Lozenge>
+						)}
+						{email.language && email.language !== "en" && <Lozenge>{email.language}</Lozenge>}
+						<time
+							className="ml-auto shrink-0 text-xs text-subtlest"
+							dateTime={email.received_at}
+							title={formatDateTime(email.received_at)}
+						>
+							{formatRelative(email.received_at)}
+						</time>
+					</div>
+					<p className={cn("mt-0.5 truncate text-sm text-subtle", "group-open:hidden")}>{preview}</p>
+				</div>
+			</summary>
+			<p className="whitespace-pre-wrap break-words px-4 pb-4 text-sm leading-6 text-foreground sm:pl-[60px]">{body}</p>
+		</details>
 	);
 }

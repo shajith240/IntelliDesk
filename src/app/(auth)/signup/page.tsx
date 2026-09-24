@@ -79,10 +79,10 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-raised p-8 shadow-raised">
+    <div>
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-foreground">Create your workspace</h1>
-        <p className="mt-1 text-sm text-subtle">You&apos;ll be the admin. You can invite your team later.</p>
+        <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground">Create your workspace</h1>
+        <p className="mt-2 text-sm text-subtle">You&apos;ll be the admin. You can invite your team later.</p>
       </div>
 
       {error && (
@@ -101,6 +101,7 @@ export default function SignupPage() {
         <div>
           <Label htmlFor="organization">Organization name</Label>
           <Input
+            className="h-10"
             id="organization"
             type="text"
             autoComplete="organization"
@@ -122,6 +123,7 @@ export default function SignupPage() {
         <div>
           <Label htmlFor="name">Your name</Label>
           <Input
+            className="h-10"
             id="name"
             type="text"
             autoComplete="name"
@@ -143,6 +145,7 @@ export default function SignupPage() {
         <div>
           <Label htmlFor="email">Work email</Label>
           <Input
+            className="h-10"
             id="email"
             type="email"
             autoComplete="email"
@@ -175,6 +178,7 @@ export default function SignupPage() {
         <div>
           <Label htmlFor="password">Password</Label>
           <Input
+            className="h-10"
             id="password"
             type="password"
             autoComplete="new-password"
@@ -207,7 +211,7 @@ export default function SignupPage() {
         <Button
           type="submit"
           variant="primary"
-          className="w-full"
+          className="h-10 w-full"
           loading={submitting}
         >
           Create account

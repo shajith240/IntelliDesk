@@ -76,10 +76,10 @@ function LoginForm() {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-raised p-8 shadow-raised">
+    <div>
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-foreground">Log in to IntelliDesk</h1>
-        <p className="mt-1 text-sm text-subtle">Use your workspace account.</p>
+        <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.02em] text-foreground">Log in to IntelliDesk</h1>
+        <p className="mt-2 text-sm text-subtle">Use your workspace account.</p>
       </div>
 
       {error && (
@@ -98,6 +98,7 @@ function LoginForm() {
         <div>
           <Label htmlFor="email">Email</Label>
           <Input
+            className="h-10"
             id="email"
             type="email"
             autoComplete="email"
@@ -142,7 +143,7 @@ function LoginForm() {
               onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
               invalid={touched.password && !password}
               aria-describedby={touched.password && !password ? "password-error" : undefined}
-              className="pr-10"
+              className="h-10 pr-10"
               required
             />
             <Button
@@ -167,7 +168,7 @@ function LoginForm() {
         <Button
           type="submit"
           variant="primary"
-          className="w-full"
+          className="h-10 w-full"
           loading={submitting}
         >
           Log in
@@ -188,7 +189,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="rounded-lg border border-border bg-raised p-8 shadow-raised">
+        <div>
           <Skeleton className="mb-6 h-6 w-40" />
           <Skeleton className="mb-8 h-4 w-56" />
           <div className="space-y-4">

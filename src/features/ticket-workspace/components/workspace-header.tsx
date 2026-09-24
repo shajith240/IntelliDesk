@@ -36,7 +36,7 @@ export function WorkspaceHeader({ ticket, onClose }: WorkspaceHeaderProps) {
 	};
 
 	return (
-		<header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
+		<header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-raised px-3 sm:px-4">
 			<nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-sm text-subtle">
 				<span>Queue /</span>
 				<span className="truncate font-mono text-foreground">{ticket.ticket_number}</span>
@@ -74,12 +74,14 @@ function StatusMenu({ ticket }: { ticket: TicketDetail }) {
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
 				<Button
-					variant="subtle"
-					size="sm"
+					variant="default"
+					size="md"
+					className="mr-1 gap-2 pl-2"
 					loading={loading}
 					aria-label={`Status: ${ticket.status}. Change status`}
 				>
 					{!loading && <StatusLozenge status={ticket.status} />}
+					<span className="hidden text-subtle sm:inline">Change status</span>
 					<ChevronDown aria-hidden="true" />
 				</Button>
 			</DropdownMenuTrigger>
