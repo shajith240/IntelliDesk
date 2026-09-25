@@ -364,3 +364,35 @@ export type ConnectMailboxBody =
 			smtp_host: string;
 			smtp_port: 465 | 587;
 	  };
+
+// ---------- /api/settings/ai ----------
+
+export interface AiKeyStatus {
+	/** workspace: the workspace's own key; platform: the deployment's shared key; none: AI is off. */
+	source: "workspace" | "platform" | "none";
+	key_hint?: string;
+	status?: "active" | "error";
+	last_error?: string | null;
+	updated_at?: string;
+}
+
+export interface AiSettingsResponse {
+	auto_send: boolean;
+	key: AiKeyStatus;
+}
+
+// ---------- /api/emails/spam ----------
+
+export interface SpamEmail {
+	id: string;
+	from_address: string;
+	from_name: string | null;
+	subject: string;
+	preview: string;
+	received_at: string;
+}
+
+export interface SpamListResponse {
+	window_days: number;
+	emails: SpamEmail[];
+}

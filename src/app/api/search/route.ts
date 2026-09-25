@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding } from "@/server/gemini/embeddings";
+import { aiErrorResponse, getAiContext } from "@/server/gemini/client";
 import { queryVectors } from "@/server/db/pinecone";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { requireAuth } from "@/server/auth/helpers";
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
 			);
 		}
 
-		const embedding = await generateEmbedding(q);
+		const embedding = await generateEmbedding(await getAiContext(orgId), q);
 
 		const results: Record<string, unknown[]> = {};
 
@@ -120,6 +121,8 @@ export async function GET(req: NextRequest) {
 
 		return NextResponse.json({ query: q, results });
 	} catch (error) {
+		const aiError = aiErrorResponse(error);
+		if (aiError) return NextResponse.json({ error: aiError.error }, { status: aiError.status });
 		console.error("Search error:", error);
 		return NextResponse.json({ error: "Search failed" }, { status: 500 });
 	}

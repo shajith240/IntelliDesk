@@ -2,12 +2,13 @@
 
 // Settings: mailbox connection, polling notes, and members; non-admins see an "Admins only" state.
 import { useSession } from "next-auth/react";
-import { Mail, Clock, Users, Lock } from "lucide-react";
+import { Mail, Clock, Users, Lock, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Panel, PanelHeader, PanelBody } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MailboxForm } from "./mailbox-form";
+import { AiSettings } from "./ai-settings";
 import { TeamMembersList } from "./team-members-list";
 
 export function Settings() {
@@ -41,7 +42,7 @@ export function Settings() {
 						{ label: "Settings" },
 					]}
 					title="Settings"
-					description="Mailbox connection and workspace members."
+					description="Mailbox, AI and workspace members."
 				/>
 				<div className="px-4 sm:px-6">
 					<EmptyState
@@ -62,7 +63,7 @@ export function Settings() {
 					{ label: "Settings" },
 				]}
 				title="Settings"
-				description="Mailbox connection and workspace members."
+				description="Mailbox, AI and workspace members."
 			/>
 			<div className="max-w-4xl space-y-6 px-4 sm:px-6">
 				<Panel>
@@ -73,6 +74,17 @@ export function Settings() {
 					/>
 					<PanelBody>
 						<MailboxForm />
+					</PanelBody>
+				</Panel>
+
+				<Panel>
+					<PanelHeader
+						title="AI"
+						icon={<Sparkles />}
+						description="The model that classifies email and drafts replies from your knowledge base."
+					/>
+					<PanelBody>
+						<AiSettings />
 					</PanelBody>
 				</Panel>
 

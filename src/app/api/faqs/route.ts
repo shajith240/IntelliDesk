@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { generateEmbedding } from "@/server/gemini/embeddings";
+import { aiErrorResponse, getAiContext } from "@/server/gemini/client";
 import { upsertVectors } from "@/server/db/pinecone";
 import { v4 as uuidv4 } from "uuid";
 import { requireAuth } from "@/server/auth/helpers";
@@ -85,6 +86,11 @@ export async function POST(req: NextRequest) {
 
 		const id = uuidv4();
 
+		// Embed first: if the AI call fails, nothing is saved, so the knowledge
+		// base never holds an article the AI can't find.
+		const ai = await getAiContext(orgId);
+		const embedding = await generateEmbedding(ai, `${question} ${answer}`);
+
 		const { data, error } = await supabaseAdmin
 			.from("faqs")
 			.insert({
@@ -99,9 +105,6 @@ export async function POST(req: NextRequest) {
 
 		if (error) throw error;
 
-		// Generate embedding and store in Pinecone
-		const embedding = await generateEmbedding(`${question} ${answer}`);
-
 		await upsertVectors(orgNamespace(orgId, "faqs"), [
 			{
 				id,
@@ -115,6 +118,8 @@ export async function POST(req: NextRequest) {
 
 		return NextResponse.json({ faq: data }, { status: 201 });
 	} catch (error) {
+		const aiError = aiErrorResponse(error);
+		if (aiError) return NextResponse.json({ error: aiError.error }, { status: aiError.status });
 		console.error("Create FAQ error:", error);
 		return NextResponse.json(
 			{ error: "Failed to create FAQ" },

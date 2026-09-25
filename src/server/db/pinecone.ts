@@ -77,3 +77,9 @@ export async function queryVectors(
 	});
 	return result.matches || [];
 }
+
+/** Remove vectors whose source rows were deleted, so they stop matching in search and AI drafting. */
+export async function deleteVectors(namespace: string, ids: string[]) {
+	if (ids.length === 0) return;
+	await getIndex().namespace(namespace).deleteMany({ ids });
+}

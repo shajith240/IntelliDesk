@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { generateEmbedding } from "@/server/gemini/embeddings";
-import { upsertVectors } from "@/server/db/pinecone";
+import { aiErrorResponse, getAiContext } from "@/server/gemini/client";
+import { deleteVectors, upsertVectors } from "@/server/db/pinecone";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId, orgNamespace } from "@/server/auth/org-context";
 import { can, forbidden } from "@/server/auth/policy";
@@ -52,6 +53,7 @@ export async function PUT(
 		// Re-embed if question or answer changed
 		if (updates.question || updates.answer) {
 			const embedding = await generateEmbedding(
+				await getAiContext(orgId),
 				`${data.question} ${data.answer}`,
 			);
 			await upsertVectors(orgNamespace(orgId, "faqs"), [
@@ -68,6 +70,8 @@ export async function PUT(
 
 		return NextResponse.json({ faq: data });
 	} catch (error) {
+		const aiError = aiErrorResponse(error);
+		if (aiError) return NextResponse.json({ error: aiError.error }, { status: aiError.status });
 		console.error("Update FAQ error:", error);
 		return NextResponse.json(
 			{ error: "Failed to update FAQ" },
@@ -98,6 +102,9 @@ export async function DELETE(
 			.eq("organization_id", orgId);
 
 		if (error) throw error;
+
+		// Drop the article's vector too, or the AI keeps quoting a deleted answer.
+		await deleteVectors(orgNamespace(orgId, "faqs"), [id]);
 
 		return NextResponse.json({ success: true });
 	} catch (error) {

@@ -102,7 +102,7 @@ NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP=false
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public | Supabase project URL and public keys |
 | `SUPABASE_SERVICE_ROLE_KEY` | server only | All database access from route handlers; bypasses row-level security. Never import into client code. |
 | `NEXTAUTH_SECRET`, `NEXTAUTH_URL` | server only | Session signing and the canonical app URL |
-| `GEMINI_API_KEY` | server only | Classification, embeddings, and reply drafting |
+| `GEMINI_API_KEY` | server only, optional | Platform key for classification, embeddings and drafting. Used only by workspaces that haven't added their own key in **Settings → AI**. |
 | `PINECONE_API_KEY`, `PINECONE_INDEX`, `PINECONE_HOST`, `PINECONE_EMBEDDING_DIMENSIONS` | server only | Vector search for knowledge-base retrieval |
 | `CRON_SECRET` | server only | Required `Authorization: Bearer` value for `/api/emails/poll` and `/api/emails/process-queue` |
 | `EMAIL_INGEST_SECRET` | server only | Required `Authorization: Bearer` value for `POST /api/emails/ingest` |
@@ -207,6 +207,9 @@ All routes are under `/api` and live in `src/app/api/`. Unless noted, a route re
 | `/api/emails/ingest` | `POST` | Webhook intake; requires `Authorization: Bearer $EMAIL_INGEST_SECRET`, not a user session |
 | `/api/emails/poll`, `/api/emails/process-queue` | `GET`, `POST` | Cron-driven pipeline runs; require `Authorization: Bearer $CRON_SECRET` |
 | `/api/emails/bulk` | `POST` | Admin only: bulk email import |
+| `/api/settings/ai` | `GET`, `PATCH`, `POST`, `DELETE` | Workspace AI: read status (admin, viewer); toggle `auto_send`, save a Gemini key (verified with Google, stored encrypted, never returned) or remove it (admin) |
+| `/api/emails/spam` | `GET` | Admin only: email the spam filters caught in the last 30 days |
+| `/api/emails/[id]/not-spam` | `POST` | Admin only: return a false positive to the intake queue with a filter override |
 
 ## Roles
 
@@ -237,6 +240,7 @@ Apply the SQL files in `supabase/migrations/` in order:
 | `008_email_intake_queue.sql` | Intake queue columns: `processing_attempts`, `processing_error`, `last_attempt_at` |
 | `009_conversation_model.sql` | `ticket_messages` (customer emails, replies, internal notes); the status workflow as data (`ticket_statuses`, `ticket_status_transitions`) enforced by a trigger; outbound emails in `emails`; `complete_ticket_reply()` |
 | `010_record_inbound_message.sql` | `record_inbound_message()`: atomic, idempotent intake of an inbound email (append, reopen, follow-up or new ticket) |
+| `011_ai_settings_and_spam_review.sql` | `organizations.ai_auto_send` (off by default), `ai_credentials` (encrypted workspace Gemini key), spam overrides on `emails` |
 
 With the Supabase CLI linked to a project, `supabase db push` applies pending migrations. The files in `supabase/tests/` check the database rules inside a transaction that is rolled back, so they are safe to run against a live database:
 
@@ -284,14 +288,17 @@ Keyboard shortcuts: `/` or `Ctrl K` opens search, `g` then `d`/`i`/`m`/`a`/`k`/`
 - Sign-in is throttled (5 failures per email, 20 per IP, per 15 minutes), takes the same time whether or not the email exists, and public signup is off by default.
 - Mailbox passwords are encrypted with AES-256-GCM, bound to their organization. Custom mail hosts must resolve to public addresses (SSRF guard), and IMAP and SMTP always use TLS.
 - There are no seed, migrate or cleanup HTTP routes; schema changes go through `supabase/migrations/`.
-- AI output is labeled as AI in the UI. The only automatic send is a high-confidence knowledge-base answer; its HTML is fully escaped.
+- AI output is labeled as AI in the UI. By default the AI only drafts; automatic sending is an admin opt-in, and even then a reply goes out unreviewed only if every rule in `src/server/pipeline/auto-reply-policy.ts` passes: a strong knowledge-base match, no links, addresses, phone numbers or amounts the articles don't contain (`grounding.ts`), a low-risk topic, a customer who isn't upset, a sender who isn't automated, and at most two automatic replies per address per day. Follow-ups on an existing ticket are always answered by a person.
+- Prompt injection: instructions go in the model's system instruction and customer text is passed as delimited, untrusted data; output is constrained to a JSON schema. The model can't take actions: it only produces text that the rules above gate.
+- Mail loops: our own messages, bounces and out-of-office replies (`Auto-Submitted`, `X-Autoreply`, `Precedence`, null `Return-Path`, system senders) are stored but never ticketed; lists and no-reply senders are ticketed but never auto-answered (`src/server/email/automated.ts`). Our automatic replies carry `Auto-Submitted: auto-replied` (RFC 3834).
+- AI failures never invent data: if Gemini is down or the key is wrong, the email stays in the queue and is retried; a bad workspace key is flagged in Settings.
 
 ## Known limitations
 
 - **Analytics has no historical data.** The dashboard reflects the current state of the queue; there is no time-series storage yet, so nothing shows trends.
 - **No push/realtime updates.** The UI relies on 30-second polling; a change made by another agent can take up to that long to appear elsewhere.
 - **Single mailbox per organization.** Multiple connected inboxes per organization are not supported.
-- The only automated tests are the database integrity checks in `supabase/tests/`; application verification is `npm run lint`, `npm run build`, and manual QA.
+- Automated tests cover the database rules (`supabase/tests/`, 38 checks) and the pure email/AI safety logic (`npm test`); routes and UI are verified with `npm run lint`, `npm run build`, and scripted browser runs, not a committed end-to-end suite yet.
 - No `LICENSE` file is included. Add one before treating this repository as reusable outside the team.
 
 ## Commands
@@ -299,6 +306,7 @@ Keyboard shortcuts: `/` or `Ctrl K` opens search, `g` then `d`/`i`/`m`/`a`/`k`/`
 ```bash
 npm run dev      # start the development server
 npm run lint     # run ESLint
+npm test         # unit tests (node:test): loop detection, grounding check
 npm run build    # production build
 npm start        # run a production build (set AUTH_TRUST_HOST=true if not on Vercel)
 ```

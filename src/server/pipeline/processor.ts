@@ -10,6 +10,9 @@ import { identifyCustomer } from "./customer-identifier";
 import { cleanEmailBody, isLikelySpam, stripHtml } from "@/server/email/parser";
 import { buildAutoResponseEmail } from "@/server/email/smtp";
 import { ReplyError, sendTicketReply } from "@/server/tickets/replies";
+import { detectAutomatedMail } from "@/server/email/automated";
+import { decideAutoSend } from "./auto-reply-policy";
+import { AiCallError, getAiContext, recordAiKeyFailure, type AiContext } from "@/server/gemini/client";
 import { orgNamespace } from "@/server/auth/org-context";
 import type { RawEmail, PipelineResult, ThreadDetectionResult } from "@/types";
 
@@ -25,6 +28,8 @@ import type { RawEmail, PipelineResult, ThreadDetectionResult } from "@/types";
 export interface ProcessEmailOptions {
 	/** Id of an already-stored queue row: it is updated in place and excluded from dedup. */
 	existingEmailId?: string;
+	/** An admin marked this email "not spam": skip both spam filters. */
+	notSpam?: boolean;
 }
 
 interface InboundResult {
@@ -41,6 +46,7 @@ export async function processEmail(
 ): Promise<PipelineResult> {
 	const startTime = Date.now();
 	const emailId = options.existingEmailId ?? uuidv4();
+	let ai: AiContext | null = null;
 
 	try {
 		// 0. Clean body (HTML-only mail is converted to text first)
@@ -51,12 +57,35 @@ export async function processEmail(
 				: "";
 		const cleanBody = cleanEmailBody(plainBody);
 
+		// 0b. Machine-generated mail. Our own messages, bounces and out-of-office
+		//     replies are stored but never ticketed (answering them is how mail
+		//     loops start). Newsletters and no-reply senders are ticketed but
+		//     never answered automatically.
+		const { data: mailbox } = await supabaseAdmin
+			.from("mailbox_connections")
+			.select("email_address")
+			.eq("organization_id", orgId)
+			.maybeSingle();
+		const automated = detectAutomatedMail(rawEmail, mailbox?.email_address ?? null);
+		if (automated && automated.kind !== "bulk") {
+			console.log(`[Pipeline] Ignoring ${automated.kind} email ${emailId}: ${automated.reason}`);
+			const result = await saveEmailToDb(emailId, rawEmail, orgId, { processed: true, processing_error: null });
+			return {
+				email_id: result,
+				status: "ignored",
+				message: `Not ticketed: ${automated.reason}`,
+				processing_time_ms: Date.now() - startTime,
+			};
+		}
+
 		// 1. Quick local spam check (no API call)
-		const spamCheck = isLikelySpam(
-			rawEmail.subject,
-			cleanBody,
-			rawEmail.from_address,
-		);
+		const spamCheck =
+			!options.notSpam &&
+			isLikelySpam(
+				rawEmail.subject,
+				cleanBody,
+				rawEmail.from_address,
+			);
 		if (spamCheck) {
 			console.log(`[Pipeline] Local spam filter matched email ${emailId}`);
 			const result = await saveEmailToDb(emailId, rawEmail, orgId, {
@@ -71,8 +100,9 @@ export async function processEmail(
 			};
 		}
 
-		// 2. Generate embedding for dedup and search
-		const embedding = await generateEmailEmbedding(rawEmail.subject, cleanBody);
+		// 2. Generate embedding for dedup and search (on the workspace's own AI key if it has one)
+		ai = await getAiContext(orgId);
+		const embedding = await generateEmailEmbedding(ai, rawEmail.subject, cleanBody);
 
 		// 3. Duplicates. The exact same message delivered twice (same Message-ID)
 		//    is dropped. A near-identical email from the same sender is usually the
@@ -131,6 +161,7 @@ export async function processEmail(
 
 		// 5. AI Classification (1 Gemini call)
 		const classification = await classifyEmail(
+			ai,
 			rawEmail.subject,
 			cleanBody,
 			rawEmail.from_address,
@@ -138,7 +169,7 @@ export async function processEmail(
 		);
 
 		// 5b. Skip ticket creation for AI-flagged spam/irrelevant emails
-		if (classification.is_spam) {
+		if (classification.is_spam && !options.notSpam) {
 			console.log(
 				`[Pipeline] AI flagged email ${emailId} as spam (confidence: ${classification.confidence})`,
 			);
@@ -245,7 +276,10 @@ export async function processEmail(
 		let autoResponseSent = false;
 		if (inbound.created) {
 			autoResponseSent = await draftOrSendAutoResponse({
+				ai,
 				orgId,
+				recipient: rawEmail.from_address,
+				automatedReason: automated?.reason ?? null,
 				ticketId,
 				ticketNumber,
 				emailId: savedEmailId,
@@ -295,6 +329,7 @@ export async function processEmail(
 		};
 	} catch (error) {
 		console.error("Pipeline error:", error instanceof Error ? error.message : error);
+		if (ai && error instanceof AiCallError) await recordAiKeyFailure(ai, error).catch(() => {});
 
 		// Keep the email queued for a retry.
 		await saveEmailToDb(emailId, rawEmail, orgId, {
@@ -317,7 +352,10 @@ export async function processEmail(
  * Returns true when an email went out.
  */
 async function draftOrSendAutoResponse(input: {
+	ai: AiContext;
 	orgId: string;
+	recipient: string;
+	automatedReason: string | null;
 	ticketId: string;
 	ticketNumber: string;
 	emailId: string;
@@ -328,13 +366,13 @@ async function draftOrSendAutoResponse(input: {
 }): Promise<boolean> {
 	const { orgId, ticketId, classification, customer } = input;
 	const autoResponse = await generateAutoResponse(
+		input.ai,
 		input.subject,
 		input.body,
 		classification.category,
 		classification.severity,
 		customer.contact_name,
 		customer.account_tier,
-		orgId,
 	);
 	if (!autoResponse.should_respond || !autoResponse.response_text) return false;
 
@@ -357,6 +395,18 @@ async function draftOrSendAutoResponse(input: {
 	if (draftError) throw new Error(`Failed to store the AI draft: ${draftError.message}`);
 
 	if (autoResponse.response_type !== "auto") return false;
+
+	// A strong match is only *eligible*; the workspace's policy decides.
+	const decision = await decideAutoSend({
+		orgId,
+		recipient: input.recipient,
+		classification,
+		automatedReason: input.automatedReason,
+	});
+	if (!decision.allowed) {
+		console.log(`[Pipeline] Draft kept for review on ${input.ticketNumber}: ${decision.reason}`);
+		return false;
+	}
 
 	const slaResponse = await getSlaResponseTime(classification.severity, orgId);
 	const companyName = await getOrgName(orgId);

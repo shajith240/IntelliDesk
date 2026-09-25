@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { EMBEDDING_DIMENSIONS } from "@/server/db/pinecone";
+import { withRetry, type AiContext } from "./client";
 
 /**
  * gemini-embedding-001 natively returns 3072 dimensions. The installed
@@ -18,21 +19,11 @@ function toTargetDimension(values: number[]): number[] {
 	return sliced.map((v) => v / norm);
 }
 
-export async function generateEmbedding(text: string): Promise<number[]> {
-	const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-	const model = genAI.getGenerativeModel(
+export async function generateEmbedding(ctx: AiContext, text: string): Promise<number[]> {
+	const model = new GoogleGenerativeAI(ctx.apiKey).getGenerativeModel(
 		{ model: "gemini-embedding-001" },
 		{ apiVersion: "v1beta" },
 	);
-	const result = await model.embedContent(text);
+	const result = await withRetry(() => model.embedContent(text));
 	return toTargetDimension(result.embedding.values);
-}
-
-export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-	const results: number[][] = [];
-	for (const text of texts) {
-		const embedding = await generateEmbedding(text);
-		results.push(embedding);
-	}
-	return results;
 }

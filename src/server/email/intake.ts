@@ -97,6 +97,7 @@ interface QueuedEmailRow {
 	raw_headers: Record<string, string> | null;
 	received_at: string;
 	processing_attempts: number;
+	not_spam_at: string | null;
 }
 
 /**
@@ -110,7 +111,7 @@ export async function drainIntakeQueue(deadline: number): Promise<DrainSummary> 
 	const { data: rows, error } = await supabaseAdmin
 		.from("emails")
 		.select(
-			"id, organization_id, message_id, in_reply_to, references_header, from_address, from_name, to_address, cc, subject, body_text, body_html, raw_headers, received_at, processing_attempts",
+			"id, organization_id, message_id, in_reply_to, references_header, from_address, from_name, to_address, cc, subject, body_text, body_html, raw_headers, received_at, processing_attempts, not_spam_at",
 		)
 		.eq("processed", false)
 		.lt("processing_attempts", MAX_PROCESSING_ATTEMPTS)
@@ -151,7 +152,8 @@ export async function drainIntakeQueue(deadline: number): Promise<DrainSummary> 
 				received_at: new Date(row.received_at),
 			},
 			row.organization_id,
-			{ existingEmailId: row.id },
+			// An admin marked it "not spam": the pipeline skips its spam filters.
+			{ existingEmailId: row.id, notSpam: row.not_spam_at !== null },
 		);
 
 		if (result.status === "error") {
