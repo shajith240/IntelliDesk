@@ -78,8 +78,8 @@ BEGIN
   RAISE NOTICE 'PASS 6 cross-org message rejected';
 
   -- 7. complete_ticket_reply records everything at once
-  INSERT INTO auto_responses (organization_id, ticket_id, response_text, match_type, sent)
-    VALUES (org_a, t_a, 'AI suggestion', 'partial', false) RETURNING id INTO draft;
+  INSERT INTO auto_responses (organization_id, ticket_id, response_text, match_type)
+    VALUES (org_a, t_a, 'AI suggestion', 'partial') RETURNING id INTO draft;
   INSERT INTO ticket_messages (organization_id, ticket_id, kind, author_type, author_user_id, body_text, delivery_status)
     VALUES (org_a, t_a, 'reply', 'agent', admin_a, 'Edited by agent', 'sending') RETURNING id INTO msg;
   t_row := complete_ticket_reply(org_a, msg, '<rehearsal@example.com>', 'support@example.com', 'customer@example.com',
@@ -88,7 +88,7 @@ BEGIN
   SELECT count(*) INTO n FROM ticket_messages m JOIN emails e ON e.id = m.email_id
     WHERE m.id = msg AND m.delivery_status = 'sent' AND e.direction = 'outbound' AND e.message_id = '<rehearsal@example.com>';
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL 7b: outbound email not linked'; END IF;
-  SELECT count(*) INTO n FROM auto_responses WHERE id = draft AND sent AND sent_message_id = msg AND response_text = 'AI suggestion';
+  SELECT count(*) INTO n FROM auto_responses WHERE id = draft AND sent_message_id = msg AND response_text = 'AI suggestion';
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL 7c: draft not linked, or its text was overwritten'; END IF;
   SELECT count(*) INTO n FROM audit_logs WHERE ticket_id = t_a AND action = 'reply_sent' AND actor_user_id = admin_a;
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL 7d: audit row missing'; END IF;
@@ -111,19 +111,17 @@ BEGIN
     RAISE EXCEPTION 'FAIL 9: first response time moved'; END IF;
   RAISE NOTICE 'PASS 9 first response time is the first reply';
 
-  -- 10. backfill: every linked inbound email is a customer message
-  SELECT count(*) INTO n FROM ticket_emails te
-    WHERE NOT EXISTS (SELECT 1 FROM ticket_messages m WHERE m.email_id = te.email_id AND m.ticket_id = te.ticket_id);
-  IF n <> 0 THEN RAISE EXCEPTION 'FAIL 10: % linked emails have no message', n; END IF;
-  RAISE NOTICE 'PASS 10 existing conversations backfilled';
+  -- 10. every stored conversation email belongs to exactly one ticket (email_id is unique)
+  SELECT count(*) INTO n FROM (SELECT email_id FROM ticket_messages WHERE email_id IS NOT NULL GROUP BY 1 HAVING count(*) > 1) x;
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL 10: % emails on several messages', n; END IF;
+  RAISE NOTICE 'PASS 10 an email belongs to at most one message';
 
-  -- 11. transition bridge: a link written the old way still becomes a message
-  INSERT INTO emails (organization_id, from_address, to_address, subject, body_text, processed)
-    VALUES (org_a, 'legacy@example.com', 'support@example.com', 'Old path', 'Body', true) RETURNING id INTO in_email;
-  INSERT INTO ticket_emails (ticket_id, email_id, relationship) VALUES (t_a, in_email, 'reply');
-  SELECT count(*) INTO n FROM ticket_messages WHERE email_id = in_email AND kind = 'customer' AND ticket_id = t_a;
-  IF n <> 1 THEN RAISE EXCEPTION 'FAIL 11: legacy link not mirrored'; END IF;
-  RAISE NOTICE 'PASS 11 legacy ticket_emails inserts are mirrored';
+  -- 11. ai_confidence is derived from the stored AI verdict and can't be set directly
+  ok := false; BEGIN UPDATE tickets SET ai_confidence = 0.1 WHERE id = t_a; EXCEPTION WHEN generated_always THEN ok := true; END;
+  IF NOT ok THEN RAISE EXCEPTION 'FAIL 11a: generated column written'; END IF;
+  UPDATE tickets SET ai_classification = '{"confidence": 0.42}' WHERE id = t_a;
+  IF (SELECT ai_confidence FROM tickets WHERE id = t_a) <> 0.42::real THEN RAISE EXCEPTION 'FAIL 11b: not derived'; END IF;
+  RAISE NOTICE 'PASS 11 ai_confidence is generated from ai_classification';
 
   -- 12. new objects closed to the public roles
   IF has_table_privilege('anon', 'public.ticket_messages', 'SELECT')

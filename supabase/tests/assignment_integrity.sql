@@ -53,23 +53,23 @@ BEGIN
   IF t_row.assigned_agent IS NOT NULL OR t_row.organization_id IS DISTINCT FROM org_a THEN RAISE EXCEPTION 'FAIL 4e: ON DELETE SET NULL (col) misbehaved'; END IF;
   RAISE NOTICE 'PASS 4e deleting assignee nulls only assigned_agent';
 
-  -- 5. team sync both directions + unknown team rejected
-  UPDATE tickets SET assigned_team = 'Billing Team' WHERE id = t_a;
-  SELECT * INTO t_row FROM tickets WHERE id = t_a;
-  IF t_row.assigned_team_id IS DISTINCT FROM (SELECT id FROM teams WHERE organization_id = org_a AND name = 'Billing Team') THEN RAISE EXCEPTION 'FAIL 5a: name->id sync'; END IF;
-  UPDATE tickets SET assigned_team_id = (SELECT id FROM teams WHERE organization_id = org_a AND name = 'Product Team') WHERE id = t_a;
-  SELECT * INTO t_row FROM tickets WHERE id = t_a;
-  IF t_row.assigned_team IS DISTINCT FROM 'Product Team' THEN RAISE EXCEPTION 'FAIL 5b: id->name sync'; END IF;
-  ok := false; BEGIN UPDATE tickets SET assigned_team = 'No Such Team' WHERE id = t_a; EXCEPTION WHEN foreign_key_violation THEN ok := true; END;
-  IF NOT ok THEN RAISE EXCEPTION 'FAIL 5c: unknown team accepted'; END IF;
-  RAISE NOTICE 'PASS 5 team name/id stay in sync; unknown team rejected';
+  -- 5. a ticket's team must be a team of the same organization (composite FK)
+  UPDATE tickets SET assigned_team_id = (SELECT id FROM teams WHERE organization_id = org_a LIMIT 1) WHERE id = t_a;
+  ok := false; BEGIN UPDATE tickets SET assigned_team_id = gen_random_uuid() WHERE id = t_a; EXCEPTION WHEN foreign_key_violation THEN ok := true; END;
+  IF NOT ok THEN RAISE EXCEPTION 'FAIL 5a: unknown team accepted'; END IF;
+  IF EXISTS (SELECT 1 FROM teams WHERE organization_id = org_b) THEN
+    ok := false; BEGIN UPDATE tickets SET assigned_team_id = (SELECT id FROM teams WHERE organization_id = org_b LIMIT 1) WHERE id = t_a;
+      EXCEPTION WHEN foreign_key_violation THEN ok := true; END;
+    IF NOT ok THEN RAISE EXCEPTION 'FAIL 5b: cross-org team accepted'; END IF;
+  END IF;
+  RAISE NOTICE 'PASS 5 team must exist in the same organization';
 
-  -- 6. ticket_emails cannot link across organizations
-  INSERT INTO emails (organization_id, from_address, subject, received_at) VALUES (org_b, 'rehearsal@example.com', 'rehearsal', now()) RETURNING id INTO email_b;
-  IF email_b IS NOT NULL THEN
-    ok := false; BEGIN INSERT INTO ticket_emails (ticket_id, email_id, relationship) VALUES (t_a, email_b, 'reply'); EXCEPTION WHEN check_violation THEN ok := true; END;
-    IF NOT ok THEN RAISE EXCEPTION 'FAIL 6: cross-org ticket_email accepted'; END IF; RAISE NOTICE 'PASS 6 cross-org ticket_emails rejected';
-  ELSE RAISE NOTICE 'SKIP 6: no email in another org to test with'; END IF;
+  -- 6. a conversation message cannot attach another organization's email
+  INSERT INTO emails (organization_id, from_address, to_address, subject, body_text, received_at) VALUES (org_b, 'rehearsal@example.com', 's@example.com', 'rehearsal', 'x', now()) RETURNING id INTO email_b;
+  ok := false; BEGIN INSERT INTO ticket_messages (organization_id, ticket_id, kind, author_type, email_id, body_text) VALUES (org_a, t_a, 'customer', 'customer', email_b, 'x');
+    EXCEPTION WHEN foreign_key_violation THEN ok := true; END;
+  IF NOT ok THEN RAISE EXCEPTION 'FAIL 6: cross-org email attached'; END IF;
+  RAISE NOTICE 'PASS 6 cross-org email can''t join a conversation';
 
   -- 7. contacts inserted the old way (no org) inherit it from the account
   SELECT id INTO acct_a FROM accounts WHERE organization_id = org_a LIMIT 1;
