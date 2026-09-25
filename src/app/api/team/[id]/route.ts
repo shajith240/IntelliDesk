@@ -1,6 +1,7 @@
 // Update a member's role, active state, or name (admins only). Deactivating is
 // used instead of deleting so ticket history and audit records stay intact.
 import { NextRequest, NextResponse } from "next/server";
+import { OPEN_STATUSES } from "@/lib/ticket-meta";
 import { z } from "zod";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { requireAuth } from "@/server/auth/helpers";
@@ -87,7 +88,7 @@ export async function PATCH(
 				.select("id")
 				.eq("organization_id", orgId)
 				.eq("assigned_agent", id)
-				.in("status", ["New", "In Progress"]);
+				.in("status", OPEN_STATUSES);
 			if (heldError) throw heldError;
 			// Through assign_ticket() so each release is recorded in the assignment history.
 			for (const ticket of held ?? []) {

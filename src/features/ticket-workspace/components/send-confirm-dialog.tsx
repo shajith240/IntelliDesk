@@ -1,6 +1,6 @@
 "use client";
 
-// Final confirmation dialog before emailing the customer and marking the ticket Resolved.
+// Final confirmation before emailing the customer; states the status the ticket will be left in.
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { SectionMessage } from "@/components/ui/section-message";
@@ -33,8 +33,8 @@ export function SendConfirmDialog({
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent
-				title="Send this response?"
-				description="This emails the customer and marks the ticket Resolved. It can't be undone."
+				title="Send this reply?"
+				description={`This emails the customer and sets the ticket to ${draft.statusAfter}. It can't be undone.`}
 				size="md"
 				onEscapeKeyDown={(e) => {
 					if (sending) e.preventDefault();
@@ -74,7 +74,7 @@ export function SendConfirmDialog({
 							// Close only on success; on failure the error stays visible in the dialog.
 							if (await draft.send()) onOpenChange(false);
 						}}>
-						Send response
+						Send reply
 					</Button>
 				</DialogFooter>
 			</DialogContent>

@@ -5,7 +5,8 @@
 
 // ==================== ENUMS ====================
 
-export type TicketStatus = "New" | "In Progress" | "Resolved" | "Closed";
+// Mirrors the ticket_statuses lookup table (migration 009); transitions are enforced by the database.
+export type TicketStatus = "New" | "In Progress" | "Pending" | "Resolved" | "Closed";
 
 export type Severity = "P1" | "P2" | "P3" | "P4";
 
@@ -130,6 +131,8 @@ export interface Ticket {
 	sla_resolution_due: string | null;
 	sla_first_response_at: string | null;
 	sla_resolved_at: string | null;
+	/** A customer wrote back after this ticket was Closed; this ticket continues it. */
+	follow_up_of: string | null;
 	sla_breach: boolean;
 	escalation_count: number;
 	auto_response_sent: boolean;
@@ -236,6 +239,7 @@ export interface ThreadDetectionResult {
 		| "ticket_ref"
 		| "subject_match"
 		| "sender_time"
+		| "near_duplicate"
 		| "none";
 	confidence: number;
 	matched_email_id: string | null;

@@ -21,10 +21,12 @@ import type { TicketStatus } from "@/types";
 
 interface WorkspaceHeaderProps {
 	ticket: TicketDetail;
+	/** Valid next statuses from the database workflow (ticket_status_transitions). */
+	allowedStatuses: TicketStatus[];
 	onClose: () => void;
 }
 
-export function WorkspaceHeader({ ticket, onClose }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ ticket, allowedStatuses, onClose }: WorkspaceHeaderProps) {
 	const { toast } = useToast();
 	const canWork = useCanWorkTicket(ticket);
 
@@ -45,7 +47,7 @@ export function WorkspaceHeader({ ticket, onClose }: WorkspaceHeaderProps) {
 			</nav>
 
 			<div className="ml-auto flex items-center gap-1">
-				<StatusMenu ticket={ticket} canWork={canWork} />
+				<StatusMenu ticket={ticket} allowedStatuses={allowedStatuses} canWork={canWork} />
 
 				<Tooltip content="Copy link">
 					<Button variant="subtle" size="icon" aria-label="Copy link" onClick={() => void handleCopyLink()}>
@@ -63,7 +65,15 @@ export function WorkspaceHeader({ ticket, onClose }: WorkspaceHeaderProps) {
 	);
 }
 
-function StatusMenu({ ticket, canWork }: { ticket: TicketDetail; canWork: boolean }) {
+function StatusMenu({
+	ticket,
+	allowedStatuses,
+	canWork,
+}: {
+	ticket: TicketDetail;
+	allowedStatuses: TicketStatus[];
+	canWork: boolean;
+}) {
 	const { pendingField, update } = useTicketMutation(ticket.id);
 	const loading = pendingField === "status";
 
@@ -72,7 +82,10 @@ function StatusMenu({ ticket, canWork }: { ticket: TicketDetail; canWork: boolea
 		void update({ status }, `${ticket.ticket_number} moved to ${status}`);
 	};
 
-	if (!canWork) {
+	// Only moves the workflow allows, in the usual order; Closed tickets have none.
+	const options = STATUSES.filter((status) => status === ticket.status || allowedStatuses.includes(status));
+
+	if (!canWork || options.length <= 1) {
 		return (
 			<span className="mr-1 inline-flex h-8 items-center pl-2">
 				<StatusLozenge status={ticket.status} />
@@ -97,7 +110,7 @@ function StatusMenu({ ticket, canWork }: { ticket: TicketDetail; canWork: boolea
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				<DropdownMenuRadioGroup value={ticket.status} onValueChange={handleSelect}>
-					{STATUSES.map((status) => (
+					{options.map((status) => (
 						<DropdownMenuRadioItem key={status} value={status}>
 							<StatusLozenge status={status} />
 						</DropdownMenuRadioItem>

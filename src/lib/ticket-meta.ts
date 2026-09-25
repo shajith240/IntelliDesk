@@ -11,15 +11,17 @@ export const PRIORITY_META: Record<Severity, { label: string; rank: number }> = 
 	P4: { label: "Low", rank: 4 },
 };
 
-export const STATUSES: TicketStatus[] = ["New", "In Progress", "Resolved", "Closed"];
-export const OPEN_STATUSES: TicketStatus[] = ["New", "In Progress"];
+export const STATUSES: TicketStatus[] = ["New", "In Progress", "Pending", "Resolved", "Closed"];
+/** Statuses with ticket_statuses.is_open = true: still in someone's queue. Pending = waiting on the customer. */
+export const OPEN_STATUSES: TicketStatus[] = ["New", "In Progress", "Pending"];
 
 /** Jira status categories: to-do (grey), in-progress (blue), done (green). */
-export type StatusAppearance = "default" | "inprogress" | "success";
+export type StatusAppearance = "default" | "inprogress" | "moved" | "success";
 
 export const STATUS_META: Record<TicketStatus, { appearance: StatusAppearance }> = {
 	New: { appearance: "default" },
 	"In Progress": { appearance: "inprogress" },
+	Pending: { appearance: "moved" },
 	Resolved: { appearance: "success" },
 	Closed: { appearance: "success" },
 };
@@ -41,7 +43,7 @@ export function isSeverity(value: string | null | undefined): value is Severity 
 }
 
 export function isStatus(value: string | null | undefined): value is TicketStatus {
-	return value === "New" || value === "In Progress" || value === "Resolved" || value === "Closed";
+	return STATUSES.includes(value as TicketStatus);
 }
 
 export function isCategory(value: string | null | undefined): value is EmailCategory {

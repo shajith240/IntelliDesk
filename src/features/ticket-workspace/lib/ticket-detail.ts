@@ -29,11 +29,11 @@ export function parseClassification(raw: unknown): AIClassification | null {
 	return Object.keys(result).length > 0 ? result : null;
 }
 
-/** First "original" ticket_emails row's sender, else the linked contact's email. */
+/** The most recent customer message's sender, else the linked contact's email. */
 export function findRecipient(ticket: TicketDetail): string | null {
-	const originalRow = ticket.ticket_emails.find(
-		(row) => row.relationship === "original" && row.emails,
-	);
-	if (originalRow?.emails) return originalRow.emails.from_address;
+	const customerMessages = ticket.ticket_messages
+		.filter((row) => row.kind === "customer" && row.emails)
+		.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+	if (customerMessages[0]?.emails) return customerMessages[0].emails.from_address;
 	return ticket.contacts?.email ?? null;
 }

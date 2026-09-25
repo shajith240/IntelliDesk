@@ -7,22 +7,31 @@ import { generateAutoResponse } from "@/server/gemini/respond";
 import { detectThread } from "@/server/email/thread-detector";
 import { checkDuplicate } from "./deduplicator";
 import { identifyCustomer } from "./customer-identifier";
-import {
-	cleanEmailBody,
-	isLikelySpam,
-} from "@/server/email/parser";
-import { sendEmail, buildAutoResponseEmail } from "@/server/email/smtp";
-import { getMailbox, recordMailboxSync } from "@/server/email/mailbox";
+import { cleanEmailBody, isLikelySpam, stripHtml } from "@/server/email/parser";
+import { buildAutoResponseEmail } from "@/server/email/smtp";
+import { ReplyError, sendTicketReply } from "@/server/tickets/replies";
 import { orgNamespace } from "@/server/auth/org-context";
-import type { RawEmail, PipelineResult } from "@/types";
+import type { RawEmail, PipelineResult, ThreadDetectionResult } from "@/types";
 
 /**
  * Main email processing pipeline.
- * Steps: Parse → Quick Spam Check → Dedup → Thread Detect → Classify → Customer ID → Auto-Response → Create/Update Ticket
+ * Steps: Clean → Spam check → Embed → Dedup → Thread → Classify → Customer →
+ *        record_inbound_message (the commit point) → Auto-response → Audit → mark processed
+ *
+ * Retry-safe: the email is marked processed only at the very end, and
+ * record_inbound_message is idempotent per email, so a run that fails at any
+ * step can be repeated by the intake queue without creating a second ticket.
  */
 export interface ProcessEmailOptions {
 	/** Id of an already-stored queue row: it is updated in place and excluded from dedup. */
 	existingEmailId?: string;
+}
+
+interface InboundResult {
+	ticket_id: string;
+	ticket_number: string;
+	created: boolean;
+	reopened: boolean;
 }
 
 export async function processEmail(
@@ -34,10 +43,13 @@ export async function processEmail(
 	const emailId = options.existingEmailId ?? uuidv4();
 
 	try {
-		// 0. Clean body
-		const cleanBody = cleanEmailBody(
-			rawEmail.body_text || rawEmail.body_html || "",
-		);
+		// 0. Clean body (HTML-only mail is converted to text first)
+		const plainBody = rawEmail.body_text?.trim()
+			? rawEmail.body_text
+			: rawEmail.body_html
+				? stripHtml(rawEmail.body_html)
+				: "";
+		const cleanBody = cleanEmailBody(plainBody);
 
 		// 1. Quick local spam check (no API call)
 		const spamCheck = isLikelySpam(
@@ -62,7 +74,10 @@ export async function processEmail(
 		// 2. Generate embedding for dedup and search
 		const embedding = await generateEmailEmbedding(rawEmail.subject, cleanBody);
 
-		// 3. Check for duplicates
+		// 3. Duplicates. The exact same message delivered twice (same Message-ID)
+		//    is dropped. A near-identical email from the same sender is usually the
+		//    customer writing again, so it is attached to the earlier email's
+		//    ticket instead of being thrown away.
 		const dupResult = await checkDuplicate(
 			rawEmail.message_id,
 			rawEmail.from_address,
@@ -72,23 +87,22 @@ export async function processEmail(
 			options.existingEmailId,
 		);
 
-		if (dupResult.is_duplicate) {
-			console.log(
-				`[Pipeline] Duplicate email ${emailId}: method=${dupResult.method} score=${dupResult.similarity_score.toFixed(2)}`,
-			);
+		if (dupResult.is_duplicate && dupResult.method === "message_id") {
+			console.log(`[Pipeline] Duplicate delivery of email ${emailId}`);
 			const result = await saveEmailToDb(emailId, rawEmail, orgId, {
 				processed: true,
 			});
 			return {
 				email_id: result,
 				status: "duplicate",
-				message: `Duplicate detected (${dupResult.method}, score: ${dupResult.similarity_score.toFixed(2)})`,
+				message: "Duplicate delivery (same Message-ID)",
 				processing_time_ms: Date.now() - startTime,
 			};
 		}
 
 		// 4. Thread detection
-		const threadResult = await detectThread(
+		let threadResult: ThreadDetectionResult = await detectThread(
+			orgId,
 			rawEmail.message_id,
 			rawEmail.in_reply_to || null,
 			rawEmail.references || [],
@@ -97,6 +111,23 @@ export async function processEmail(
 			cleanBody,
 			new Date(rawEmail.received_at),
 		);
+		if (!threadResult.existing_ticket_id && dupResult.is_duplicate && dupResult.duplicate_of) {
+			const { data: earlier } = await supabaseAdmin
+				.from("ticket_messages")
+				.select("ticket_id")
+				.eq("organization_id", orgId)
+				.eq("email_id", dupResult.duplicate_of)
+				.maybeSingle();
+			if (earlier) {
+				threadResult = {
+					is_thread: true,
+					existing_ticket_id: earlier.ticket_id,
+					thread_type: "near_duplicate",
+					confidence: dupResult.similarity_score,
+					matched_email_id: dupResult.duplicate_of,
+				};
+			}
+		}
 
 		// 5. AI Classification (1 Gemini call)
 		const classification = await classifyEmail(
@@ -132,14 +163,14 @@ export async function processEmail(
 			orgId,
 		);
 
-		// 7. Save email to database
+		// 7. Store the email (still unprocessed until every step below succeeds)
 		const savedEmailId = await saveEmailToDb(emailId, rawEmail, orgId, {
-			is_spam: classification.is_spam,
+			is_spam: false,
 			language: classification.language,
-			processed: true,
+			processed: false,
 		});
 
-		// 8. Store embedding in Pinecone
+		// 8. Store embedding in Pinecone (upsert by id: safe to repeat)
 		await upsertVectors(orgNamespace(orgId, "emails"), [
 			{
 				id: savedEmailId,
@@ -155,83 +186,46 @@ export async function processEmail(
 			},
 		]);
 
-		// 9. Create or update ticket
-		let ticketId: string;
-		let ticketNumber: string;
+		// 9. Commit point: append to the matched ticket (reopening it if needed),
+		//    open a follow-up for a Closed one, or create a new ticket. One
+		//    transaction, idempotent per email.
+		const aiClassification = {
+			category: classification.category,
+			severity: classification.severity,
+			confidence: classification.confidence,
+			sentiment: classification.sentiment,
+			language: classification.language,
+			is_spam: classification.is_spam,
+			summary: classification.summary,
+			reasoning: classification.reasoning,
+			key_entities: classification.key_entities,
+			suggested_tags: classification.suggested_tags,
+			requires_human_review: classification.requires_human_review,
+		};
+		const { data: inboundRows, error: inboundError } = await supabaseAdmin.rpc("record_inbound_message", {
+			p_org_id: orgId,
+			p_email_id: savedEmailId,
+			p_body: cleanBody || plainBody,
+			p_thread_ticket_id: threadResult.existing_ticket_id,
+			p_new_ticket: {
+				subject: rawEmail.subject,
+				summary: classification.summary,
+				severity: classification.severity,
+				category: classification.category,
+				subcategory: classification.subcategory || null,
+				contact_id: customer.contact_id || null,
+				account_id: customer.account_id || null,
+				ai_confidence: classification.confidence,
+				is_flagged_for_review: classification.requires_human_review || false,
+				ai_classification: aiClassification,
+			},
+		});
+		if (inboundError) throw new Error(`Failed to record the email on a ticket: ${inboundError.message}`);
+		const inbound = (inboundRows as InboundResult[])[0];
+		const ticketId = inbound.ticket_id;
+		const ticketNumber = inbound.ticket_number;
 
-		if (threadResult.is_thread && threadResult.existing_ticket_id) {
-			// Add to existing ticket
-			ticketId = threadResult.existing_ticket_id;
-			await supabaseAdmin.from("ticket_emails").insert({
-				ticket_id: ticketId,
-				email_id: savedEmailId,
-				relationship: "reply",
-			});
-
-			// Update ticket severity if new email is higher priority
-			const { data: existingTicket } = await supabaseAdmin
-				.from("tickets")
-				.select("severity, ticket_number")
-				.eq("id", ticketId)
-				.single();
-
-			ticketNumber = existingTicket?.ticket_number || "";
-			const severityOrder = { P1: 1, P2: 2, P3: 3, P4: 4 };
-			if (
-				existingTicket &&
-				severityOrder[classification.severity] <
-					severityOrder[existingTicket.severity as keyof typeof severityOrder]
-			) {
-				await supabaseAdmin
-					.from("tickets")
-					.update({ severity: classification.severity })
-					.eq("id", ticketId);
-			}
-		} else {
-			// Create new ticket
-			const { data: newTicket } = await supabaseAdmin
-				.from("tickets")
-				.insert({
-					organization_id: orgId,
-					subject: rawEmail.subject,
-					summary: classification.summary,
-					status: "New",
-					severity: classification.severity,
-					category: classification.category,
-					subcategory: classification.subcategory || null,
-					contact_id: customer.contact_id || null,
-					account_id: customer.account_id || null,
-					ai_confidence: classification.confidence,
-					is_flagged_for_review: classification.requires_human_review || false,
-					ai_classification: {
-						category: classification.category,
-						severity: classification.severity,
-						confidence: classification.confidence,
-						sentiment: classification.sentiment,
-						language: classification.language,
-						is_spam: classification.is_spam,
-						summary: classification.summary,
-						reasoning: classification.reasoning,
-						key_entities: classification.key_entities,
-						suggested_tags: classification.suggested_tags,
-						requires_human_review: classification.requires_human_review,
-					},
-				})
-				.select("id, ticket_number")
-				.single();
-
-			if (!newTicket) throw new Error("Failed to create ticket");
-			ticketId = newTicket.id;
-			ticketNumber = newTicket.ticket_number;
-
-			// Link email to ticket
-			await supabaseAdmin.from("ticket_emails").insert({
-				ticket_id: ticketId,
-				email_id: savedEmailId,
-				relationship: "original",
-			});
-
-			// Store ticket embedding
+		if (inbound.created) {
 			await upsertVectors(orgNamespace(orgId, "tickets"), [
 				{
 					id: ticketId,
@@ -246,84 +240,32 @@ export async function processEmail(
 			]);
 		}
 
-		// 10. Auto-response (1 Gemini call - only for non-spam, P3/P4)
+		// 10. Auto-response: only for a ticket this run created. A customer
+		//     writing back on an existing conversation is answered by a person.
 		let autoResponseSent = false;
-		if (!classification.is_spam) {
-			const autoResponse = await generateAutoResponse(
-				rawEmail.subject,
-				cleanBody,
-				classification.category,
-				classification.severity,
-				customer.contact_name,
-				customer.account_tier,
+		if (inbound.created) {
+			autoResponseSent = await draftOrSendAutoResponse({
 				orgId,
-			);
-
-			if (autoResponse.should_respond && autoResponse.response_text) {
-				// Send first, then record what actually happened: a failed send must
-				// stay unsent so an agent sees the draft and can send it manually.
-				let sentOk = false;
-				if (autoResponse.response_type === "auto") {
-					const mailbox = await getMailbox(orgId).catch(() => null);
-					if (mailbox) {
-						const slaResponse = await getSlaResponseTime(classification.severity, orgId);
-						const companyName = await getOrgName(orgId);
-						const email = buildAutoResponseEmail(
-							customer.contact_name || "Customer",
-							ticketNumber,
-							slaResponse,
-							autoResponse.response_text,
-							rawEmail.subject,
-							companyName,
-						);
-						sentOk = await sendEmail({
-							to: rawEmail.from_address,
-							subject: email.subject,
-							html: email.html,
-							text: email.text,
-							inReplyTo: rawEmail.message_id || undefined,
-							smtpConfig: mailbox.smtp,
-							fromName: companyName,
-						});
-						if (!sentOk) await recordMailboxSync(orgId, new Error("SMTP send failed"));
-					}
-				}
-
-				await supabaseAdmin.from("auto_responses").insert({
-					organization_id: orgId,
-					ticket_id: ticketId,
-					email_id: savedEmailId,
-					match_type: autoResponse.response_type || "none",
-					response_text: autoResponse.response_text,
-					match_score: autoResponse.confidence || 0,
-					sent: sentOk,
-					sent_at: sentOk ? new Date().toISOString() : null,
-				});
-				autoResponseSent = sentOk;
-			}
+				ticketId,
+				ticketNumber,
+				emailId: savedEmailId,
+				subject: rawEmail.subject,
+				body: cleanBody,
+				classification,
+				customer,
+			});
 		}
 
-		// 11. Audit log (store full classification for AI Analysis tab)
+		// 11. Audit log (full classification for the AI Analysis tab)
 		await supabaseAdmin.from("audit_logs").insert({
 			organization_id: orgId,
 			ticket_id: ticketId,
-			action: threadResult.is_thread ? "email_added" : "ticket_created",
+			action: inbound.created ? "ticket_created" : "email_added",
 			details: {
 				email_id: savedEmailId,
-				ai_classification: {
-					category: classification.category,
-					severity: classification.severity,
-					confidence: classification.confidence,
-					sentiment: classification.sentiment,
-					language: classification.language,
-					is_spam: classification.is_spam,
-					summary: classification.summary,
-					reasoning: classification.reasoning,
-					key_entities: classification.key_entities,
-					suggested_tags: classification.suggested_tags,
-					requires_human_review: classification.requires_human_review,
-				},
+				ai_classification: aiClassification,
 				thread: threadResult.thread_type,
+				reopened: inbound.reopened,
 				customer: customer.method,
 				auto_response_sent: autoResponseSent,
 				processing_time_ms: Date.now() - startTime,
@@ -331,6 +273,13 @@ export async function processEmail(
 			performed_by: "system",
 			actor_type: "system",
 		});
+
+		// 12. Done: only now does the email leave the intake queue.
+		const { error: doneError } = await supabaseAdmin
+			.from("emails")
+			.update({ processed: true, processing_error: null })
+			.eq("id", savedEmailId);
+		if (doneError) throw new Error(`Failed to mark the email processed: ${doneError.message}`);
 
 		return {
 			email_id: savedEmailId,
@@ -341,13 +290,13 @@ export async function processEmail(
 			thread: threadResult,
 			customer,
 			auto_response_sent: autoResponseSent,
-			message: `Email processed → ${threadResult.is_thread ? "added to" : "created"} ticket ${ticketNumber}`,
+			message: `Email processed → ${inbound.created ? "created" : "added to"} ticket ${ticketNumber}`,
 			processing_time_ms: Date.now() - startTime,
 		};
 	} catch (error) {
-		console.error("Pipeline error:", error);
+		console.error("Pipeline error:", error instanceof Error ? error.message : error);
 
-		// Save failed email for retry
+		// Keep the email queued for a retry.
 		await saveEmailToDb(emailId, rawEmail, orgId, {
 			processed: false,
 		}).catch(() => {});
@@ -358,6 +307,86 @@ export async function processEmail(
 			message: `Processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
 			processing_time_ms: Date.now() - startTime,
 		};
+	}
+}
+
+/**
+ * Ask the AI for a knowledge-base answer. A confident match is emailed through
+ * the same reply path agents use (recorded as an AI-authored message, ticket
+ * set to Pending); anything else is stored as a draft for an agent.
+ * Returns true when an email went out.
+ */
+async function draftOrSendAutoResponse(input: {
+	orgId: string;
+	ticketId: string;
+	ticketNumber: string;
+	emailId: string;
+	subject: string;
+	body: string;
+	classification: Awaited<ReturnType<typeof classifyEmail>>;
+	customer: Awaited<ReturnType<typeof identifyCustomer>>;
+}): Promise<boolean> {
+	const { orgId, ticketId, classification, customer } = input;
+	const autoResponse = await generateAutoResponse(
+		input.subject,
+		input.body,
+		classification.category,
+		classification.severity,
+		customer.contact_name,
+		customer.account_tier,
+		orgId,
+	);
+	if (!autoResponse.should_respond || !autoResponse.response_text) return false;
+
+	const { data: draft, error: draftError } = await supabaseAdmin
+		.from("auto_responses")
+		.insert({
+			organization_id: orgId,
+			ticket_id: ticketId,
+			email_id: input.emailId,
+			// The generator says auto/suggest; the table records how well the knowledge
+			// base matched (perfect/partial). Writing "auto" here used to violate the
+			// CHECK constraint, and because the error was ignored no draft was ever saved.
+			match_type: autoResponse.response_type === "auto" ? "perfect" : "partial",
+			response_text: autoResponse.response_text,
+			match_score: autoResponse.confidence || 0,
+			sent: false,
+		})
+		.select("id")
+		.single();
+	if (draftError) throw new Error(`Failed to store the AI draft: ${draftError.message}`);
+
+	if (autoResponse.response_type !== "auto") return false;
+
+	const slaResponse = await getSlaResponseTime(classification.severity, orgId);
+	const companyName = await getOrgName(orgId);
+	const email = buildAutoResponseEmail(
+		customer.contact_name || "Customer",
+		input.ticketNumber,
+		slaResponse,
+		autoResponse.response_text,
+		input.subject,
+		companyName,
+	);
+	try {
+		await sendTicketReply({
+			orgId,
+			ticketId,
+			author: { type: "ai" },
+			body: email.text,
+			html: email.html,
+			statusAfter: "Pending",
+			draftId: draft.id,
+			fromName: companyName,
+		});
+		return true;
+	} catch (err) {
+		// The draft stays unsent, so an agent sees it and can send it by hand.
+		if (err instanceof ReplyError) {
+			console.warn(`[Pipeline] Auto-response not sent for ${input.ticketNumber}: ${err.message}`);
+			return false;
+		}
+		throw err;
 	}
 }
 

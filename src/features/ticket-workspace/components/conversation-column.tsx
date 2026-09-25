@@ -1,50 +1,32 @@
 "use client";
 
-// Ticket title and email thread. Customer bodies are untrusted, so they render as plain text (HTML is converted to text).
+// Ticket title and conversation: customer emails, team replies, and internal notes.
+// Customer/reply bodies are untrusted or user-authored, so they always render as plain text.
 import { useId, useMemo } from "react";
-import { MailX } from "lucide-react";
+import { Lock, MailX } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Lozenge, StatusLozenge } from "@/components/ui/lozenge";
 import { PriorityIcon } from "@/components/ui/priority-icon";
+import { AiLabel } from "@/components/ui/ai-mark";
 import { cn } from "@/lib/utils";
 import { formatDateTime, formatRelative } from "@/lib/ticket-meta";
 import { AiSummaryCard } from "./ai-summary-card";
-import type { TicketDetail, TicketEmailRow } from "@/types/api";
+import type { TicketDetail, TicketMessageRow } from "@/types/api";
 
-function bodyTextFor(row: TicketEmailRow): string {
-	const email = row.emails;
-	if (!email) return "";
-	if (email.body_text.trim()) return email.body_text;
-	if (email.body_html && typeof window !== "undefined") {
-		return new DOMParser().parseFromString(email.body_html, "text/html").body.textContent ?? "";
-	}
-	return "";
+interface ConversationColumnProps {
+	ticket: TicketDetail;
+	onOpenTicket: (id: string) => void;
 }
 
-const RELATIONSHIP_LABEL: Record<string, string> = {
-	original: "Original",
-	reply: "Reply",
-	forward: "Forward",
-	duplicate: "Duplicate",
-};
-
-export function ConversationColumn({ ticket }: { ticket: TicketDetail }) {
+export function ConversationColumn({ ticket, onOpenTicket }: ConversationColumnProps) {
 	const rows = useMemo(
 		() =>
-			ticket.ticket_emails
-				.filter((row) => row.emails)
-				.sort(
-					(a, b) => new Date(a.emails!.received_at).getTime() - new Date(b.emails!.received_at).getTime(),
-				),
-		[ticket.ticket_emails],
+			[...ticket.ticket_messages].sort(
+				(a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+			),
+		[ticket.ticket_messages],
 	);
-
-	const bodies = useMemo(() => {
-		const map = new Map<string, string>();
-		for (const row of rows) map.set(row.email_id, bodyTextFor(row));
-		return map;
-	}, [rows]);
 
 	const customer = ticket.contacts?.name ?? ticket.contacts?.email ?? null;
 	// Rendered once per responsive layout, so the heading id must be unique per instance.
@@ -70,6 +52,18 @@ export function ConversationColumn({ ticket }: { ticket: TicketDetail }) {
 						</time>
 					</span>
 				</div>
+				{ticket.follow_up_parent && (
+					<p className="mt-1.5 text-xs text-subtle">
+						Follow-up to{" "}
+						<button
+							type="button"
+							onClick={() => onOpenTicket(ticket.follow_up_parent!.id)}
+							className="font-mono text-primary hover:underline"
+						>
+							{ticket.follow_up_parent.ticket_number}
+						</button>
+					</p>
+				)}
 			</div>
 
 			<AiSummaryCard ticket={ticket} />
@@ -81,14 +75,13 @@ export function ConversationColumn({ ticket }: { ticket: TicketDetail }) {
 				</h2>
 
 				{rows.length === 0 ? (
-					<EmptyState className="mt-3" size="sm" icon={MailX} title="No email content stored" />
+					<EmptyState className="mt-3" size="sm" icon={MailX} title="No messages yet" />
 				) : (
 					<ol className="mt-3 space-y-3">
 						{rows.map((row, index) => (
-							<li key={row.email_id}>
+							<li key={row.id}>
 								<MessageCard
 									row={row}
-									body={bodies.get(row.email_id) ?? ""}
 									// Older messages start collapsed so the latest one is readable without scrolling.
 									defaultOpen={index === rows.length - 1 || rows.length <= 2}
 								/>
@@ -101,10 +94,80 @@ export function ConversationColumn({ ticket }: { ticket: TicketDetail }) {
 	);
 }
 
-function MessageCard({ row, body, defaultOpen }: { row: TicketEmailRow; body: string; defaultOpen: boolean }) {
-	const email = row.emails!;
-	const sender = email.from_name || email.from_address;
+function MessageCard({ row, defaultOpen }: { row: TicketMessageRow; defaultOpen: boolean }) {
+	const body = row.body_text ?? "";
 	const preview = body.replace(/\s+/g, " ").trim();
+
+	if (row.kind === "note") {
+		const author = row.users?.name ?? "Former member";
+		return (
+			<details open={defaultOpen} className="group rounded-lg border border-warning/30 bg-warning-subtle/40">
+				<summary className="flex cursor-pointer list-none items-start gap-3 rounded-lg px-4 py-3 hover:bg-warning-subtle/70">
+					<Avatar name={author} size="md" />
+					<div className="min-w-0 flex-1">
+						<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+							<span className="text-sm font-semibold text-foreground">{author}</span>
+							<Lock className="h-3.5 w-3.5 shrink-0 text-warning-text" aria-hidden="true" />
+							<Lozenge appearance="moved">Internal note</Lozenge>
+							<time
+								className="ml-auto shrink-0 text-xs text-subtlest"
+								dateTime={row.created_at}
+								title={formatDateTime(row.created_at)}
+							>
+								{formatRelative(row.created_at)}
+							</time>
+						</div>
+						<p className={cn("mt-0.5 truncate text-sm text-subtle", "group-open:hidden")}>{preview}</p>
+					</div>
+				</summary>
+				<p className="whitespace-pre-wrap break-words px-4 pb-4 text-sm leading-6 text-foreground sm:pl-[60px]">
+					{body}
+				</p>
+			</details>
+		);
+	}
+
+	if (row.kind === "reply") {
+		const isAi = row.author_type === "ai";
+		const author = isAi ? "IntelliDesk AI" : (row.users?.name ?? "Former member");
+		return (
+			<details open={defaultOpen} className="group rounded-lg border border-border bg-raised">
+				<summary className="flex cursor-pointer list-none items-start gap-3 rounded-lg px-4 py-3 hover:bg-fill/60">
+					<Avatar name={author} size="md" />
+					<div className="min-w-0 flex-1">
+						<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+							<span className="text-sm font-semibold text-foreground">{author}</span>
+							{isAi ? <AiLabel>Sent automatically</AiLabel> : <Lozenge>Reply</Lozenge>}
+							{row.delivery_status === "sending" && <Lozenge appearance="inprogress">Sending…</Lozenge>}
+							{row.delivery_status === "failed" && <Lozenge appearance="removed">Not delivered</Lozenge>}
+							<time
+								className="ml-auto shrink-0 text-xs text-subtlest"
+								dateTime={row.created_at}
+								title={formatDateTime(row.created_at)}
+							>
+								{formatRelative(row.created_at)}
+							</time>
+						</div>
+						<p className={cn("mt-0.5 truncate text-sm text-subtle", "group-open:hidden")}>{preview}</p>
+						{row.delivery_status === "failed" && row.delivery_error && (
+							<p className="mt-1 text-xs text-danger-text group-open:hidden">{row.delivery_error}</p>
+						)}
+					</div>
+				</summary>
+				<div className="px-4 pb-4 sm:pl-[60px]">
+					{row.delivery_status === "failed" && row.delivery_error && (
+						<p className="mb-2 text-xs text-danger-text">{row.delivery_error}</p>
+					)}
+					<p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">{body}</p>
+				</div>
+			</details>
+		);
+	}
+
+	// Customer message.
+	const email = row.emails;
+	const sender = email?.from_name || email?.from_address || "Unknown sender";
+	const showLanguage = email?.language && email.language.toLowerCase() !== "english";
 
 	return (
 		<details open={defaultOpen} className="group rounded-lg border border-border bg-raised">
@@ -113,17 +176,14 @@ function MessageCard({ row, body, defaultOpen }: { row: TicketEmailRow; body: st
 				<div className="min-w-0 flex-1">
 					<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
 						<span className="text-sm font-semibold text-foreground">{sender}</span>
-						{email.from_name && <span className="truncate text-xs text-subtle">{email.from_address}</span>}
-						{row.relationship !== "original" && (
-							<Lozenge>{RELATIONSHIP_LABEL[row.relationship] ?? row.relationship}</Lozenge>
-						)}
-						{email.language && email.language !== "en" && <Lozenge>{email.language}</Lozenge>}
+						{email?.from_name && <span className="truncate text-xs text-subtle">{email.from_address}</span>}
+						{showLanguage && <Lozenge>{email!.language}</Lozenge>}
 						<time
 							className="ml-auto shrink-0 text-xs text-subtlest"
-							dateTime={email.received_at}
-							title={formatDateTime(email.received_at)}
+							dateTime={row.created_at}
+							title={formatDateTime(row.created_at)}
 						>
-							{formatRelative(email.received_at)}
+							{formatRelative(row.created_at)}
 						</time>
 					</div>
 					<p className={cn("mt-0.5 truncate text-sm text-subtle", "group-open:hidden")}>{preview}</p>

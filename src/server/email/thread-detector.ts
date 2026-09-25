@@ -4,11 +4,21 @@ import { supabaseAdmin } from "@/server/db/supabase";
 import { normalizeSubject, extractTicketReferences } from "./parser";
 import type { ThreadDetectionResult } from "@/types";
 
+type LinkedEmail = { id: string; ticket_messages: { ticket_id: string }[] | null };
+
+function linkedTicket(email: LinkedEmail): string | null {
+	return email.ticket_messages?.[0]?.ticket_id ?? null;
+}
+
 /**
  * Detect if an incoming email belongs to an existing thread.
- * Priority: header match > ticket reference > subject+sender match > none
+ * Priority: header match > ticket reference > subject+sender match > none.
+ * Every lookup is scoped to the organization: a Message-ID or ticket number
+ * that happens to exist in another workspace must never attach mail to it.
+ * Header matches include our own outbound replies, whose Message-IDs we set.
  */
 export async function detectThread(
+	orgId: string,
 	messageId: string | null,
 	inReplyTo: string | null,
 	references: string[],
@@ -21,17 +31,16 @@ export async function detectThread(
 	if (inReplyTo) {
 		const { data: parentEmail } = await supabaseAdmin
 			.from("emails")
-			.select("id, ticket_emails(ticket_id)")
+			.select("id, ticket_messages(ticket_id)")
+			.eq("organization_id", orgId)
 			.eq("message_id", inReplyTo)
-			.single();
+			.limit(1)
+			.maybeSingle();
 
 		if (parentEmail) {
-			const ticketLink = (
-				parentEmail as unknown as { ticket_emails: { ticket_id: string }[] }
-			).ticket_emails?.[0];
 			return {
 				is_thread: true,
-				existing_ticket_id: ticketLink?.ticket_id || null,
+				existing_ticket_id: linkedTicket(parentEmail as unknown as LinkedEmail),
 				thread_type: "header",
 				confidence: 1.0,
 				matched_email_id: parentEmail.id,
@@ -43,17 +52,16 @@ export async function detectThread(
 	if (references.length > 0) {
 		const { data: refEmails } = await supabaseAdmin
 			.from("emails")
-			.select("id, ticket_emails(ticket_id)")
-			.in("message_id", references)
+			.select("id, ticket_messages(ticket_id)")
+			.eq("organization_id", orgId)
+			.in("message_id", references.slice(-20))
+			.order("received_at", { ascending: false })
 			.limit(1);
 
 		if (refEmails && refEmails.length > 0) {
-			const ticketLink = (
-				refEmails[0] as unknown as { ticket_emails: { ticket_id: string }[] }
-			).ticket_emails?.[0];
 			return {
 				is_thread: true,
-				existing_ticket_id: ticketLink?.ticket_id || null,
+				existing_ticket_id: linkedTicket(refEmails[0] as unknown as LinkedEmail),
 				thread_type: "header",
 				confidence: 0.95,
 				matched_email_id: refEmails[0].id,
@@ -73,8 +81,9 @@ export async function detectThread(
 				const { data: ticket } = await supabaseAdmin
 					.from("tickets")
 					.select("id")
+					.eq("organization_id", orgId)
 					.eq("ticket_number", tktMatch[0].toUpperCase())
-					.single();
+					.maybeSingle();
 
 				if (ticket) {
 					return {
@@ -98,7 +107,9 @@ export async function detectThread(
 
 		const { data: recentEmails } = await supabaseAdmin
 			.from("emails")
-			.select("id, subject, from_address, ticket_emails(ticket_id)")
+			.select("id, subject, from_address, ticket_messages(ticket_id)")
+			.eq("organization_id", orgId)
+			.eq("direction", "inbound")
 			.eq("from_address", fromAddress)
 			.gte("received_at", cutoff)
 			.eq("processed", true)
@@ -110,7 +121,7 @@ export async function detectThread(
 					id: string;
 					subject: string;
 					from_address: string;
-					ticket_emails?: { ticket_id: string }[];
+					ticket_messages?: { ticket_id: string }[] | null;
 				}) => ({
 					...e,
 					normalized_subject: normalizeSubject(e.subject),
@@ -131,12 +142,9 @@ export async function detectThread(
 				results[0].score < 0.3
 			) {
 				const matched = results[0].item;
-				const ticketLink = (
-					matched as unknown as { ticket_emails: { ticket_id: string }[] }
-				).ticket_emails?.[0];
 				return {
 					is_thread: true,
-					existing_ticket_id: ticketLink?.ticket_id || null,
+					existing_ticket_id: linkedTicket(matched as unknown as LinkedEmail),
 					thread_type: "subject_match",
 					confidence: 1 - (results[0].score || 0),
 					matched_email_id: matched.id,

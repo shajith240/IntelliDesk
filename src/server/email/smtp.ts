@@ -30,41 +30,60 @@ interface SendEmailOptions {
 	subject: string;
 	text: string;
 	html?: string;
+	/** Our own Message-ID, e.g. "<uuid@example.com>", so a customer's reply can be matched back to this ticket. */
+	messageId?: string;
 	inReplyTo?: string;
 	references?: string[];
 	smtpConfig?: SmtpConfig;
 	/** Display name on the From header, e.g. the customer-facing company name. */
 	fromName?: string;
+	/**
+	 * Marks the message as machine-generated (RFC 3834 "Auto-Submitted: auto-replied"),
+	 * so well-behaved autoresponders on the other side don't answer it and start a loop.
+	 */
+	automatic?: boolean;
 }
+
+export type SendEmailResult = { ok: true; messageId: string } | { ok: false; error: string };
 
 /** Header values that came from inbound mail must not carry line breaks. */
 function headerSafe(value: string): string {
 	return value.replace(/[\r\n]+/g, " ").trim();
 }
 
-export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
+export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
 	const config = options.smtpConfig;
 	if (!config?.user || !config?.pass) {
-		console.warn("SMTP credentials not configured, skipping send");
-		return false;
+		return { ok: false, error: "No mailbox credentials configured" };
 	}
 
 	const fromName = headerSafe(options.fromName ?? "Support").replace(/"/g, "'");
 	try {
-		await createSmtpTransport(config).sendMail({
+		const info = await createSmtpTransport(config).sendMail({
 			from: `"${fromName}" <${config.user}>`,
 			to: options.to,
 			subject: headerSafe(options.subject),
 			text: options.text,
 			html: options.html,
+			messageId: options.messageId,
 			inReplyTo: options.inReplyTo,
 			references: options.references?.join(" "),
+			headers: options.automatic
+				? { "Auto-Submitted": "auto-replied", "X-Auto-Response-Suppress": "All" }
+				: undefined,
 		});
-		return true;
+		return { ok: true, messageId: info.messageId };
 	} catch (err) {
-		console.error("SMTP send error:", err instanceof Error ? err.message : err);
-		return false;
+		const message = err instanceof Error ? err.message : String(err);
+		console.error("SMTP send error:", message);
+		return { ok: false, error: message };
 	}
+}
+
+/** A globally unique Message-ID on the mailbox's own domain (RFC 5322 §3.6.4). */
+export function newMessageId(mailboxAddress: string, id: string): string {
+	const domain = mailboxAddress.split("@")[1]?.toLowerCase() || "intellidesk.local";
+	return `<${id}@${domain}>`;
 }
 
 export function escapeHtml(value: string): string {

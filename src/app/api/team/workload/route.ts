@@ -1,6 +1,7 @@
 // Assignee candidates for the admin's assign menu: active admins and agents,
 // available people first, then by how many open tickets they already hold.
 import { NextResponse } from "next/server";
+import { OPEN_STATUSES } from "@/lib/ticket-meta";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId } from "@/server/auth/org-context";
@@ -24,7 +25,7 @@ export async function GET() {
 				.from("tickets")
 				.select("assigned_agent")
 				.eq("organization_id", orgId)
-				.in("status", ["New", "In Progress"])
+				.in("status", OPEN_STATUSES)
 				.not("assigned_agent", "is", null),
 		]);
 		if (membersResult.error) throw membersResult.error;

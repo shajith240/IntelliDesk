@@ -41,6 +41,7 @@ function MetricCell({ icon: Icon, iconNode, iconClassName, label, value, valueCl
 export function MetricStrip({ data }: { data: DashboardResponse }) {
 	const newCount = data.tickets.by_status.New ?? 0;
 	const inProgressCount = data.tickets.by_status["In Progress"] ?? 0;
+	const pendingCount = data.tickets.by_status.Pending ?? 0;
 	const p1 = data.tickets.by_severity.P1 ?? 0;
 	const p2 = data.tickets.by_severity.P2 ?? 0;
 	const confidence = confidencePercent(data.tickets.avg_ai_confidence);
@@ -51,7 +52,7 @@ export function MetricStrip({ data }: { data: DashboardResponse }) {
 				icon={Inbox}
 				label="Open queue"
 				value={data.tickets.open}
-				context={`${newCount} new · ${inProgressCount} in progress`}
+				context={`${newCount} new · ${inProgressCount} in progress · ${pendingCount} pending`}
 			/>
 			<MetricCell
 				icon={ChevronsUp}

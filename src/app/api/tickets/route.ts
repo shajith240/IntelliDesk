@@ -1,5 +1,6 @@
 // Ticket list endpoint: returns filtered/searched/paginated tickets for the org, filling missing SLA due dates from policies.
 import { NextRequest, NextResponse } from "next/server";
+import { OPEN_STATUSES, isStatus } from "@/lib/ticket-meta";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId } from "@/server/auth/org-context";
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
 		const statuses = statusParam
 			.split(",")
 			.map((s) => s.trim())
-			.filter((s) => ["New", "In Progress", "Resolved", "Closed"].includes(s));
+			.filter((s) => isStatus(s));
 
 		// Parse severity (comma-separated)
 		const severityParam = searchParams.get("severity") ?? "";
@@ -112,7 +113,7 @@ export async function GET(req: NextRequest) {
 			query = query
 				.is("assigned_agent", null)
 				.eq("is_flagged_for_review", true)
-				.in("status", ["New", "In Progress"]);
+				.in("status", OPEN_STATUSES);
 		}
 
 		const validSortFields = [

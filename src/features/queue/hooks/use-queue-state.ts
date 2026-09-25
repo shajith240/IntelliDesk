@@ -3,7 +3,7 @@
 // Queue state hook: manages filters (status, priority, category, search), sort, and page via URL params; debounces search.
 import { useCallback, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { isCategory, isSeverity, isStatus } from "@/lib/ticket-meta";
+import { OPEN_STATUSES, isCategory, isSeverity, isStatus } from "@/lib/ticket-meta";
 import type { TicketListQueryWithView } from "@/hooks/use-api";
 import type { EmailCategory, Severity, TicketStatus } from "@/types";
 import type { TicketSortField } from "@/types/api";
@@ -42,7 +42,7 @@ export interface UseQueueStateResult {
 
 function scopeDefaultStatuses(scope: QueueScope): TicketStatus[] {
 	if (scope === "incoming") return ["New"];
-	if (scope === "open" || scope === "mine") return ["New", "In Progress"];
+	if (scope === "open" || scope === "mine") return [...OPEN_STATUSES];
 	// "review" locks its own status filter server-side (view=review); no client default needed.
 	return [];
 }

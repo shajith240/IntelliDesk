@@ -1,5 +1,6 @@
 // Dashboard stats endpoint: compiles ticket counts, email metrics, SLA status, and activity feed for the org.
 import { NextResponse } from "next/server";
+import { OPEN_STATUSES } from "@/lib/ticket-meta";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { getSLAMetrics, getSLAAlerts } from "@/server/pipeline/sla-tracker";
 import { requireAuth } from "@/server/auth/helpers";
@@ -69,7 +70,7 @@ export async function GET() {
 			.from("tickets")
 			.select("*", { count: "exact", head: true })
 			.eq("organization_id", orgId)
-			.in("status", ["New", "In Progress"]);
+			.in("status", OPEN_STATUSES);
 		if (scopeToAgent) openTicketsQuery = openTicketsQuery.eq("assigned_agent", agentId);
 
 		let resolvedTodayQuery = supabaseAdmin
@@ -84,14 +85,14 @@ export async function GET() {
 			.from("tickets")
 			.select("category")
 			.eq("organization_id", orgId)
-			.in("status", ["New", "In Progress"]);
+			.in("status", OPEN_STATUSES);
 		if (scopeToAgent) categoryQuery = categoryQuery.eq("assigned_agent", agentId);
 
 		let severityQuery = supabaseAdmin
 			.from("tickets")
 			.select("severity")
 			.eq("organization_id", orgId)
-			.in("status", ["New", "In Progress"]);
+			.in("status", OPEN_STATUSES);
 		if (scopeToAgent) severityQuery = severityQuery.eq("assigned_agent", agentId);
 
 		let statusQuery = supabaseAdmin
@@ -104,7 +105,7 @@ export async function GET() {
 			.from("tickets")
 			.select("*", { count: "exact", head: true })
 			.eq("organization_id", orgId)
-			.in("status", ["New", "In Progress"])
+			.in("status", OPEN_STATUSES)
 			.eq("is_flagged_for_review", true);
 		if (scopeToAgent) awaitingReviewQuery = awaitingReviewQuery.eq("assigned_agent", agentId);
 
@@ -115,7 +116,7 @@ export async function GET() {
 					.from("tickets")
 					.select("*", { count: "exact", head: true })
 					.eq("organization_id", orgId)
-					.in("status", ["New", "In Progress"])
+					.in("status", OPEN_STATUSES)
 					.is("assigned_agent", null)
 					.eq("is_flagged_for_review", true);
 
@@ -139,7 +140,7 @@ export async function GET() {
 			.from("tickets")
 			.select("ai_confidence")
 			.eq("organization_id", orgId)
-			.in("status", ["New", "In Progress"]);
+			.in("status", OPEN_STATUSES);
 		if (scopeToAgent) aiConfidenceQuery = aiConfidenceQuery.eq("assigned_agent", agentId);
 
 		// Run independent queries in parallel

@@ -6,8 +6,10 @@ import { getTicketSLAStatus } from "@/server/pipeline/sla-tracker";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId } from "@/server/auth/org-context";
 import { can, forbidden, notFound } from "@/server/auth/policy";
+import { allowedNextStatuses } from "@/server/tickets/replies";
+import type { TicketStatus } from "@/types";
 
-const STATUSES = ["New", "In Progress", "Resolved", "Closed"] as const;
+const STATUSES = ["New", "In Progress", "Pending", "Resolved", "Closed"] as const;
 const SEVERITIES = ["P1", "P2", "P3", "P4"] as const;
 const CATEGORIES = [
 	"Technical Support",
@@ -41,12 +43,12 @@ export async function GET(
         *,
         contacts(id, name, email, role, phone),
         accounts(id, company_name, domain, tier),
-        ticket_emails(
-          email_id,
-          relationship,
-          emails(id, message_id, from_address, from_name, subject, body_text, body_html, received_at, language)
+        ticket_messages(
+          id, kind, author_type, author_user_id, body_text, delivery_status, delivery_error, created_at,
+          users(id, name),
+          emails(from_address, from_name, to_address, subject, language)
         ),
-        auto_responses(id, match_type, response_text, match_score, sent, created_at)
+        auto_responses(id, match_type, response_text, match_score, sent, sent_message_id, created_at)
       `,
 			)
 			.eq("id", id)
@@ -57,7 +59,19 @@ export async function GET(
 		// Agents get the same 404 for "doesn't exist" and "not assigned to you".
 		if (!ticket || !can.viewTicket(session, ticket)) return notFound("Ticket not found");
 
-		const slaStatus = await getTicketSLAStatus(id);
+		const [slaStatus, nextStatuses, parent] = await Promise.all([
+			getTicketSLAStatus(id),
+			allowedNextStatuses(ticket.status as TicketStatus),
+			ticket.follow_up_of
+				? supabaseAdmin
+						.from("tickets")
+						.select("id, ticket_number")
+						.eq("id", ticket.follow_up_of)
+						.eq("organization_id", orgId)
+						.maybeSingle()
+						.then(({ data }) => data)
+				: Promise.resolve(null),
+		]);
 
 		let similarQuery = supabaseAdmin
 			.from("tickets")
@@ -73,8 +87,9 @@ export async function GET(
 		const { data: relatedTickets } = await similarQuery;
 
 		return NextResponse.json({
-			ticket,
+			ticket: { ...ticket, follow_up_parent: parent },
 			sla: slaStatus,
+			allowed_statuses: nextStatuses,
 			similar_tickets: relatedTickets || [],
 		});
 	} catch (error) {
@@ -158,11 +173,8 @@ export async function PATCH(
 			return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
 		}
 
-		const closing = (updates.status === "Resolved" || updates.status === "Closed") &&
-			current.status !== "Resolved" && current.status !== "Closed";
-		if (closing) updates.sla_resolved_at = new Date().toISOString();
-		if (updates.status === "New" || updates.status === "In Progress") updates.sla_resolved_at = null;
-
+		// The resolution timestamp and the allowed status transitions are enforced
+		// by the enforce_ticket_status trigger (migration 009), not here.
 		const { data, error } = await supabaseAdmin
 			.from("tickets")
 			.update(updates)
@@ -174,6 +186,9 @@ export async function PATCH(
 		if (error) {
 			// Composite FK: team must belong to this organization.
 			if (error.code === "23503") return NextResponse.json({ error: "Invalid team" }, { status: 400 });
+			if (error.code === "23514" && error.hint === "invalid_status_transition") {
+				return NextResponse.json({ error: `A ${current.status} ticket can't be set to ${updates.status}` }, { status: 400 });
+			}
 			throw error;
 		}
 

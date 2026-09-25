@@ -4,7 +4,6 @@
 import type {
 	AccountTier,
 	EmailCategory,
-	EmailRelationship,
 	MatchType,
 	Severity,
 	Ticket,
@@ -80,18 +79,23 @@ export interface SLAStatus {
 	time_to_resolution_minutes: number | null;
 }
 
-export interface TicketEmailRow {
-	email_id: string;
-	relationship: EmailRelationship;
+/** One entry in a ticket's conversation (ticket_messages, migration 009). */
+export interface TicketMessageRow {
+	id: string;
+	/** customer: inbound email; reply: public email from the team; note: internal only */
+	kind: "customer" | "reply" | "note";
+	author_type: "customer" | "agent" | "ai";
+	author_user_id: string | null;
+	body_text: string;
+	delivery_status: "sending" | "sent" | "failed" | null;
+	delivery_error: string | null;
+	created_at: string;
+	users: { id: string; name: string } | null;
 	emails: {
-		id: string;
-		message_id: string | null;
 		from_address: string;
 		from_name: string | null;
+		to_address: string;
 		subject: string;
-		body_text: string;
-		body_html: string | null;
-		received_at: string;
 		language: string | null;
 	} | null;
 }
@@ -102,6 +106,7 @@ export interface AutoResponseRow {
 	response_text: string;
 	match_score: number;
 	sent: boolean;
+	sent_message_id: string | null;
 	created_at: string;
 }
 
@@ -119,7 +124,9 @@ export type TicketDetail = Omit<Ticket, "account" | "contact" | "emails"> & {
 		domain: string;
 		tier: AccountTier;
 	} | null;
-	ticket_emails: TicketEmailRow[];
+	ticket_messages: TicketMessageRow[];
+	/** The Closed ticket this one continues (tickets.follow_up_of), if any. */
+	follow_up_parent: { id: string; ticket_number: string } | null;
 	auto_responses: AutoResponseRow[];
 };
 
@@ -135,6 +142,8 @@ export interface SimilarTicketRef {
 export interface TicketDetailResponse {
 	ticket: TicketDetail;
 	sla: SLAStatus | null;
+	/** Statuses this ticket may move to next, from the ticket_status_transitions table. */
+	allowed_statuses: TicketStatus[];
 	similar_tickets: SimilarTicketRef[];
 }
 
@@ -180,10 +189,19 @@ export interface RespondBody {
 	response_text: string;
 }
 
-export interface RespondResponse {
-	success: true;
-	message: string;
-	ticket_id: string;
+// ---------- POST /api/tickets/[id]/messages ----------
+
+export type ReplyStatusAfter = "In Progress" | "Pending" | "Resolved";
+
+export type PostMessageBody =
+	| { kind: "reply"; body: string; status_after?: ReplyStatusAfter; draft_id?: string }
+	| { kind: "note"; body: string };
+
+export interface PostMessageResponse {
+	message_id: string;
+	/** Present for replies: the ticket's status after sending, and the recipient. */
+	status?: TicketStatus;
+	to?: string;
 }
 
 // ---------- GET /api/dashboard ----------

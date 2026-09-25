@@ -2,7 +2,7 @@
 
 // Analytics dashboard: ticket breakdown by priority/category/status, SLA performance, email intake with bar charts.
 import { useDashboard } from "@/hooks/use-api";
-import { formatDuration, SEVERITIES, PRIORITY_META } from "@/lib/ticket-meta";
+import { formatDuration, SEVERITIES, STATUSES, PRIORITY_META } from "@/lib/ticket-meta";
 import { PageHeader } from "@/components/layout/page-header";
 import { Panel, PanelHeader, PanelBody } from "@/components/ui/panel";
 import { SectionMessage } from "@/components/ui/section-message";
@@ -162,12 +162,12 @@ export function Analytics() {
 				<Panel>
 					<PanelHeader title="Ticket status" />
 					<PanelBody>
-						<div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-							{["New", "In Progress", "Resolved", "Closed"].map((status) => {
-								const count = data.tickets.by_status[status as "New" | "In Progress" | "Resolved" | "Closed"] ?? 0;
+						<div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+							{STATUSES.map((status) => {
+								const count = data.tickets.by_status[status] ?? 0;
 								return (
 									<div key={status} className="text-center">
-										<StatusLozenge status={status as "New" | "In Progress" | "Resolved" | "Closed"} />
+										<StatusLozenge status={status} />
 										<div className="mt-2 text-xl font-semibold text-foreground">
 											{count}
 										</div>

@@ -190,6 +190,11 @@ export function QueueList({
 										Mark In Progress
 									</DropdownMenuItem>
 								)}
+								{canWork && (ticket.status === "New" || ticket.status === "In Progress") && (
+									<DropdownMenuItem disabled={isPending} onClick={() => onSetStatus(ticket.id, "Pending")}>
+										Mark Pending
+									</DropdownMenuItem>
+								)}
 								{isAdmin && (
 									<>
 										<DropdownMenuSeparator />

@@ -159,12 +159,18 @@ Feature folders under `src/features/`:
 
 1. A message arrives by IMAP poll or through `POST /api/emails/ingest`. A polled message is stored as an unprocessed row first and only then marked read in the mailbox.
 2. It is parsed and sanitized, then checked against local spam and duplicate rules.
-3. The thread and customer are identified against existing accounts/contacts.
+3. The thread is identified, always within the same organization: `In-Reply-To`/`References` against every stored Message-ID (including our own replies, whose Message-IDs we set), then a ticket number in the subject, then the same sender with a similar subject in the last 48 hours. An email that is near-identical to one the same sender sent recently is attached to that ticket rather than dropped.
 4. Gemini classifies the message and generates its embedding.
-5. The organization-scoped ticket is created or updated in Supabase, and its embedding is written to Pinecone.
-6. A candidate reply is generated from the best-matching knowledge-base article, if one exists. A high-confidence match is sent immediately from the connected mailbox; anything else is stored unsent. A message the classifier flags for human review lands in **Needs Review** for an admin to assign.
-7. The assigned agent reviews the draft in the ticket workspace and sends it through `POST /api/respond`, which emails the customer from the connected mailbox and marks the ticket resolved.
-8. Every step is recorded to the ticket, its SLA timestamps, and the audit log.
+5. `record_inbound_message()` commits the email to a ticket in one transaction:
+   - reply to an open ticket: appended;
+   - reply to a **Pending** or **Resolved** ticket: appended and reopened;
+   - reply to a **Closed** ticket: a new follow-up ticket linked to the old one;
+   - otherwise: a new ticket.
+
+   It is idempotent per email, and the email leaves the intake queue only after every step has succeeded, so a failed run is retried without creating a second ticket.
+6. For a new ticket only, a candidate reply is generated from the best-matching knowledge-base article. A high-confidence match is emailed right away through the same reply path agents use (recorded as an AI-authored message, ticket set to Pending); anything else is stored as a draft. A message the classifier flags for human review lands in **Needs Review** for an admin to assign. A customer writing back on an existing ticket never gets an automatic reply.
+7. The assigned agent answers in the ticket workspace with `POST /api/tickets/[id]/messages`: a public reply (optionally starting from the AI draft) with the status to leave the ticket in, or an internal note the customer never sees.
+8. Every step is recorded to the conversation, the ticket's SLA timestamps, and the audit log.
 
 `GET|POST /api/emails/poll` reads every connected mailbox, then processes the stored queue. `POST /api/emails/process-queue` only processes the queue. Both require `Authorization: Bearer $CRON_SECRET` and accept `GET` so Vercel Cron can call them directly:
 
@@ -189,7 +195,7 @@ All routes are under `/api` and live in `src/app/api/`. Unless noted, a route re
 | `/api/tickets` `?view=review` | `GET` | Needs Review: flagged, unassigned, open tickets (admin, viewer) |
 | `/api/tickets/[id]` | `GET`, `PATCH` | Ticket detail with SLA status and similar tickets; status, priority, category and team updates. Assignment and SLA fields are rejected. |
 | `/api/tickets/[id]/assign` | `POST` | Admin only. `{ assignee_id \| null, note? }`: assigns or unassigns atomically, with history and audit |
-| `/api/respond` | `POST` | Sends the reviewed AI draft, marks the ticket resolved |
+| `/api/tickets/[id]/messages` | `POST` | Assigned agent or admin: `{ kind: "reply", body, status_after?, draft_id? }` emails the customer; `{ kind: "note", body }` adds an internal note |
 | `/api/faqs`, `/api/faqs/[id]` | `GET`, `POST`, `PUT`, `DELETE` | Knowledge-base articles |
 | `/api/search` | `GET` | Semantic ticket/article search via Pinecone |
 | `/api/team` | `GET`, `POST` | Members; admins add a member and receive a one-time initial password |
@@ -229,18 +235,32 @@ Apply the SQL files in `supabase/migrations/` in order:
 | `006_lockdown_public_api.sql` | Closes the Supabase Data API: RLS on every table with no policies, and all `anon`/`authenticated` grants revoked. The app reaches the database only through the service-role key on the server. |
 | `007_integrity_and_assignment.sql` | Composite `(id, organization_id)` foreign keys so no row can point across organizations; `assign_ticket()`; `ticket_assignments` history; `mailbox_connections`; `auth_login_attempts` |
 | `008_email_intake_queue.sql` | Intake queue columns: `processing_attempts`, `processing_error`, `last_attempt_at` |
+| `009_conversation_model.sql` | `ticket_messages` (customer emails, replies, internal notes); the status workflow as data (`ticket_statuses`, `ticket_status_transitions`) enforced by a trigger; outbound emails in `emails`; `complete_ticket_reply()` |
+| `010_record_inbound_message.sql` | `record_inbound_message()`: atomic, idempotent intake of an inbound email (append, reopen, follow-up or new ticket) |
 
-With the Supabase CLI linked to a project, `supabase db push` applies pending migrations. `supabase/tests/assignment_integrity.sql` checks the integrity rules inside a transaction that it rolls back, so it is safe to run against a live database:
+With the Supabase CLI linked to a project, `supabase db push` applies pending migrations. The files in `supabase/tests/` check the database rules inside a transaction that is rolled back, so they are safe to run against a live database:
 
 ```bash
-psql "$DATABASE_URL" -f supabase/tests/assignment_integrity.sql
+for f in supabase/tests/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
 ```
+
+### Ticket workflow
+
+| From \ To | In Progress | Pending | Resolved | Closed |
+| --- | --- | --- | --- | --- |
+| New | yes | yes | yes | yes |
+| In Progress | | yes | yes | yes |
+| Pending (waiting on customer) | yes | | yes | yes |
+| Resolved | yes (reopen) | | | yes |
+| Closed | | | | |
+
+The table lives in `ticket_status_transitions`; a trigger rejects any other change and owns `sla_resolved_at` (set on resolve, cleared on reopen). Closed is final: a customer who writes back gets a follow-up ticket.
 
 If a Supabase project already has this schema and data, do not rerun the migrations blindly — confirm the expected tables and columns exist first.
 
 ## Using the app
 
-After signing in, admins and viewers land on the **Command Center** and agents on **My Work**. The Command Center shows queue metrics, the open work queue, SLA risk, and recent activity. Clicking a ticket opens a workspace panel (`?ticket=<id>` in the URL) with the customer conversation, the AI analysis (always marked with the IntelliDesk AI label — "AI suggestion" for analysis, "AI draft" for replies), verified ticket details, and the reply composer. Sending a reply requires an explicit confirmation; it emails the customer and marks the ticket resolved.
+After signing in, admins and viewers land on the **Command Center** and agents on **My Work**. The Command Center shows queue metrics, the open work queue, SLA risk, and recent activity. Clicking a ticket opens a workspace panel (`?ticket=<id>` in the URL) with the conversation (customer emails, the team's replies, and internal notes), the AI analysis (always marked with the IntelliDesk AI label — "AI suggestion" for analysis, "AI draft" for replies), verified ticket details, and the composer. A reply requires an explicit confirmation, emails the customer, and leaves the ticket in the status the agent picks (usually Pending while waiting on the customer). Internal notes are never emailed.
 
 Data refreshes every 30 seconds and after every mutation. The status indicator in the top bar reflects whether the last refresh succeeded — the app polls and does not use a push/realtime connection.
 

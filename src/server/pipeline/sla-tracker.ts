@@ -1,4 +1,5 @@
 import "server-only";
+import { OPEN_STATUSES } from "@/lib/ticket-meta";
 import { supabaseAdmin } from "@/server/db/supabase";
 
 interface SLAStatus {
@@ -129,7 +130,7 @@ export async function getSLAAlerts(orgId?: string, assigneeId?: string): Promise
 		.select(
 			"id, ticket_number, severity, created_at, sla_first_response_at, sla_resolved_at",
 		)
-		.in("status", ["New", "In Progress"])
+		.in("status", OPEN_STATUSES)
 		.order("created_at", { ascending: true });
 
 	if (orgId) {
@@ -264,7 +265,7 @@ export async function getSLAMetrics(
 	let openQuery = supabaseAdmin
 		.from("tickets")
 		.select("id", { count: "exact" })
-		.in("status", ["New", "In Progress"]);
+		.in("status", OPEN_STATUSES);
 
 	if (orgId) {
 		openQuery = openQuery.eq("organization_id", orgId);

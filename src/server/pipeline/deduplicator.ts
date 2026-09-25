@@ -59,8 +59,10 @@ export async function checkDuplicate(
 		},
 	);
 
-	if (results && results.length > 0) {
-		const topMatch = results[0];
+	// On a retry the email's own vector is already stored; it isn't a duplicate of itself.
+	const matches = (results ?? []).filter((match) => match.id !== excludeEmailId);
+	if (matches.length > 0) {
+		const topMatch = matches[0];
 		if (topMatch.score && topMatch.score >= DEDUP_SIMILARITY_THRESHOLD) {
 			return {
 				is_duplicate: true,

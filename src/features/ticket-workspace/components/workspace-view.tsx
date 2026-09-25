@@ -21,22 +21,30 @@ interface WorkspaceViewProps {
 }
 
 export function WorkspaceView({ detail, onOpenTicket, onClose, onDirtyChange }: WorkspaceViewProps) {
-	const { ticket, sla, similar_tickets } = detail;
+	const { ticket, sla, similar_tickets, allowed_statuses } = detail;
 	const draft = useReplyDraft(detail);
 	const [sendDialogOpen, setSendDialogOpen] = useState(false);
 	const canWork = useCanWorkTicket(ticket);
 
 	// Report dirty state up so the sheet can warn before discarding unsent edits. This is a
 	// deliberate synchronization with the parent, not derivable render output, so it stays an effect.
+	// Anything typed that isn't just the untouched AI draft counts as unsent work.
+	const hasUnsentText = draft.text.trim().length > 0 && !draft.fromAiDraft;
 	useEffect(() => {
-		onDirtyChange(draft.isDirty);
-	}, [draft.isDirty, onDirtyChange]);
+		onDirtyChange(hasUnsentText);
+	}, [hasUnsentText, onDirtyChange]);
+
+	// The knowledge-base evidence shown in the sidebar: the pending draft, else the last one sent.
+	const lastSentDraft =
+		ticket.auto_responses
+			.filter((row) => row.sent)
+			.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
 
 	const main = (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6">
 				<div className="mx-auto max-w-[760px]">
-					<ConversationColumn ticket={ticket} />
+					<ConversationColumn ticket={ticket} onOpenTicket={onOpenTicket} />
 				</div>
 			</div>
 			<div className="shrink-0 border-t border-border bg-raised px-4 py-3 sm:px-8">
@@ -57,14 +65,14 @@ export function WorkspaceView({ detail, onOpenTicket, onClose, onDirtyChange }: 
 			ticket={ticket}
 			sla={sla}
 			similarTickets={similar_tickets}
-			evidence={draft.pending ?? draft.lastSent}
+			evidence={draft.pending ?? lastSentDraft}
 			onOpenTicket={onOpenTicket}
 		/>
 	);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-background">
-			<WorkspaceHeader ticket={ticket} onClose={onClose} />
+			<WorkspaceHeader ticket={ticket} allowedStatuses={allowed_statuses} onClose={onClose} />
 
 			<div className="hidden min-h-0 flex-1 md:grid md:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
 				<div className="flex min-h-0 flex-col">{main}</div>
