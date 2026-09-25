@@ -6,17 +6,21 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
+import type { UserRole } from "@/types";
 import { NAV_GROUPS } from "./nav";
 import { useShell } from "./shell-context";
 
-const SECOND_KEY_TO_HREF: Record<string, string> = {
-	d: "/dashboard",
-	i: "/dashboard/queue",
-	m: "/dashboard/my-work",
-	a: "/dashboard/analytics",
-	k: "/dashboard/knowledge-base",
-	s: "/dashboard/settings",
-};
+/** Maps the second key of a "G <key>" shortcut to its href, for the roles that can open it. */
+function secondKeyToHref(role: UserRole | undefined): Record<string, string> {
+	const map: Record<string, string> = {};
+	if (!role) return map;
+	for (const item of NAV_GROUPS.flatMap((group) => group.items)) {
+		if (!item.roles.includes(role)) continue;
+		const second = item.shortcut.split(" ")[1]?.toLowerCase();
+		if (second) map[second] = item.href;
+	}
+	return map;
+}
 
 function isTypingTarget(target: EventTarget | null): boolean {
 	if (!(target instanceof HTMLElement)) return false;
@@ -33,13 +37,13 @@ export function KeyboardShortcuts() {
 	const { toggleSidebar, paletteOpen, setPaletteOpen, setShortcutsOpen, shortcutsOpen } = useShell();
 	const router = useRouter();
 	const { data: session } = useSession();
-	const isAdmin = session?.user.role === "admin";
+	const role = session?.user.role;
 	const pendingGRef = useRef<number>(0);
-	const isAdminRef = useRef(isAdmin);
+	const roleRef = useRef(role);
 
 	useEffect(() => {
-		isAdminRef.current = isAdmin;
-	}, [isAdmin]);
+		roleRef.current = role;
+	}, [role]);
 
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
@@ -87,8 +91,7 @@ export function KeyboardShortcuts() {
 			if (pendingAt && Date.now() - pendingAt < 1000) {
 				pendingGRef.current = 0;
 				const key = e.key.toLowerCase();
-				if (key === "s" && !isAdminRef.current) return;
-				const href = SECOND_KEY_TO_HREF[key];
+				const href = secondKeyToHref(roleRef.current)[key];
 				if (href) {
 					e.preventDefault();
 					router.push(href);
@@ -100,10 +103,21 @@ export function KeyboardShortcuts() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [paletteOpen, setPaletteOpen, setShortcutsOpen, toggleSidebar, router]);
 
-	return <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />;
+	return <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} role={role} />;
 }
 
-function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function ShortcutsDialog({
+	open,
+	onOpenChange,
+	role,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	role: UserRole | undefined;
+}) {
+	const navItems = NAV_GROUPS.flatMap((group) => group.items).filter(
+		(item) => !!role && item.roles.includes(role),
+	);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent title="Keyboard shortcuts" size="md">
@@ -129,7 +143,7 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
 					<section>
 						<h3 className="mb-1 text-sm font-semibold text-foreground">Navigation</h3>
 						<dl>
-							{NAV_GROUPS.flatMap((group) => group.items).map((item) => {
+							{navItems.map((item) => {
 								const [first, second] = item.shortcut.split(" ");
 								return (
 									<Row key={item.href} label={item.label}>

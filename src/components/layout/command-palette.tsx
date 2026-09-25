@@ -33,7 +33,7 @@ export function CommandPalette() {
 	const refreshAll = useRefreshAll();
 	const { resolvedTheme, setTheme } = useTheme();
 	const { data: session } = useSession();
-	const isAdmin = session?.user.role === "admin";
+	const role = session?.user.role;
 
 	const [query, setQuery] = useState("");
 	const [debounced, setDebounced] = useState("");
@@ -65,7 +65,7 @@ export function CommandPalette() {
 
 	const lowerQuery = query.toLowerCase();
 	const navItems = NAV_GROUPS.flatMap((group) => group.items)
-		.filter((item) => !item.adminOnly || isAdmin)
+		.filter((item) => !!role && item.roles.includes(role))
 		.filter((item) => item.label.toLowerCase().includes(lowerQuery));
 
 	const isDark = resolvedTheme === "dark";

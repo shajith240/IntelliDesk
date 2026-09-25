@@ -21,10 +21,14 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 	const pathname = usePathname();
 	const { data: session } = useSession();
 	const { data: team, isLoading: teamLoading, error: teamError } = useTeam();
-	const { data: dashboard } = useDashboard();
+	const role = session?.user.role;
+	// Only admins and viewers have nav items with badges (Incoming Queue, Needs Review);
+	// agents never see either, so skip the dashboard fetch entirely for them.
+	const showBadges = role === "admin" || role === "viewer";
+	const { data: dashboard } = useDashboard(showBadges);
 	const { setShortcutsOpen } = useShell();
-	const isAdmin = session?.user.role === "admin";
 	const newCount = dashboard?.tickets.by_status.New;
+	const needsAssignmentCount = dashboard?.tickets.needs_assignment;
 
 	const orgName = teamError ? "Workspace" : team?.organization.name;
 
@@ -47,7 +51,7 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 			</div>
 			<nav aria-label="Primary" className="flex-1 overflow-y-auto px-3 py-2">
 				{NAV_GROUPS.map((group) => {
-					const items = group.items.filter((item) => !item.adminOnly || isAdmin);
+					const items = group.items.filter((item) => !!role && item.roles.includes(role));
 					if (items.length === 0) return null;
 					return (
 						<div key={group.label}>
@@ -58,7 +62,13 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 								{items.map((item) => {
 									const active = isNavActive(pathname, item.href);
 									const Icon = item.icon;
-									const showBadge = item.href === "/dashboard/queue" && typeof newCount === "number" && newCount > 0;
+									const badgeCount =
+										item.href === "/dashboard/queue"
+											? newCount
+											: item.href === "/dashboard/review"
+												? needsAssignmentCount
+												: undefined;
+									const showBadge = typeof badgeCount === "number" && badgeCount > 0;
 									return (
 										<li key={item.href}>
 											<Link
@@ -78,8 +88,11 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 												{showBadge && (
 													<span className="ml-auto">
 														<Badge tone="primary">
-															{newCount}
-															<span className="sr-only"> new tickets</span>
+															{badgeCount}
+															<span className="sr-only">
+																{" "}
+																{item.href === "/dashboard/review" ? "tickets needing review" : "new tickets"}
+															</span>
 														</Badge>
 													</span>
 												)}

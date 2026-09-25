@@ -15,14 +15,14 @@ export async function identifyCustomer(
 ): Promise<CustomerIdentificationResult> {
 	const emailDomain = fromAddress.split("@")[1]?.toLowerCase();
 
-	// 1. Exact contact match by email (scoped through account's org)
+	// 1. Exact contact match by email (contacts carry their own organization_id)
 	const { data: existingContact } = await supabaseAdmin
 		.from("contacts")
 		.select(
-			"id, name, email, role, account_id, accounts(id, company_name, domain, tier, organization_id)",
+			"id, name, email, role, account_id, accounts(id, company_name, domain, tier)",
 		)
 		.eq("email", fromAddress.toLowerCase())
-		.eq("accounts.organization_id", orgId)
+		.eq("organization_id", orgId)
 		.single();
 
 	if (existingContact) {
@@ -33,7 +33,6 @@ export async function identifyCustomer(
 					company_name: string;
 					domain: string;
 					tier: string;
-					organization_id: string;
 				};
 			}
 		).accounts;
@@ -68,6 +67,7 @@ export async function identifyCustomer(
 			const { data: newContact } = await supabaseAdmin
 				.from("contacts")
 				.insert({
+					organization_id: orgId,
 					email: fromAddress.toLowerCase(),
 					name: contactName,
 					role: signature?.role || null,
@@ -112,6 +112,7 @@ export async function identifyCustomer(
 	const { data: newContact } = await supabaseAdmin
 		.from("contacts")
 		.insert({
+			organization_id: orgId,
 			email: fromAddress.toLowerCase(),
 			name: contactName,
 			role: signature?.role || null,

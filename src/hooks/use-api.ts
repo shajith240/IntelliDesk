@@ -7,10 +7,12 @@ import { apiGet, buildQuery } from "@/lib/api-client";
 import { REFRESH_INTERVAL_MS } from "@/lib/sync-status";
 import type {
 	DashboardResponse,
+	MeResponse,
 	TeamResponse,
 	TicketDetailResponse,
 	TicketListQuery,
 	TicketListResponse,
+	WorkloadResponse,
 } from "@/types/api";
 
 const liveOptions = {
@@ -19,11 +21,15 @@ const liveOptions = {
 	keepPreviousData: true,
 } as const;
 
-export function useDashboard() {
-	return useSWR<DashboardResponse>("/api/dashboard", apiGet, liveOptions);
+/** Pass false to skip fetching (e.g. the sidebar badge isn't shown for this role). */
+export function useDashboard(enabled = true) {
+	return useSWR<DashboardResponse>(enabled ? "/api/dashboard" : null, apiGet, liveOptions);
 }
 
-export function ticketsKey(query: TicketListQuery): string {
+/** GET /api/tickets accepts `view=review` in addition to the fields on TicketListQuery. */
+export type TicketListQueryWithView = TicketListQuery & { view?: "review" };
+
+export function ticketsKey(query: TicketListQueryWithView): string {
 	return `/api/tickets${buildQuery({
 		status: query.statuses?.length ? query.statuses.join(",") : query.status,
 		severity: query.severities?.length ? query.severities.join(",") : query.severity,
@@ -34,10 +40,11 @@ export function ticketsKey(query: TicketListQuery): string {
 		limit: query.limit,
 		sort: query.sort,
 		order: query.order,
+		view: query.view,
 	})}`;
 }
 
-export function useTickets(query: TicketListQuery) {
+export function useTickets(query: TicketListQueryWithView) {
 	return useSWR<TicketListResponse>(ticketsKey(query), apiGet, liveOptions);
 }
 
@@ -48,8 +55,29 @@ export function useTicket(id: string | null) {
 	});
 }
 
-export function useTeam() {
-	return useSWR<TeamResponse>("/api/team", apiGet, { revalidateOnFocus: false });
+export interface UseTeamOptions {
+	/** Admins only: also returns deactivated members. */
+	includeInactive?: boolean;
+}
+
+export function useTeam(options: UseTeamOptions = {}) {
+	const { includeInactive = false } = options;
+	return useSWR<TeamResponse>(
+		`/api/team${includeInactive ? "?include=inactive" : ""}`,
+		apiGet,
+		{ revalidateOnFocus: false },
+	);
+}
+
+export function useMe() {
+	return useSWR<MeResponse>("/api/me", apiGet, { revalidateOnFocus: true });
+}
+
+/** Assignee candidates for the admin assign menu. Pass false to skip fetching (non-admins). */
+export function useWorkload(enabled: boolean) {
+	return useSWR<WorkloadResponse>(enabled ? "/api/team/workload" : null, apiGet, {
+		revalidateOnFocus: false,
+	});
 }
 
 /** Revalidates every cached /api/* request. Use after mutations and for the Refresh button. */

@@ -155,12 +155,21 @@ export interface AIClassification {
 
 // ---------- PATCH /api/tickets/[id] ----------
 
+/** Assignment is not patchable here; use POST /api/tickets/[id]/assign (admins). */
 export interface TicketPatchBody {
 	status?: TicketStatus;
 	severity?: Severity;
 	category?: EmailCategory;
-	assigned_team?: string | null;
-	assigned_agent?: string | null;
+	/** Admins only. */
+	assigned_team_id?: string | null;
+}
+
+// ---------- POST /api/tickets/[id]/assign (admins) ----------
+
+export interface AssignTicketBody {
+	/** null unassigns. */
+	assignee_id: string | null;
+	note?: string;
 }
 
 // ---------- POST /api/respond ----------
@@ -209,6 +218,8 @@ export interface DashboardResponse {
 		by_category: Record<string, number>;
 		by_severity: Partial<Record<Severity, number>>;
 		by_status: Partial<Record<TicketStatus, number>>;
+		/** Open, unassigned tickets flagged for human review; always 0 on an agent's dashboard. */
+		needs_assignment: number;
 	};
 	emails: {
 		total: number;
@@ -238,9 +249,100 @@ export interface TeamMember {
 	name: string;
 	email: string;
 	role: UserRole;
+	is_active: boolean;
+	is_available: boolean;
+	last_login: string | null;
+	created_at: string;
 }
 
+/** GET /api/team (?include=inactive, admins only, adds deactivated members). */
 export interface TeamResponse {
 	organization: { id: string; name: string };
 	members: TeamMember[];
 }
+
+// ---------- POST /api/team, PATCH /api/team/[id] (admins) ----------
+
+export interface CreateMemberBody {
+	name: string;
+	email: string;
+	role: "admin" | "agent" | "viewer";
+}
+
+export interface CreateMemberResponse {
+	member: TeamMember;
+	/** Shown to the admin once; never retrievable again. */
+	initial_password: string;
+}
+
+export interface UpdateMemberBody {
+	name?: string;
+	role?: "admin" | "agent" | "viewer";
+	is_active?: boolean;
+}
+
+// ---------- GET /api/team/workload (admins) ----------
+
+export interface AssigneeCandidate {
+	id: string;
+	name: string;
+	email: string;
+	role: "admin" | "agent";
+	is_available: boolean;
+	open_tickets: number;
+}
+
+/** Sorted: available first, then fewest open tickets. */
+export interface WorkloadResponse {
+	candidates: AssigneeCandidate[];
+}
+
+// ---------- GET/PATCH /api/me, POST /api/me/password ----------
+
+export interface Me {
+	id: string;
+	name: string;
+	email: string;
+	role: UserRole;
+	is_available: boolean;
+}
+
+export interface MeResponse {
+	me: Me;
+}
+
+// ---------- /api/settings/email-config ----------
+
+export type MailboxProvider = "gmail" | "imap_smtp";
+
+export interface MailboxStatus {
+	provider: MailboxProvider;
+	email_address: string;
+	imap_host: string;
+	imap_port: number;
+	smtp_host: string;
+	smtp_port: number;
+	status: "active" | "error" | "disconnected";
+	last_error: string | null;
+	last_synced_at: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface MailboxResponse {
+	connected: boolean;
+	mailbox: MailboxStatus | null;
+}
+
+export type ConnectMailboxBody =
+	| { provider: "gmail"; email: string; app_password: string }
+	| {
+			provider: "imap_smtp";
+			email: string;
+			username?: string;
+			app_password: string;
+			imap_host: string;
+			imap_port: 993;
+			smtp_host: string;
+			smtp_port: 465 | 587;
+	  };

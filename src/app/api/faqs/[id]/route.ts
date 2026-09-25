@@ -4,6 +4,7 @@ import { generateEmbedding } from "@/server/gemini/embeddings";
 import { upsertVectors } from "@/server/db/pinecone";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId, orgNamespace } from "@/server/auth/org-context";
+import { can, forbidden } from "@/server/auth/policy";
 
 export async function PUT(
 	req: NextRequest,
@@ -11,17 +12,25 @@ export async function PUT(
 ) {
 	const session = await requireAuth();
 	if (session instanceof NextResponse) return session;
+	if (!can.manageKnowledgeBase(session)) {
+		return forbidden("Only admins can edit the knowledge base");
+	}
 
 	const orgId = getOrgId(session);
 
 	try {
 		const { id } = await params;
-		const body = await req.json();
+		let body: Record<string, unknown>;
+		try {
+			body = await req.json();
+		} catch {
+			return NextResponse.json({ error: "Request body must be JSON" }, { status: 400 });
+		}
 
 		const updates: Record<string, unknown> = {};
-		if (body.question !== undefined) updates.question = body.question;
-		if (body.answer !== undefined) updates.answer = body.answer;
-		if (body.category !== undefined) updates.category = body.category;
+		if (typeof body.question === "string") updates.question = body.question;
+		if (typeof body.answer === "string") updates.answer = body.answer;
+		if (typeof body.category === "string") updates.category = body.category;
 
 		if (Object.keys(updates).length === 0) {
 			return NextResponse.json(
@@ -73,6 +82,9 @@ export async function DELETE(
 ) {
 	const session = await requireAuth();
 	if (session instanceof NextResponse) return session;
+	if (!can.manageKnowledgeBase(session)) {
+		return forbidden("Only admins can edit the knowledge base");
+	}
 
 	const orgId = getOrgId(session);
 

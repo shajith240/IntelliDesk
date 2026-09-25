@@ -54,6 +54,7 @@ export interface User {
 	role: UserRole;
 	avatar_url: string | null;
 	is_active: boolean;
+	is_available: boolean;
 	last_login: string | null;
 	created_at: string;
 	updated_at: string;
@@ -123,6 +124,7 @@ export interface Ticket {
 	account_id: string | null;
 	contact_id: string | null;
 	assigned_team: string | null;
+	assigned_team_id: string | null;
 	assigned_agent: string | null;
 	sla_first_response_due: string | null;
 	sla_resolution_due: string | null;

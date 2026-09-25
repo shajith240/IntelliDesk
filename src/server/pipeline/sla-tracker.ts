@@ -15,6 +15,36 @@ interface SLAStatus {
 	time_to_resolution_minutes: number | null;
 }
 
+interface SlaPolicyRow {
+	severity: string;
+	organization_id: string | null;
+	first_response_minutes: number;
+	resolution_minutes: number;
+}
+
+/**
+ * Build a severity -> policy map from candidate rows, preferring the
+ * organization-specific row over the global default (organization_id null)
+ * when both are present for the same severity.
+ */
+function buildPolicyMap(
+	rows: SlaPolicyRow[],
+): Map<string, { first_response_minutes: number; resolution_minutes: number }> {
+	const map = new Map<
+		string,
+		{ first_response_minutes: number; resolution_minutes: number }
+	>();
+	for (const row of [...rows].sort(
+		(a, b) => Number(a.organization_id !== null) - Number(b.organization_id !== null),
+	)) {
+		map.set(row.severity, {
+			first_response_minutes: row.first_response_minutes,
+			resolution_minutes: row.resolution_minutes,
+		});
+	}
+	return map;
+}
+
 /**
  * Calculate SLA status for a ticket
  */
@@ -24,18 +54,23 @@ export async function getTicketSLAStatus(
 	const { data: ticket } = await supabaseAdmin
 		.from("tickets")
 		.select(
-			"id, ticket_number, severity, created_at, sla_first_response_at, sla_resolved_at",
+			"id, ticket_number, severity, organization_id, created_at, sla_first_response_at, sla_resolved_at",
 		)
 		.eq("id", ticketId)
 		.single();
 
 	if (!ticket) return null;
 
-	const { data: slaPolicy } = await supabaseAdmin
+	// Two rows can match (org override + global default); never .single() this.
+	const { data: policyRows } = await supabaseAdmin
 		.from("sla_policies")
-		.select("first_response_minutes, resolution_minutes")
+		.select("severity, organization_id, first_response_minutes, resolution_minutes")
 		.eq("severity", ticket.severity)
-		.single();
+		.or(`organization_id.eq.${ticket.organization_id},organization_id.is.null`);
+
+	const slaPolicy = policyRows
+		? buildPolicyMap(policyRows as SlaPolicyRow[]).get(ticket.severity)
+		: undefined;
 
 	if (!slaPolicy) return null;
 
@@ -84,9 +119,11 @@ export async function getTicketSLAStatus(
 }
 
 /**
- * Get all tickets that are breaching or about to breach SLA
+ * Get all tickets that are breaching or about to breach SLA.
+ * `assigneeId`, when set, restricts to tickets assigned to that user (used for
+ * agents, who may only see SLA data for their own tickets).
  */
-export async function getSLAAlerts(orgId?: string): Promise<SLAStatus[]> {
+export async function getSLAAlerts(orgId?: string, assigneeId?: string): Promise<SLAStatus[]> {
 	let query = supabaseAdmin
 		.from("tickets")
 		.select(
@@ -98,18 +135,28 @@ export async function getSLAAlerts(orgId?: string): Promise<SLAStatus[]> {
 	if (orgId) {
 		query = query.eq("organization_id", orgId);
 	}
+	if (assigneeId) {
+		query = query.eq("assigned_agent", assigneeId);
+	}
 
 	const { data: openTickets } = await query;
 
 	if (!openTickets || openTickets.length === 0) return [];
 
-	const { data: slaPolicies } = await supabaseAdmin
+	// Two rows can match per severity (org override + global default); never .single() this.
+	let policiesQuery = supabaseAdmin
 		.from("sla_policies")
-		.select("severity, first_response_minutes, resolution_minutes");
+		.select("severity, organization_id, first_response_minutes, resolution_minutes");
+
+	if (orgId) {
+		policiesQuery = policiesQuery.or(`organization_id.eq.${orgId},organization_id.is.null`);
+	}
+
+	const { data: slaPolicies } = await policiesQuery;
 
 	if (!slaPolicies) return [];
 
-	const policyMap = new Map(slaPolicies.map((p) => [p.severity, p]));
+	const policyMap = buildPolicyMap(slaPolicies as SlaPolicyRow[]);
 
 	const now = new Date();
 	const alerts: SLAStatus[] = [];
@@ -196,9 +243,15 @@ export async function getSLAAlerts(orgId?: string): Promise<SLAStatus[]> {
 }
 
 /**
- * Get SLA metrics summary for dashboard
+ * Get SLA metrics summary for dashboard.
+ * `assigneeId`, when set, restricts totals/averages to tickets assigned to
+ * that user (used for agents on their own dashboard).
  */
-export async function getSLAMetrics(orgId?: string, precomputedAlerts?: SLAStatus[]): Promise<{
+export async function getSLAMetrics(
+	orgId?: string,
+	precomputedAlerts?: SLAStatus[],
+	assigneeId?: string,
+): Promise<{
 	total_open: number;
 	breached: number;
 	at_risk: number;
@@ -206,7 +259,7 @@ export async function getSLAMetrics(orgId?: string, precomputedAlerts?: SLAStatu
 	avg_first_response_minutes: number | null;
 	avg_resolution_minutes: number | null;
 }> {
-	const alerts = precomputedAlerts ?? (await getSLAAlerts(orgId));
+	const alerts = precomputedAlerts ?? (await getSLAAlerts(orgId, assigneeId));
 
 	let openQuery = supabaseAdmin
 		.from("tickets")
@@ -215,6 +268,9 @@ export async function getSLAMetrics(orgId?: string, precomputedAlerts?: SLAStatu
 
 	if (orgId) {
 		openQuery = openQuery.eq("organization_id", orgId);
+	}
+	if (assigneeId) {
+		openQuery = openQuery.eq("assigned_agent", assigneeId);
 	}
 
 	const { data: openTickets } = await openQuery;
@@ -236,6 +292,9 @@ export async function getSLAMetrics(orgId?: string, precomputedAlerts?: SLAStatu
 
 	if (orgId) {
 		resolvedQuery = resolvedQuery.eq("organization_id", orgId);
+	}
+	if (assigneeId) {
+		resolvedQuery = resolvedQuery.eq("assigned_agent", assigneeId);
 	}
 
 	const { data: resolvedTickets } = await resolvedQuery;

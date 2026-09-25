@@ -14,6 +14,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { STATUSES } from "@/lib/ticket-meta";
+import { useCanWorkTicket } from "@/features/ticket-workspace/hooks/use-can-work-ticket";
 import { useTicketMutation } from "@/features/ticket-workspace/hooks/use-ticket-mutation";
 import type { TicketDetail } from "@/types/api";
 import type { TicketStatus } from "@/types";
@@ -25,6 +26,7 @@ interface WorkspaceHeaderProps {
 
 export function WorkspaceHeader({ ticket, onClose }: WorkspaceHeaderProps) {
 	const { toast } = useToast();
+	const canWork = useCanWorkTicket(ticket);
 
 	const handleCopyLink = async () => {
 		try {
@@ -43,7 +45,7 @@ export function WorkspaceHeader({ ticket, onClose }: WorkspaceHeaderProps) {
 			</nav>
 
 			<div className="ml-auto flex items-center gap-1">
-				<StatusMenu ticket={ticket} />
+				<StatusMenu ticket={ticket} canWork={canWork} />
 
 				<Tooltip content="Copy link">
 					<Button variant="subtle" size="icon" aria-label="Copy link" onClick={() => void handleCopyLink()}>
@@ -61,7 +63,7 @@ export function WorkspaceHeader({ ticket, onClose }: WorkspaceHeaderProps) {
 	);
 }
 
-function StatusMenu({ ticket }: { ticket: TicketDetail }) {
+function StatusMenu({ ticket, canWork }: { ticket: TicketDetail; canWork: boolean }) {
 	const { pendingField, update } = useTicketMutation(ticket.id);
 	const loading = pendingField === "status";
 
@@ -69,6 +71,14 @@ function StatusMenu({ ticket }: { ticket: TicketDetail }) {
 		if (!isTicketStatus(status) || status === ticket.status) return;
 		void update({ status }, `${ticket.ticket_number} moved to ${status}`);
 	};
+
+	if (!canWork) {
+		return (
+			<span className="mr-1 inline-flex h-8 items-center pl-2">
+				<StatusLozenge status={ticket.status} />
+			</span>
+		);
+	}
 
 	return (
 		<DropdownMenu>

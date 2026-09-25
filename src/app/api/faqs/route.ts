@@ -5,6 +5,7 @@ import { upsertVectors } from "@/server/db/pinecone";
 import { v4 as uuidv4 } from "uuid";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId, orgNamespace } from "@/server/auth/org-context";
+import { can, forbidden } from "@/server/auth/policy";
 
 export async function GET(req: NextRequest) {
 	const session = await requireAuth();
@@ -56,13 +57,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
 	const session = await requireAuth();
 	if (session instanceof NextResponse) return session;
+	if (!can.manageKnowledgeBase(session)) {
+		return forbidden("Only admins can edit the knowledge base");
+	}
 
 	const orgId = getOrgId(session);
 
 	try {
-		const body = await req.json();
+		let body: Record<string, unknown>;
+		try {
+			body = await req.json();
+		} catch {
+			return NextResponse.json({ error: "Request body must be JSON" }, { status: 400 });
+		}
 
-		if (!body.question || !body.answer || !body.category) {
+		const { question, answer, category } = body;
+		if (
+			typeof question !== "string" || !question ||
+			typeof answer !== "string" || !answer ||
+			typeof category !== "string" || !category
+		) {
 			return NextResponse.json(
 				{ error: "Missing required fields: question, answer, category" },
 				{ status: 400 },
@@ -76,9 +90,9 @@ export async function POST(req: NextRequest) {
 			.insert({
 				id,
 				organization_id: orgId,
-				question: body.question,
-				answer: body.answer,
-				category: body.category,
+				question,
+				answer,
+				category,
 			})
 			.select()
 			.single();
@@ -86,17 +100,15 @@ export async function POST(req: NextRequest) {
 		if (error) throw error;
 
 		// Generate embedding and store in Pinecone
-		const embedding = await generateEmbedding(
-			`${body.question} ${body.answer}`,
-		);
+		const embedding = await generateEmbedding(`${question} ${answer}`);
 
 		await upsertVectors(orgNamespace(orgId, "faqs"), [
 			{
 				id,
 				values: embedding,
 				metadata: {
-					category: body.category,
-					question: body.question.slice(0, 200),
+					category,
+					question: question.slice(0, 200),
 				},
 			},
 		]);

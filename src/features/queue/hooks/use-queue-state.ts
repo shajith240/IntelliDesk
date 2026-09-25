@@ -4,10 +4,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isCategory, isSeverity, isStatus } from "@/lib/ticket-meta";
+import type { TicketListQueryWithView } from "@/hooks/use-api";
 import type { EmailCategory, Severity, TicketStatus } from "@/types";
-import type { TicketListQuery, TicketSortField } from "@/types/api";
+import type { TicketSortField } from "@/types/api";
 
-export type QueueScope = "all" | "open" | "incoming" | "mine";
+export type QueueScope = "all" | "open" | "incoming" | "mine" | "review";
 
 interface QueueFiltersState {
 	q: string;
@@ -22,7 +23,7 @@ interface QueueSortState {
 }
 
 export interface UseQueueStateResult {
-	query: TicketListQuery;
+	query: TicketListQueryWithView;
 	filters: QueueFiltersState;
 	sort: QueueSortState;
 	page: number;
@@ -42,6 +43,7 @@ export interface UseQueueStateResult {
 function scopeDefaultStatuses(scope: QueueScope): TicketStatus[] {
 	if (scope === "incoming") return ["New"];
 	if (scope === "open" || scope === "mine") return ["New", "In Progress"];
+	// "review" locks its own status filter server-side (view=review); no client default needed.
 	return [];
 }
 
@@ -56,17 +58,19 @@ export function useQueueState(scope: QueueScope, pageSize = 25): UseQueueStateRe
 	const searchParams = useSearchParams();
 
 	const rawStatusParam = searchParams.get("status");
-	const statusLocked = scope === "incoming";
+	const statusLocked = scope === "incoming" || scope === "review";
 
 	const statuses = useMemo<TicketStatus[]>(() => {
-		if (statusLocked) return ["New"];
+		if (scope === "incoming") return ["New"];
+		// The review view (view=review) already restricts to open, unassigned, flagged tickets server-side.
+		if (scope === "review") return [];
 		if (rawStatusParam === null) return scopeDefaultStatuses(scope);
 		if (rawStatusParam === "all" || rawStatusParam === "") return [];
 		return rawStatusParam
 			.split(",")
 			.map((s) => s.trim())
 			.filter(isStatus);
-	}, [rawStatusParam, scope, statusLocked]);
+	}, [rawStatusParam, scope]);
 
 	const priorities = useMemo<Severity[]>(() => {
 		const raw = searchParams.get("priority");
@@ -200,13 +204,14 @@ export function useQueueState(scope: QueueScope, pageSize = 25): UseQueueStateRe
 		return count;
 	}, [category, priorities.length, scope, statusLocked, statuses]);
 
-	const query: TicketListQuery = useMemo(
+	const query: TicketListQueryWithView = useMemo(
 		() => ({
 			statuses: statuses.length ? statuses : undefined,
 			severities: priorities.length ? priorities : undefined,
 			category: category ?? undefined,
 			search: q || undefined,
 			assigned: scope === "mine" ? "me" : undefined,
+			view: scope === "review" ? "review" : undefined,
 			page,
 			limit: pageSize,
 			sort: sortField,

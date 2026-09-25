@@ -3,6 +3,7 @@
 // Ticket workspace layout: conversation with a docked composer beside a collapsible sidebar; tabs on mobile.
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCanWorkTicket } from "@/features/ticket-workspace/hooks/use-can-work-ticket";
 import { useReplyDraft } from "@/features/ticket-workspace/hooks/use-reply-draft";
 import { ConversationColumn } from "./conversation-column";
 import { ReplyComposer } from "./reply-composer";
@@ -23,6 +24,7 @@ export function WorkspaceView({ detail, onOpenTicket, onClose, onDirtyChange }: 
 	const { ticket, sla, similar_tickets } = detail;
 	const draft = useReplyDraft(detail);
 	const [sendDialogOpen, setSendDialogOpen] = useState(false);
+	const canWork = useCanWorkTicket(ticket);
 
 	// Report dirty state up so the sheet can warn before discarding unsent edits. This is a
 	// deliberate synchronization with the parent, not derivable render output, so it stays an effect.
@@ -39,7 +41,12 @@ export function WorkspaceView({ detail, onOpenTicket, onClose, onDirtyChange }: 
 			</div>
 			<div className="shrink-0 border-t border-border bg-raised px-4 py-3 sm:px-8">
 				<div className="mx-auto max-w-[760px]">
-					<ReplyComposer draft={draft} recipient={draft.recipient} onRequestSend={() => setSendDialogOpen(true)} />
+					<ReplyComposer
+						draft={draft}
+						recipient={draft.recipient}
+						onRequestSend={() => setSendDialogOpen(true)}
+						canWork={canWork}
+					/>
 				</div>
 			</div>
 		</div>

@@ -1,12 +1,14 @@
 // My work queue: displays tickets assigned to the current user.
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { requirePageRole } from "@/server/auth/page-guard";
 import { PageHeader } from "@/components/layout/page-header";
 import { WorkQueue, QueueSkeleton } from "@/features/queue/components/work-queue";
 
 export const metadata: Metadata = { title: "My Work" };
 
-export default function MyWorkPage() {
+export default async function MyWorkPage() {
+	await requirePageRole("admin", "agent");
 	return (
 		<div className="pb-10">
 			<PageHeader

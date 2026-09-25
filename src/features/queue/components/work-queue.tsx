@@ -4,16 +4,17 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { CheckCircle2, ChevronLeft, ChevronRight, Inbox, SearchX, UserCheck } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Inbox, SearchX, ShieldCheck, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiSend, ApiRequestError } from "@/lib/api-client";
-import { useTickets, useTeam, useRefreshAll } from "@/hooks/use-api";
+import { useTickets, useTeam, useWorkload, useRefreshAll } from "@/hooks/use-api";
 import { useTicketParam } from "@/hooks/use-ticket-param";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { SectionMessage } from "@/components/ui/section-message";
+import { useAssignTicket } from "@/features/ticket-workspace/components/assign-menu";
 import { QueueFilters } from "./queue-filters";
 import { QueueList } from "./queue-list";
 import { QueueSkeleton, QueueRowsSkeleton } from "./queue-skeleton";
@@ -39,6 +40,9 @@ export function WorkQueue({ scope, title, pageSize = 25, className }: WorkQueueP
 	const { openTicket } = useTicketParam();
 	const refreshAll = useRefreshAll();
 	const { toast } = useToast();
+	const isAdmin = session?.user.role === "admin";
+	const { data: workload } = useWorkload(isAdmin);
+	const { assign, pendingTicketId } = useAssignTicket();
 
 	const [pendingId, setPendingId] = useState<string | null>(null);
 	const [activeState, setActiveState] = useState<{ key: string; index: number }>({
@@ -52,7 +56,7 @@ export function WorkQueue({ scope, title, pageSize = 25, className }: WorkQueueP
 	const sectionRef = useRef<HTMLElement | null>(null);
 	const members = teamData?.members ?? [];
 	const currentUserId = session?.user.id;
-	const isAdmin = session?.user.role === "admin";
+	const currentUserRole = session?.user.role;
 
 	const tickets = data?.tickets ?? [];
 
@@ -79,10 +83,8 @@ export function WorkQueue({ scope, title, pageSize = 25, className }: WorkQueueP
 		}
 	}
 
-	function handleAssignToMe(id: string) {
-		const ticket = tickets.find((t) => t.id === id);
-		if (!currentUserId) return;
-		void patch(id, { assigned_agent: currentUserId }, `Assigned ${ticket?.ticket_number ?? "ticket"} to you`);
+	function handleAssign(id: string, assigneeId: string | null, assigneeName: string | null) {
+		void assign(id, assigneeId, assigneeName);
 	}
 
 	function handleSetStatus(id: string, status: TicketStatus) {
@@ -146,7 +148,16 @@ export function WorkQueue({ scope, title, pageSize = 25, className }: WorkQueueP
 				<EmptyState
 					icon={UserCheck}
 					title="Nothing assigned to you"
-					description="Open a ticket from the queue and choose Assign to me."
+					description="Tickets an admin assigns to you will show up here."
+				/>
+			);
+		}
+		if (scope === "review") {
+			return (
+				<EmptyState
+					icon={ShieldCheck}
+					title="Nothing waiting for review"
+					description="Tickets the AI flags for a human land here, unassigned, until someone picks them up."
 				/>
 			);
 		}
@@ -223,9 +234,13 @@ export function WorkQueue({ scope, title, pageSize = 25, className }: WorkQueueP
 						onOpen={openTicket}
 						members={members}
 						currentUserId={currentUserId}
-						onAssignToMe={handleAssignToMe}
+						currentUserRole={currentUserRole}
+						isAdmin={isAdmin}
+						candidates={workload?.candidates ?? []}
+						onAssign={handleAssign}
 						onSetStatus={handleSetStatus}
 						pendingId={pendingId}
+						assigningId={pendingTicketId}
 					/>
 				</div>
 			)}

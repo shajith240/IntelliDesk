@@ -3,10 +3,12 @@ import { processEmailBatch } from "@/server/pipeline/processor";
 import type { RawEmail } from "@/types";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId } from "@/server/auth/org-context";
+import { can, forbidden } from "@/server/auth/policy";
 
 export async function POST(req: NextRequest) {
 	const session = await requireAuth();
 	if (session instanceof NextResponse) return session;
+	if (!can.importEmails(session)) return forbidden("Only admins can import emails");
 
 	const orgId = getOrgId(session);
 

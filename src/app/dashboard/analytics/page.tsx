@@ -1,5 +1,6 @@
 // Analytics page: a live snapshot of the current queue. No history is stored, so there are no trends.
 import { Suspense } from "react";
+import { requirePageRole } from "@/server/auth/page-guard";
 import { Analytics } from "@/features/analytics/components/analytics";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -27,7 +28,8 @@ function AnalyticsSkeleton() {
 	);
 }
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+	await requirePageRole("admin", "viewer");
 	return (
 		<Suspense fallback={<AnalyticsSkeleton />}>
 			<Analytics />

@@ -18,11 +18,13 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useTeam } from "@/hooks/use-api";
+import { useTeam, useWorkload } from "@/hooks/use-api";
 import { useNow } from "@/hooks/use-now";
 import { formatDateTime, isSeverity, PRIORITY_META, readSla, SEVERITIES } from "@/lib/ticket-meta";
 import { parseClassification } from "@/features/ticket-workspace/lib/ticket-detail";
+import { useCanWorkTicket } from "@/features/ticket-workspace/hooks/use-can-work-ticket";
 import { useTicketMutation } from "@/features/ticket-workspace/hooks/use-ticket-mutation";
+import { AssignMenuItems, useAssignTicket } from "./assign-menu";
 import { SidebarField, SidebarSection } from "./sidebar-section";
 import type { AutoResponseRow, SimilarTicketRef, SLAStatus, TicketDetail } from "@/types/api";
 
@@ -55,7 +57,11 @@ function sentimentIcon(sentiment: string) {
 
 export function TicketSidebar({ ticket, sla, similarTickets, evidence, onOpenTicket }: TicketSidebarProps) {
 	const { data: session } = useSession();
+	const isAdmin = session?.user.role === "admin";
+	const canWork = useCanWorkTicket(ticket);
 	const { data: team } = useTeam();
+	const { data: workload } = useWorkload(isAdmin);
+	const { assign, pendingTicketId } = useAssignTicket();
 	const { pendingField, update } = useTicketMutation(ticket.id);
 	const now = useNow();
 	const classification = useMemo(() => parseClassification(ticket.ai_classification), [ticket.ai_classification]);
@@ -63,12 +69,7 @@ export function TicketSidebar({ ticket, sla, similarTickets, evidence, onOpenTic
 	const member = team?.members.find((m) => m.id === ticket.assigned_agent) ?? null;
 	const isSelf = ticket.assigned_agent === session?.user.id;
 	const assigneeName = isSelf ? "You" : (member?.name ?? null);
-
-	const handleAssignToggle = () => {
-		if (!session?.user.id) return;
-		if (isSelf) void update({ assigned_agent: null }, "Unassigned");
-		else void update({ assigned_agent: session.user.id }, "Assigned to you");
-	};
+	const assignPending = pendingTicketId === ticket.id;
 
 	const handlePriorityChange = (value: string) => {
 		if (!isSeverity(value) || value === ticket.severity) return;
@@ -89,41 +90,52 @@ export function TicketSidebar({ ticket, sla, similarTickets, evidence, onOpenTic
 							<Avatar name={assigneeName} size="xs" />
 							<span>{assigneeName ?? "Unassigned"}</span>
 						</div>
-						<Button
-							variant="link"
-							size="sm"
-							className="mt-0.5"
-							loading={pendingField === "assigned_agent"}
-							onClick={handleAssignToggle}
-						>
-							{isSelf ? "Unassign" : "Assign to me"}
-						</Button>
+						{isAdmin && (
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button variant="link" size="sm" className="mt-0.5" loading={assignPending}>
+										Assign
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="start">
+									<AssignMenuItems
+										candidates={workload?.candidates ?? []}
+										currentAssigneeId={ticket.assigned_agent}
+										onSelect={(assigneeId, name) => void assign(ticket.id, assigneeId, name)}
+									/>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						)}
 					</SidebarField>
 
 					<SidebarField label="Priority">
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button
-									variant="subtle"
-									size="sm"
-									className="-ml-2"
-									loading={pendingField === "severity"}
-									aria-label={`Priority: ${PRIORITY_META[ticket.severity].label}. Change priority`}
-								>
-									{pendingField !== "severity" && <PriorityIcon severity={ticket.severity} showLabel />}
-									<ChevronDown aria-hidden="true" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="start">
-								<DropdownMenuRadioGroup value={ticket.severity} onValueChange={handlePriorityChange}>
-									{SEVERITIES.map((severity) => (
-										<DropdownMenuRadioItem key={severity} value={severity}>
-											<PriorityIcon severity={severity} showLabel />
-										</DropdownMenuRadioItem>
-									))}
-								</DropdownMenuRadioGroup>
-							</DropdownMenuContent>
-						</DropdownMenu>
+						{canWork ? (
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button
+										variant="subtle"
+										size="sm"
+										className="-ml-2"
+										loading={pendingField === "severity"}
+										aria-label={`Priority: ${PRIORITY_META[ticket.severity].label}. Change priority`}
+									>
+										{pendingField !== "severity" && <PriorityIcon severity={ticket.severity} showLabel />}
+										<ChevronDown aria-hidden="true" />
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="start">
+									<DropdownMenuRadioGroup value={ticket.severity} onValueChange={handlePriorityChange}>
+										{SEVERITIES.map((severity) => (
+											<DropdownMenuRadioItem key={severity} value={severity}>
+												<PriorityIcon severity={severity} showLabel />
+											</DropdownMenuRadioItem>
+										))}
+									</DropdownMenuRadioGroup>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						) : (
+							<PriorityIcon severity={ticket.severity} showLabel />
+						)}
 					</SidebarField>
 
 					<SidebarField label="Category">{ticket.category ?? "—"}</SidebarField>

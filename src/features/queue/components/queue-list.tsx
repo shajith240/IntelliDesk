@@ -16,11 +16,16 @@ import {
 	DropdownMenuTrigger,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubTrigger,
+	DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
+import { AssignMenuItems } from "@/features/ticket-workspace/components/assign-menu";
 import { confidencePercent, formatCompactDuration, formatDateTime } from "@/lib/ticket-meta";
 import { useNow } from "@/hooks/use-now";
-import type { TeamMember, TicketListItem, TicketSortField } from "@/types/api";
-import type { TicketStatus } from "@/types";
+import type { AssigneeCandidate, TeamMember, TicketListItem, TicketSortField } from "@/types/api";
+import type { TicketStatus, UserRole } from "@/types";
 
 export interface QueueTableProps {
 	tickets: TicketListItem[];
@@ -31,9 +36,16 @@ export interface QueueTableProps {
 	onOpen: (id: string) => void;
 	members: TeamMember[];
 	currentUserId: string | undefined;
-	onAssignToMe: (id: string) => void;
+	currentUserRole: UserRole | undefined;
+	isAdmin: boolean;
+	/** Assignee candidates for the admin-only "Assign to…" submenu. */
+	candidates: AssigneeCandidate[];
+	onAssign: (id: string, assigneeId: string | null, assigneeName: string | null) => void;
 	onSetStatus: (id: string, status: TicketStatus) => void;
+	/** Ticket id with a PATCH (status) in flight. */
 	pendingId: string | null;
+	/** Ticket id with an assign request in flight. */
+	assigningId: string | null;
 }
 
 
@@ -104,9 +116,13 @@ export function QueueList({
 	onOpen,
 	members,
 	currentUserId,
-	onAssignToMe,
+	currentUserRole,
+	isAdmin,
+	candidates,
+	onAssign,
 	onSetStatus,
 	pendingId,
+	assigningId,
 }: QueueTableProps) {
 	const now = useNow(30000);
 
@@ -139,8 +155,10 @@ export function QueueList({
 					const sla = slaTarget(ticket);
 					const pct = confidencePercent(ticket.ai_confidence);
 					const assigneeName = memberName(ticket.assigned_agent, members, currentUserId);
-					const isMine = ticket.assigned_agent === currentUserId;
 					const isPending = pendingId === ticket.id;
+					const isAssigning = assigningId === ticket.id;
+					const canWork =
+						isAdmin || (currentUserRole === "agent" && ticket.assigned_agent === currentUserId);
 					const isSelected = index === activeIndex;
 					const minutesAgo = (now.getTime() - new Date(ticket.updated_at).getTime()) / 60000;
 
@@ -167,15 +185,25 @@ export function QueueList({
 								<DropdownMenuItem disabled={isPending} onClick={() => onOpen(ticket.id)}>
 									Open ticket
 								</DropdownMenuItem>
-								{!isMine && (
-									<DropdownMenuItem disabled={isPending} onClick={() => onAssignToMe(ticket.id)}>
-										Assign to me
-									</DropdownMenuItem>
-								)}
-								{ticket.status === "New" && (
+								{canWork && ticket.status === "New" && (
 									<DropdownMenuItem disabled={isPending} onClick={() => onSetStatus(ticket.id, "In Progress")}>
 										Mark In Progress
 									</DropdownMenuItem>
+								)}
+								{isAdmin && (
+									<>
+										<DropdownMenuSeparator />
+										<DropdownMenuSub>
+											<DropdownMenuSubTrigger disabled={isAssigning}>Assign to…</DropdownMenuSubTrigger>
+											<DropdownMenuSubContent>
+												<AssignMenuItems
+													candidates={candidates}
+													currentAssigneeId={ticket.assigned_agent}
+													onSelect={(assigneeId, name) => onAssign(ticket.id, assigneeId, name)}
+												/>
+											</DropdownMenuSubContent>
+										</DropdownMenuSub>
+									</>
 								)}
 							</DropdownMenuContent>
 						</DropdownMenu>

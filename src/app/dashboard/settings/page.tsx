@@ -1,5 +1,6 @@
 // Settings page (admins only): support mailbox connection, polling notes, and the member list.
 import { Suspense } from "react";
+import { requirePageRole } from "@/server/auth/page-guard";
 import { Settings } from "@/features/settings/components/settings";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -22,7 +23,8 @@ function SettingsSkeleton() {
 	);
 }
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+	await requirePageRole("admin");
 	return (
 		<Suspense fallback={<SettingsSkeleton />}>
 			<Settings />

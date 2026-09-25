@@ -23,9 +23,11 @@ interface ReplyComposerProps {
 	draft: ReplyDraft;
 	recipient: string | null;
 	onRequestSend: () => void;
+	/** False for viewers, and agents the ticket isn't assigned to: the draft is visible but not editable. */
+	canWork: boolean;
 }
 
-export function ReplyComposer({ draft, recipient, onRequestSend }: ReplyComposerProps) {
+export function ReplyComposer({ draft, recipient, onRequestSend, canWork }: ReplyComposerProps) {
 	const { pending, lastSent, text, setText, isDirty, restoreAiDraft, savedLocally, status, errorMessage } = draft;
 
 	// Mounted once per responsive layout, so ids must be unique per instance.
@@ -81,7 +83,8 @@ export function ReplyComposer({ draft, recipient, onRequestSend }: ReplyComposer
 				className="mt-2 max-h-[38vh] min-h-[132px] bg-background"
 				value={text}
 				onChange={(e) => setText(e.target.value)}
-				disabled={sending}
+				disabled={sending || !canWork}
+				readOnly={!canWork}
 				invalid={status === "error"}
 				aria-describedby={`${counterId}${status === "error" ? ` ${errorId}` : ""}`}
 			/>
@@ -93,23 +96,33 @@ export function ReplyComposer({ draft, recipient, onRequestSend }: ReplyComposer
 
 			<div className="mt-2 flex flex-wrap items-center gap-2">
 				<p id={counterId} className="mr-auto text-xs text-subtlest">
-					<span className={tooLong ? "text-danger-text" : undefined}>
-						{text.length.toLocaleString()} / 20,000
-					</span>
-					{savedLocally ? " · Saved on this device" : " · Review before sending"}
+					{canWork ? (
+						<>
+							<span className={tooLong ? "text-danger-text" : undefined}>
+								{text.length.toLocaleString()} / 20,000
+							</span>
+							{savedLocally ? " · Saved on this device" : " · Review before sending"}
+						</>
+					) : (
+						"You don't have permission to reply to this ticket."
+					)}
 				</p>
-				<Button variant="subtle" size="sm" onClick={restoreAiDraft} disabled={!isDirty || sending}>
-					<RotateCcw aria-hidden="true" />
-					Restore draft
-				</Button>
-				<Button
-					variant="primary"
-					onClick={onRequestSend}
-					disabled={text.trim().length === 0 || tooLong || sending}
-				>
-					<Send aria-hidden="true" />
-					Review &amp; send
-				</Button>
+				{canWork && (
+					<>
+						<Button variant="subtle" size="sm" onClick={restoreAiDraft} disabled={!isDirty || sending}>
+							<RotateCcw aria-hidden="true" />
+							Restore draft
+						</Button>
+						<Button
+							variant="primary"
+							onClick={onRequestSend}
+							disabled={text.trim().length === 0 || tooLong || sending}
+						>
+							<Send aria-hidden="true" />
+							Review &amp; send
+						</Button>
+					</>
+				)}
 			</div>
 		</div>
 	);

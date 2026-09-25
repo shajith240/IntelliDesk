@@ -2,7 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processEmail } from "@/server/pipeline/processor";
 import { verifyBearerSecret } from "@/server/auth/cron";
+import { supabaseAdmin } from "@/server/db/supabase";
 import type { RawEmail } from "@/types";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(req: NextRequest) {
 	const denied = verifyBearerSecret(
@@ -32,6 +35,22 @@ export async function POST(req: NextRequest) {
 		}
 
 		const orgId: string = body.organization_id;
+		if (typeof orgId !== "string" || !UUID_RE.test(orgId)) {
+			return NextResponse.json(
+				{ error: "organization_id must be a valid UUID" },
+				{ status: 400 },
+			);
+		}
+
+		const { data: org, error: orgError } = await supabaseAdmin
+			.from("organizations")
+			.select("id")
+			.eq("id", orgId)
+			.maybeSingle();
+		if (orgError) throw orgError;
+		if (!org) {
+			return NextResponse.json({ error: "Unknown organization" }, { status: 400 });
+		}
 
 		const rawEmail: RawEmail = {
 			message_id: body.message_id || null,

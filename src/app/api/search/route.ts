@@ -4,12 +4,15 @@ import { queryVectors } from "@/server/db/pinecone";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId, orgNamespace } from "@/server/auth/org-context";
+import { can } from "@/server/auth/policy";
 
 export async function GET(req: NextRequest) {
 	const session = await requireAuth();
 	if (session instanceof NextResponse) return session;
 
 	const orgId = getOrgId(session);
+	// Agents must never see search hits for tickets that aren't assigned to them.
+	const scopeToAgent = !can.viewAllTickets(session);
 
 	try {
 		const { searchParams } = new URL(req.url);
@@ -37,12 +40,17 @@ export async function GET(req: NextRequest) {
 			);
 			if (ticketResults.length > 0) {
 				const ticketIds = ticketResults.map((m: { id: string }) => m.id);
-				const { data: tickets } = await supabaseAdmin
+				let ticketsQuery = supabaseAdmin
 					.from("tickets")
 					.select(
 						"id, ticket_number, subject, status, severity, category, created_at",
 					)
+					.eq("organization_id", orgId)
 					.in("id", ticketIds);
+				if (scopeToAgent) {
+					ticketsQuery = ticketsQuery.eq("assigned_agent", session.user.id);
+				}
+				const { data: tickets } = await ticketsQuery;
 
 				results.tickets = (tickets || []).map((t) => ({
 					...t,
@@ -68,6 +76,7 @@ export async function GET(req: NextRequest) {
 				const { data: emails } = await supabaseAdmin
 					.from("emails")
 					.select("id, from_address, from_name, subject, received_at")
+					.eq("organization_id", orgId)
 					.in("id", emailIds);
 
 				results.emails = (emails || []).map((e) => ({
@@ -94,6 +103,7 @@ export async function GET(req: NextRequest) {
 				const { data: faqs } = await supabaseAdmin
 					.from("faqs")
 					.select("id, question, answer, category")
+					.eq("organization_id", orgId)
 					.in("id", faqIds);
 
 				results.faqs = (faqs || []).map((f) => ({

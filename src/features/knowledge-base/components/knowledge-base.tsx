@@ -42,7 +42,8 @@ interface FaqsResponse {
 export function KnowledgeBase() {
 	const session = useSession();
 	const userRole = session.data?.user.role;
-	const isViewer = userRole === "viewer";
+	// Only admins manage the knowledge base; agents and viewers get read-only access.
+	const isAdmin = userRole === "admin";
 
 	const { data, error, isLoading, mutate } = useSWR<FaqsResponse>("/api/faqs", apiGet);
 	const refreshAll = useRefreshAll();
@@ -141,7 +142,7 @@ export function KnowledgeBase() {
 				icon={BookOpen}
 				title="No articles yet"
 				description="Add answers to common questions. The AI uses them to draft replies and to match incoming tickets."
-				action={!isViewer ? <Button onClick={handleOpenDialog} variant="primary" size="sm"><Plus className="mr-2 h-4 w-4" />New article</Button> : undefined}
+				action={isAdmin ? <Button onClick={handleOpenDialog} variant="primary" size="sm"><Plus className="mr-2 h-4 w-4" />New article</Button> : undefined}
 			/>
 		);
 	}
@@ -198,7 +199,7 @@ export function KnowledgeBase() {
 
 				<span className="ml-auto text-xs text-subtlest">{filteredArticles.length} articles</span>
 
-				{!isViewer && (
+				{isAdmin && (
 					<Button onClick={handleOpenDialog} variant="primary" size="sm">
 						<Plus className="h-4 w-4" aria-hidden="true" />
 						<span className="ml-1">New article</span>
@@ -244,7 +245,7 @@ export function KnowledgeBase() {
 												</div>
 											)}
 										</div>
-										{!isViewer && (
+										{isAdmin && (
 											<div className="ml-2 flex items-center gap-1">
 												<Tooltip content="Edit article">
 													<button

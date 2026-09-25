@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId } from "@/server/auth/org-context";
+import { can, forbidden } from "@/server/auth/policy";
 
 interface TicketRow {
 	created_at: string;
@@ -96,11 +97,22 @@ export async function GET(req: NextRequest) {
 			);
 		}
 
-		// Apply assigned filter
-		if (assigned === "me") {
+		// Agents only ever see tickets assigned to them, whatever filters they send.
+		if (!can.viewAllTickets(session)) {
+			query = query.eq("assigned_agent", session.user.id);
+		} else if (assigned === "me") {
 			query = query.eq("assigned_agent", session.user.id);
 		} else if (assigned === "unassigned") {
 			query = query.is("assigned_agent", null);
+		}
+
+		// Review queue: open, unassigned tickets the pipeline flagged for a human.
+		if (searchParams.get("view") === "review") {
+			if (!can.viewAllTickets(session)) return forbidden();
+			query = query
+				.is("assigned_agent", null)
+				.eq("is_flagged_for_review", true)
+				.in("status", ["New", "In Progress"]);
 		}
 
 		const validSortFields = [
@@ -126,16 +138,18 @@ export async function GET(req: NextRequest) {
 
 		if (missingAny) {
 			// SLA due dates are computed from sla_policies because the email pipeline does not store them on the ticket.
+			// Organization-specific policies override the global defaults (organization_id NULL).
 			const { data: policies, error: policiesError } = await supabaseAdmin
 				.from("sla_policies")
-				.select("severity, first_response_minutes, resolution_minutes");
+				.select("severity, organization_id, first_response_minutes, resolution_minutes")
+				.or(`organization_id.eq.${orgId},organization_id.is.null`);
 
 			if (!policiesError && policies) {
 				const policyMap = new Map<
 					string,
 					{ first_response_minutes: number; resolution_minutes: number }
 				>();
-				for (const policy of policies) {
+				for (const policy of [...policies].sort((a, b) => Number(a.organization_id !== null) - Number(b.organization_id !== null))) {
 					policyMap.set(policy.severity, {
 						first_response_minutes: policy.first_response_minutes,
 						resolution_minutes: policy.resolution_minutes,
