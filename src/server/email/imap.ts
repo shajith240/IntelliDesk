@@ -9,14 +9,6 @@ export interface ImapConfig {
 	auth: { user: string; pass: string };
 }
 
-function getImapConfig(override?: ImapConfig): ImapConfig | null {
-	if (override?.auth?.user && override?.auth?.pass) {
-		return override;
-	}
-	// No fallback to env vars — orgs must connect Gmail through Settings
-	return null;
-}
-
 function parsedMailToRawEmail(parsed: ParsedMail): RawEmail {
 	const fromAddr = parsed.from?.value?.[0];
 	const toAddr = parsed.to
@@ -51,17 +43,17 @@ function parsedMailToRawEmail(parsed: ParsedMail): RawEmail {
 	};
 }
 
-// Track processed UIDs in memory to avoid re-fetching when \Seen flag fails to persist
-const processedUIDs = new Set<number>();
-
-export async function pollNewEmails(
-	imapOverride?: ImapConfig,
-): Promise<RawEmail[]> {
-	const config = getImapConfig(imapOverride);
-	if (!config) {
-		return [];
-	}
-
+/**
+ * Fetch unseen INBOX messages from the last two days and hand each to `store`.
+ * A message is marked \Seen only after `store` resolves, so a crash or timeout
+ * between fetch and storage leaves it unread and it is fetched again next run
+ * (at-least-once delivery; callers must make `store` idempotent).
+ * Connection and login failures are thrown so the caller can record them.
+ */
+export async function fetchUnseenMessages(
+	config: ImapConfig,
+	store: (email: RawEmail) => Promise<void>,
+): Promise<{ fetched: number; stored: number }> {
 	const client = new ImapFlow({
 		host: config.host,
 		port: config.port,
@@ -72,70 +64,47 @@ export async function pollNewEmails(
 		greetingTimeout: 30000,
 		tls: { rejectUnauthorized: true },
 	});
-
-	// Suppress uncaught socket errors from ImapFlow
 	client.on("error", (err: Error) => {
-		console.warn("[IMAP] Client error (suppressed):", err.message);
+		// Surfaced through the awaited calls below; this only prevents an unhandled 'error' event.
+		console.warn("[IMAP] Client error:", err.message);
 	});
 
-	const emails: RawEmail[] = [];
-
+	let fetched = 0;
+	let stored = 0;
+	await client.connect();
 	try {
-		await client.connect();
 		const lock = await client.getMailboxLock("INBOX");
-
 		try {
-			// Only fetch unseen emails from the last 2 days to avoid importing old inbox history
-			const twoDaysAgo = new Date();
-			twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+			const since = new Date();
+			since.setDate(since.getDate() - 2);
 
-			const messages = client.fetch(
-				{ seen: false, since: twoDaysAgo },
-				{ source: true, envelope: true, uid: true },
-			);
+			// Collect first: imapflow must not run other commands (like setting
+			// flags) while a FETCH stream is still being iterated.
+			const pending: Array<{ uid: number; source: Buffer }> = [];
+			for await (const msg of client.fetch({ seen: false, since }, { source: true, uid: true })) {
+				if (msg.source) pending.push({ uid: msg.uid, source: msg.source });
+			}
+			fetched = pending.length;
 
-			for await (const msg of messages) {
+			for (const { uid, source } of pending) {
+				let email: RawEmail;
 				try {
-					// Skip UIDs we've already processed (in case \Seen flag didn't persist)
-					if (processedUIDs.has(msg.uid)) {
-						console.log(`[IMAP] Skipping already-processed UID ${msg.uid}`);
-						continue;
-					}
-
-					if (!msg.source) continue;
-					const parsed = await simpleParser(msg.source);
-					const rawEmail = parsedMailToRawEmail(parsed as ParsedMail);
-					console.log(
-						`[IMAP] Fetched: "${rawEmail.subject}" from ${rawEmail.from_address}`,
-					);
-					emails.push(rawEmail);
-
-					// Remember this UID so we never re-process it
-					processedUIDs.add(msg.uid);
-
-					// Try to mark as seen (best-effort, may fail if connection drops)
-					try {
-						await client.messageFlagsAdd({ uid: msg.uid }, ["\\Seen"], {
-							uid: true,
-						});
-					} catch {
-						console.warn(`[IMAP] Failed to mark UID ${msg.uid} as seen`);
-					}
+					email = parsedMailToRawEmail((await simpleParser(source)) as ParsedMail);
 				} catch (err) {
-					console.error("[IMAP] Error parsing email UID", msg.uid, ":", err);
-					// Still mark as processed to avoid infinite retries
-					processedUIDs.add(msg.uid);
+					// Unparseable message: mark it read so it doesn't block every future run.
+					console.error(`[IMAP] Could not parse UID ${uid}:`, (err as Error).message);
+					await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true }).catch(() => {});
+					continue;
 				}
+				await store(email);
+				stored++;
+				await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
 			}
 		} finally {
 			lock.release();
 		}
-	} catch (err) {
-		console.error("IMAP connection error:", (err as Error).message);
 	} finally {
-		await client.logout().catch(() => {});
+		await client.logout().catch(() => client.close());
 	}
-
-	console.log(`[IMAP] Poll complete: ${emails.length} email(s) fetched`);
-	return emails;
+	return { fetched, stored };
 }

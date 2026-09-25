@@ -1,263 +1,407 @@
 "use client";
 
-// Email mailbox configuration form: IMAP/SMTP credentials with connect/disconnect actions, admin-only.
-import { useRef, useState } from "react";
+// Support mailbox: a guided Gmail app-password connect (or any IMAP/SMTP provider),
+// the live connection status, and disconnect. Credentials are verified by the
+// server before they're saved and are never sent back to the browser.
+import { useState } from "react";
 import useSWR from "swr";
-import { Unlink } from "lucide-react";
+import { ExternalLink, Mail, RefreshCw, Server, Unlink } from "lucide-react";
 import { apiGet, apiSend, ApiRequestError } from "@/lib/api-client";
+import { formatRelative } from "@/lib/ticket-meta";
 import { Button } from "@/components/ui/button";
 import { Lozenge } from "@/components/ui/lozenge";
 import { Label, Input, FieldMessage } from "@/components/ui/field";
 import { SectionMessage } from "@/components/ui/section-message";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { Dialog, DialogTrigger, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import type { ConnectMailboxBody, MailboxResponse, MailboxStatus } from "@/types/api";
 
-interface ConfigResponse {
-	connected: boolean;
-	config?: {
-		email: string;
-		imap_host: string;
-		imap_port: number;
-		smtp_host: string;
-		smtp_port: number;
-		password_set: boolean;
-	};
-}
+const ENDPOINT = "/api/settings/email-config";
 
 export function MailboxForm() {
-	const { data: response, error: loadError, isLoading, mutate } = useSWR<ConfigResponse>(
-		"/api/settings/email-config",
-		apiGet,
-		{ revalidateOnFocus: false }
-	);
+	const { data, error, isLoading, mutate } = useSWR<MailboxResponse>(ENDPOINT, apiGet, {
+		revalidateOnFocus: false,
+	});
+	const [replacing, setReplacing] = useState(false);
 
-	const { toast } = useToast();
-	const formRef = useRef<HTMLFormElement>(null);
-	const [formError, setFormError] = useState<string | null>(null);
-	const [isSubmitting, setIsSubmitting] = useState(false);
-	const [isDisconnecting, setIsDisconnecting] = useState(false);
-	const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
-
-	const connected = response?.connected ?? false;
-	const config = response?.config;
-
-	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		setFormError(null);
-		setIsSubmitting(true);
-
-		const formData = new FormData(e.currentTarget);
-		const email = formData.get("email") as string;
-		const password = formData.get("password") as string;
-		const imap_host = formData.get("imap_host") as string;
-		const imap_port = parseInt(formData.get("imap_port") as string, 10);
-		const smtp_host = formData.get("smtp_host") as string;
-		const smtp_port = parseInt(formData.get("smtp_port") as string, 10);
-
-		// Validation
-		if (!email || !password) {
-			setFormError("Email and password are required");
-			setIsSubmitting(false);
-			return;
-		}
-
-		if (imap_port < 1 || imap_port > 65535 || smtp_port < 1 || smtp_port > 65535) {
-			setFormError("Port numbers must be between 1 and 65535");
-			setIsSubmitting(false);
-			return;
-		}
-
-		try {
-			await apiSend<{ message: string }>("/api/settings/email-config", "POST", {
-				email,
-				password,
-				imap_host,
-				imap_port,
-				smtp_host,
-				smtp_port,
-			});
-
-			toast({ tone: "success", title: "Email configuration saved" });
-			await mutate();
-		} catch (err) {
-			if (err instanceof ApiRequestError) {
-				if (err.status === 403) {
-					setFormError("Only admins can change the mailbox.");
-				} else {
-					setFormError(err.message);
-				}
-			} else {
-				setFormError("Failed to save email configuration");
-			}
-		} finally {
-			setIsSubmitting(false);
-		}
-	};
-
-	const handleDisconnect = async () => {
-		setIsDisconnecting(true);
-		try {
-			await apiSend<{ message: string }>("/api/settings/email-config", "DELETE");
-			toast({ tone: "success", title: "Mailbox disconnected" });
-			setDisconnectDialogOpen(false);
-			await mutate();
-		} catch (err) {
-			if (err instanceof ApiRequestError) {
-				toast({ tone: "error", title: "Failed to disconnect mailbox", description: err.message });
-			} else {
-				toast({ tone: "error", title: "Failed to disconnect mailbox" });
-			}
-		} finally {
-			setIsDisconnecting(false);
-		}
-	};
-
-	if (isLoading) {
-		return <Spinner label="Loading mailbox configuration" />;
-	}
-
-	if (loadError) {
+	if (isLoading) return <Spinner label="Loading mailbox" />;
+	if (error) {
 		return (
-			<SectionMessage appearance="error">
-				Failed to load email configuration. Please try again.
+			<SectionMessage
+				appearance="error"
+				actions={
+					<Button size="sm" onClick={() => mutate()}>
+						Retry
+					</Button>
+				}
+			>
+				Couldn&apos;t load the mailbox settings.
 			</SectionMessage>
 		);
 	}
 
+	const mailbox = data?.connected ? data.mailbox : null;
+
+	if (mailbox && !replacing) {
+		return <MailboxStatusCard mailbox={mailbox} onReplace={() => setReplacing(true)} onChange={() => mutate()} />;
+	}
+
+	return (
+		<ConnectMailbox
+			onCancel={mailbox ? () => setReplacing(false) : undefined}
+			onConnected={async (next) => {
+				await mutate(next, { revalidate: false });
+				setReplacing(false);
+			}}
+		/>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Connected state
+// ---------------------------------------------------------------------------
+
+function MailboxStatusCard({
+	mailbox,
+	onReplace,
+	onChange,
+}: {
+	mailbox: MailboxStatus;
+	onReplace: () => void;
+	onChange: () => void;
+}) {
+	const { toast } = useToast();
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [disconnecting, setDisconnecting] = useState(false);
+	const healthy = mailbox.status === "active";
+
+	const disconnect = async () => {
+		setDisconnecting(true);
+		try {
+			await apiSend<MailboxResponse>(ENDPOINT, "DELETE");
+			toast({ tone: "success", title: "Mailbox disconnected" });
+			setConfirmOpen(false);
+			onChange();
+		} catch (err) {
+			toast({
+				tone: "error",
+				title: "Couldn't disconnect the mailbox",
+				description: err instanceof ApiRequestError ? err.message : undefined,
+			});
+		} finally {
+			setDisconnecting(false);
+		}
+	};
+
 	return (
 		<div className="space-y-4">
-			{/* Connection Status */}
-			<div className="flex items-center gap-2">
-				<span className="text-xs font-semibold text-subtle">Status:</span>
-				<Lozenge appearance={connected ? "success" : "default"}>
-					{connected ? "Connected" : "Not connected"}
-				</Lozenge>
-				{connected && config && (
-					<div className="text-xs text-subtle font-mono ml-2">
-						{config.email} • IMAP: {config.imap_host}:{config.imap_port} • SMTP: {config.smtp_host}:{config.smtp_port}
+			<div className="flex flex-wrap items-start gap-3 rounded-lg border border-border p-3">
+				<div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-fill text-subtle">
+					{mailbox.provider === "gmail" ? <Mail className="size-4" /> : <Server className="size-4" />}
+				</div>
+				<div className="min-w-0 flex-1">
+					<div className="flex flex-wrap items-center gap-2">
+						<span className="truncate text-sm font-semibold text-foreground">{mailbox.email_address}</span>
+						<Lozenge appearance={healthy ? "success" : "removed"}>{healthy ? "Connected" : "Needs attention"}</Lozenge>
 					</div>
-				)}
+					<p className="mt-0.5 font-mono text-xs text-subtle">
+						{mailbox.provider === "gmail" ? "Gmail" : "IMAP/SMTP"} · IMAP {mailbox.imap_host}:{mailbox.imap_port} · SMTP{" "}
+						{mailbox.smtp_host}:{mailbox.smtp_port}
+					</p>
+					<p className="mt-0.5 text-xs text-subtle">
+						{mailbox.last_synced_at ? `Last checked ${formatRelative(mailbox.last_synced_at)}` : "Not checked yet: the next scheduled poll will read new mail."}
+					</p>
+				</div>
 			</div>
 
-			{/* Form */}
-			<form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
-				{formError && <SectionMessage appearance="error">{formError}</SectionMessage>}
+			{!healthy && mailbox.last_error && (
+				<SectionMessage appearance="error" title="The last check failed">
+					{mailbox.last_error} Reconnect with a fresh app password to fix it.
+				</SectionMessage>
+			)}
 
-				{/* Email Address */}
+			<div className="flex flex-wrap gap-2">
+				<Button variant={healthy ? "default" : "primary"} onClick={onReplace}>
+					<RefreshCw />
+					{healthy ? "Change mailbox" : "Reconnect"}
+				</Button>
+				<Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+					<DialogTrigger asChild>
+						<Button variant="danger">
+							<Unlink />
+							Disconnect
+						</Button>
+					</DialogTrigger>
+					<DialogContent
+						title="Disconnect mailbox?"
+						size="sm"
+						description="New email will stop creating tickets and replies can't be sent until a mailbox is connected again. The saved credentials are deleted."
+					>
+						<DialogFooter>
+							<Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+							<Button variant="danger" onClick={disconnect} loading={disconnecting} disabled={disconnecting}>
+								Disconnect
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			</div>
+		</div>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Connect flow
+// ---------------------------------------------------------------------------
+
+function ConnectMailbox({
+	onCancel,
+	onConnected,
+}: {
+	onCancel?: () => void;
+	onConnected: (next: MailboxResponse) => Promise<void>;
+}) {
+	const { toast } = useToast();
+	const [formError, setFormError] = useState<string | null>(null);
+	const [submitting, setSubmitting] = useState(false);
+
+	const submit = async (body: ConnectMailboxBody) => {
+		setFormError(null);
+		setSubmitting(true);
+		try {
+			const next = await apiSend<MailboxResponse>(ENDPOINT, "POST", body);
+			toast({ tone: "success", title: "Mailbox connected", description: `New email to ${body.email} will become tickets.` });
+			await onConnected(next);
+		} catch (err) {
+			setFormError(err instanceof ApiRequestError ? err.message : "Couldn't connect the mailbox. Try again.");
+		} finally {
+			setSubmitting(false);
+		}
+	};
+
+	return (
+		<Tabs defaultValue="gmail" className="space-y-4">
+			<TabsList>
+				<TabsTrigger value="gmail">
+					<Mail className="size-4" />
+					Gmail
+				</TabsTrigger>
+				<TabsTrigger value="imap_smtp">
+					<Server className="size-4" />
+					Other provider
+				</TabsTrigger>
+			</TabsList>
+
+			{formError && <SectionMessage appearance="error">{formError}</SectionMessage>}
+
+			<TabsContent value="gmail">
+				<GmailForm submitting={submitting} onSubmit={submit} onCancel={onCancel} />
+			</TabsContent>
+			<TabsContent value="imap_smtp">
+				<CustomForm submitting={submitting} onSubmit={submit} onCancel={onCancel} />
+			</TabsContent>
+		</Tabs>
+	);
+}
+
+interface FormProps {
+	submitting: boolean;
+	onSubmit: (body: ConnectMailboxBody) => Promise<void>;
+	onCancel?: () => void;
+}
+
+function FormActions({ submitting, onCancel }: Pick<FormProps, "submitting" | "onCancel">) {
+	return (
+		<div className="flex flex-wrap items-center gap-2 pt-1">
+			<Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
+				{submitting ? "Checking sign-in…" : "Verify and connect"}
+			</Button>
+			{onCancel && (
+				<Button onClick={onCancel} disabled={submitting}>
+					Cancel
+				</Button>
+			)}
+			<span className="text-xs text-subtle">We sign in once to check the details before saving anything.</span>
+		</div>
+	);
+}
+
+const GMAIL_STEPS = [
+	{
+		title: "Turn on 2-Step Verification",
+		body: "Google only issues app passwords to accounts with 2-Step Verification.",
+		href: "https://myaccount.google.com/signinoptions/twosv",
+		link: "Open security settings",
+	},
+	{
+		title: "Create an app password",
+		body: "Name it “IntelliDesk”. Google shows a 16-letter code once: copy it.",
+		href: "https://myaccount.google.com/apppasswords",
+		link: "Open app passwords",
+	},
+	{
+		title: "Paste it below",
+		body: "Use the Gmail address customers write to. IMAP is on by default for Gmail.",
+	},
+] as const;
+
+function GmailForm({ submitting, onSubmit, onCancel }: FormProps) {
+	return (
+		<form
+			className="space-y-4"
+			onSubmit={(e) => {
+				e.preventDefault();
+				const form = new FormData(e.currentTarget);
+				void onSubmit({
+					provider: "gmail",
+					email: String(form.get("email") ?? "").trim(),
+					app_password: String(form.get("app_password") ?? ""),
+				});
+			}}
+		>
+			<ol className="grid gap-3 sm:grid-cols-3">
+				{GMAIL_STEPS.map((step, i) => (
+					<li key={step.title} className="rounded-lg border border-border p-3">
+						<div className="flex items-center gap-2">
+							<span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+								{i + 1}
+							</span>
+							<span className="text-sm font-semibold text-foreground">{step.title}</span>
+						</div>
+						<p className="mt-1.5 text-xs text-subtle">{step.body}</p>
+						{"href" in step && (
+							<a
+								href={step.href}
+								target="_blank"
+								rel="noopener noreferrer"
+								className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+							>
+								{step.link}
+								<ExternalLink className="size-3" />
+							</a>
+						)}
+					</li>
+				))}
+			</ol>
+
+			<div className="grid gap-4 sm:grid-cols-2">
 				<div>
-					<Label htmlFor="email">Email address</Label>
+					<Label htmlFor="gmail-email">Gmail address</Label>
 					<Input
-						id="email"
+						id="gmail-email"
 						name="email"
 						type="email"
-						placeholder="your-email@gmail.com"
-						defaultValue={config?.email ?? ""}
+						autoComplete="off"
+						placeholder="support@yourcompany.com"
 						required
-						disabled={isSubmitting}
+						disabled={submitting}
 					/>
 				</div>
-
-				{/* Password */}
 				<div>
-					<Label htmlFor="password">App password</Label>
+					<Label htmlFor="gmail-app-password">App password</Label>
 					<Input
-						id="password"
-						name="password"
+						id="gmail-app-password"
+						name="app_password"
 						type="password"
 						autoComplete="new-password"
-						placeholder={config?.password_set ? "••••••••" : "Enter app password"}
-						disabled={isSubmitting}
+						placeholder="xxxx xxxx xxxx xxxx"
+						aria-describedby="gmail-app-password-hint"
+						required
+						disabled={submitting}
 					/>
-					{config?.password_set && (
-						<FieldMessage id="password-hint" tone="hint">
-							Leave blank to keep the saved password
-						</FieldMessage>
-					)}
+					<FieldMessage id="gmail-app-password-hint">Not your Google password. Spaces are fine.</FieldMessage>
 				</div>
+			</div>
 
-				{/* IMAP Configuration */}
-				<div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
+			<FormActions submitting={submitting} onCancel={onCancel} />
+		</form>
+	);
+}
+
+const selectClass =
+	"h-8 w-full rounded-md border border-border-bold bg-background px-2 text-sm text-foreground transition-colors duration-100 hover:bg-fill focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50";
+
+function CustomForm({ submitting, onSubmit, onCancel }: FormProps) {
+	return (
+		<form
+			className="space-y-4"
+			onSubmit={(e) => {
+				e.preventDefault();
+				const form = new FormData(e.currentTarget);
+				const username = String(form.get("username") ?? "").trim();
+				void onSubmit({
+					provider: "imap_smtp",
+					email: String(form.get("email") ?? "").trim(),
+					username: username || undefined,
+					app_password: String(form.get("app_password") ?? ""),
+					imap_host: String(form.get("imap_host") ?? "").trim(),
+					imap_port: 993,
+					smtp_host: String(form.get("smtp_host") ?? "").trim(),
+					smtp_port: form.get("smtp_port") === "465" ? 465 : 587,
+				});
+			}}
+		>
+			<p className="text-xs text-subtle">
+				For Outlook, Zoho, Fastmail or your own mail server. Encrypted connections only: IMAP over TLS on 993, SMTP on
+				465 or 587 with STARTTLS.
+			</p>
+
+			<div className="grid gap-4 sm:grid-cols-2">
+				<div>
+					<Label htmlFor="custom-email">Mailbox address</Label>
+					<Input id="custom-email" name="email" type="email" autoComplete="off" required disabled={submitting} />
+				</div>
+				<div>
+					<Label htmlFor="custom-username">Sign-in username</Label>
+					<Input
+						id="custom-username"
+						name="username"
+						autoComplete="off"
+						placeholder="Same as the address"
+						disabled={submitting}
+					/>
+				</div>
+				<div className="sm:col-span-2">
+					<Label htmlFor="custom-password">Password or app password</Label>
+					<Input
+						id="custom-password"
+						name="app_password"
+						type="password"
+						autoComplete="new-password"
+						required
+						disabled={submitting}
+					/>
+				</div>
+				<div>
+					<Label htmlFor="custom-imap-host">IMAP server</Label>
+					<Input
+						id="custom-imap-host"
+						name="imap_host"
+						placeholder="imap.example.com"
+						aria-describedby="custom-imap-hint"
+						required
+						disabled={submitting}
+					/>
+					<FieldMessage id="custom-imap-hint">Port 993 (TLS)</FieldMessage>
+				</div>
+				<div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
 					<div>
-						<Label htmlFor="imap_host">IMAP host</Label>
-						<Input
-							id="imap_host"
-							name="imap_host"
-							placeholder="imap.gmail.com"
-							defaultValue={config?.imap_host ?? "imap.gmail.com"}
-							disabled={isSubmitting}
-						/>
+						<Label htmlFor="custom-smtp-host">SMTP server</Label>
+						<Input id="custom-smtp-host" name="smtp_host" placeholder="smtp.example.com" required disabled={submitting} />
 					</div>
 					<div>
-						<Label htmlFor="imap_port">IMAP port</Label>
-						<Input
-							id="imap_port"
-							name="imap_port"
-							type="number"
-							min="1"
-							max="65535"
-							placeholder="993"
-							defaultValue={config?.imap_port ?? "993"}
-							disabled={isSubmitting}
-						/>
+						<Label htmlFor="custom-smtp-port">Port</Label>
+						<select id="custom-smtp-port" name="smtp_port" defaultValue="587" className={selectClass} disabled={submitting}>
+							<option value="587">587</option>
+							<option value="465">465</option>
+						</select>
 					</div>
 				</div>
+			</div>
 
-				{/* SMTP Configuration */}
-				<div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
-					<div>
-						<Label htmlFor="smtp_host">SMTP host</Label>
-						<Input
-							id="smtp_host"
-							name="smtp_host"
-							placeholder="smtp.gmail.com"
-							defaultValue={config?.smtp_host ?? "smtp.gmail.com"}
-							disabled={isSubmitting}
-						/>
-					</div>
-					<div>
-						<Label htmlFor="smtp_port">SMTP port</Label>
-						<Input
-							id="smtp_port"
-							name="smtp_port"
-							type="number"
-							min="1"
-							max="65535"
-							placeholder="587"
-							defaultValue={config?.smtp_port ?? "587"}
-							disabled={isSubmitting}
-						/>
-					</div>
-				</div>
-
-				{/* Submit Button */}
-				<div className="flex gap-2 pt-2">
-					<Button type="submit" variant="primary" loading={isSubmitting} disabled={isSubmitting}>
-						Save configuration
-					</Button>
-
-					{connected && (
-						<Dialog open={disconnectDialogOpen} onOpenChange={setDisconnectDialogOpen}>
-							<DialogTrigger asChild>
-								<Button variant="danger" size="md">
-									<Unlink />
-									Disconnect mailbox
-								</Button>
-							</DialogTrigger>
-							<DialogContent title="Disconnect mailbox?" size="sm" description="New email will stop creating tickets and replies can't be sent until a mailbox is connected again.">
-								<DialogFooter>
-									<Button variant="default" onClick={() => setDisconnectDialogOpen(false)}>
-										Cancel
-									</Button>
-									<Button variant="danger" onClick={handleDisconnect} loading={isDisconnecting} disabled={isDisconnecting}>
-										Disconnect
-									</Button>
-								</DialogFooter>
-							</DialogContent>
-						</Dialog>
-					)}
-				</div>
-			</form>
-		</div>
+			<FormActions submitting={submitting} onCancel={onCancel} />
+		</form>
 	);
 }

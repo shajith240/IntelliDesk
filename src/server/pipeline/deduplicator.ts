@@ -18,15 +18,21 @@ export async function checkDuplicate(
 	embedding: number[],
 	receivedAt: Date,
 	orgId: string,
+	/** When reprocessing a stored email, its own row must not count as a duplicate. */
+	excludeEmailId?: string,
 ): Promise<DeduplicationResult> {
 	// 1. Exact message-id match (skip if prior entry was spam — allow reprocessing)
 	if (messageId) {
-		const { data: existing } = await supabaseAdmin
+		let existingQuery = supabaseAdmin
 			.from("emails")
 			.select("id, is_spam")
 			.eq("message_id", messageId)
 			.eq("organization_id", orgId)
-			.single();
+			.eq("processed", true)
+			.order("received_at", { ascending: true })
+			.limit(1);
+		if (excludeEmailId) existingQuery = existingQuery.neq("id", excludeEmailId);
+		const { data: existing } = await existingQuery.maybeSingle();
 
 		if (existing && !existing.is_spam) {
 			return {

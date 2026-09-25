@@ -80,13 +80,14 @@ export function Settings() {
 					<PanelHeader
 						title="Scheduled email polling"
 						icon={<Clock />}
-						description="Email polling configuration."
+						description="How new email becomes tickets."
 					/>
 					<PanelBody className="space-y-3">
 						<p className="text-sm text-foreground">
-							In production, Vercel Cron calls <code className="rounded-sm bg-fill px-1 font-mono text-xs">/api/emails/poll</code> with the{" "}
-							<code className="rounded-sm bg-fill px-1 font-mono text-xs">CRON_SECRET</code>. The schedule is set in{" "}
-							<code className="rounded-sm bg-fill px-1 font-mono text-xs">vercel.json</code> (daily on the Hobby plan; every 5–10 minutes on Pro). Polling is safe to run twice: already-processed messages are skipped.
+							A GitHub Actions schedule calls <code className="rounded-sm bg-fill px-1 font-mono text-xs">/api/emails/poll</code> every 10 minutes with the 
+							<code className="rounded-sm bg-fill px-1 font-mono text-xs">CRON_SECRET</code>, plus a daily Vercel Cron as a fallback. Each run stores new mail before marking it
+							read, then processes the queue, so a run that times out loses nothing and overlapping runs never double-process a
+							message.
 						</p>
 					</PanelBody>
 				</Panel>

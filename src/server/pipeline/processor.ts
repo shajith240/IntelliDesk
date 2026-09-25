@@ -11,7 +11,8 @@ import {
 	cleanEmailBody,
 	isLikelySpam,
 } from "@/server/email/parser";
-import { sendEmail, buildAutoResponseEmail, type SmtpConfig } from "@/server/email/smtp";
+import { sendEmail, buildAutoResponseEmail } from "@/server/email/smtp";
+import { getMailbox, recordMailboxSync } from "@/server/email/mailbox";
 import { orgNamespace } from "@/server/auth/org-context";
 import type { RawEmail, PipelineResult } from "@/types";
 
@@ -19,12 +20,18 @@ import type { RawEmail, PipelineResult } from "@/types";
  * Main email processing pipeline.
  * Steps: Parse → Quick Spam Check → Dedup → Thread Detect → Classify → Customer ID → Auto-Response → Create/Update Ticket
  */
+export interface ProcessEmailOptions {
+	/** Id of an already-stored queue row: it is updated in place and excluded from dedup. */
+	existingEmailId?: string;
+}
+
 export async function processEmail(
 	rawEmail: RawEmail,
 	orgId: string,
+	options: ProcessEmailOptions = {},
 ): Promise<PipelineResult> {
 	const startTime = Date.now();
-	const emailId = uuidv4();
+	const emailId = options.existingEmailId ?? uuidv4();
 
 	try {
 		// 0. Clean body
@@ -39,10 +46,7 @@ export async function processEmail(
 			rawEmail.from_address,
 		);
 		if (spamCheck) {
-			console.log(
-				`[Pipeline] Spam detected for: "${rawEmail.subject}" from ${rawEmail.from_address}`,
-			);
-			console.log(`[Pipeline] Body preview: ${cleanBody.substring(0, 200)}`);
+			console.log(`[Pipeline] Local spam filter matched email ${emailId}`);
 			const result = await saveEmailToDb(emailId, rawEmail, orgId, {
 				is_spam: true,
 				processed: true,
@@ -65,11 +69,12 @@ export async function processEmail(
 			embedding,
 			new Date(rawEmail.received_at),
 			orgId,
+			options.existingEmailId,
 		);
 
 		if (dupResult.is_duplicate) {
 			console.log(
-				`[Pipeline] Duplicate: "${rawEmail.subject}" method=${dupResult.method} score=${dupResult.similarity_score.toFixed(2)}`,
+				`[Pipeline] Duplicate email ${emailId}: method=${dupResult.method} score=${dupResult.similarity_score.toFixed(2)}`,
 			);
 			const result = await saveEmailToDb(emailId, rawEmail, orgId, {
 				processed: true,
@@ -104,7 +109,7 @@ export async function processEmail(
 		// 5b. Skip ticket creation for AI-flagged spam/irrelevant emails
 		if (classification.is_spam) {
 			console.log(
-				`[Pipeline] AI flagged as spam: "${rawEmail.subject}" (confidence: ${classification.confidence})`,
+				`[Pipeline] AI flagged email ${emailId} as spam (confidence: ${classification.confidence})`,
 			);
 			await saveEmailToDb(emailId, rawEmail, orgId, {
 				is_spam: true,
@@ -255,7 +260,35 @@ export async function processEmail(
 			);
 
 			if (autoResponse.should_respond && autoResponse.response_text) {
-				// Save auto-response record
+				// Send first, then record what actually happened: a failed send must
+				// stay unsent so an agent sees the draft and can send it manually.
+				let sentOk = false;
+				if (autoResponse.response_type === "auto") {
+					const mailbox = await getMailbox(orgId).catch(() => null);
+					if (mailbox) {
+						const slaResponse = await getSlaResponseTime(classification.severity, orgId);
+						const companyName = await getOrgName(orgId);
+						const email = buildAutoResponseEmail(
+							customer.contact_name || "Customer",
+							ticketNumber,
+							slaResponse,
+							autoResponse.response_text,
+							rawEmail.subject,
+							companyName,
+						);
+						sentOk = await sendEmail({
+							to: rawEmail.from_address,
+							subject: email.subject,
+							html: email.html,
+							text: email.text,
+							inReplyTo: rawEmail.message_id || undefined,
+							smtpConfig: mailbox.smtp,
+							fromName: companyName,
+						});
+						if (!sentOk) await recordMailboxSync(orgId, new Error("SMTP send failed"));
+					}
+				}
+
 				await supabaseAdmin.from("auto_responses").insert({
 					organization_id: orgId,
 					ticket_id: ticketId,
@@ -263,34 +296,10 @@ export async function processEmail(
 					match_type: autoResponse.response_type || "none",
 					response_text: autoResponse.response_text,
 					match_score: autoResponse.confidence || 0,
-					sent: autoResponse.response_type === "auto",
+					sent: sentOk,
+					sent_at: sentOk ? new Date().toISOString() : null,
 				});
-
-				// Send auto-response if confidence is high enough
-				if (autoResponse.response_type === "auto") {
-					const slaResponse = await getSlaResponseTime(classification.severity);
-					const {
-						subject: emailSubject,
-						text: emailText,
-						html: emailHtml,
-					} = buildAutoResponseEmail(
-						customer.contact_name || "Customer",
-						ticketNumber,
-						slaResponse,
-						autoResponse.response_text,
-						rawEmail.subject,
-					);
-
-					await sendEmail({
-						to: rawEmail.from_address,
-						subject: emailSubject,
-						html: emailHtml,
-						text: emailText,
-						inReplyTo: rawEmail.message_id || undefined,
-							smtpConfig: await getOrgSmtpConfig(orgId),
-						});
-						autoResponseSent = true;
-				}
+				autoResponseSent = sentOk;
 			}
 		}
 
@@ -319,6 +328,8 @@ export async function processEmail(
 				auto_response_sent: autoResponseSent,
 				processing_time_ms: Date.now() - startTime,
 			},
+			performed_by: "system",
+			actor_type: "system",
 		});
 
 		return {
@@ -382,41 +393,26 @@ async function saveEmailToDb(
 	return data!.id;
 }
 
-async function getSlaResponseTime(severity: string): Promise<string> {
+async function getSlaResponseTime(severity: string, orgId: string): Promise<string> {
+	// Two rows can match (org override + global default); never .single() this.
 	const { data } = await supabaseAdmin
 		.from("sla_policies")
-		.select("first_response_minutes")
+		.select("organization_id, first_response_minutes")
 		.eq("severity", severity)
-		.single();
+		.or(`organization_id.eq.${orgId},organization_id.is.null`);
 
-	if (!data) return "24 hours";
+	if (!data || data.length === 0) return "24 hours";
 
-	const minutes = data.first_response_minutes;
+	const orgPolicy = data.find((p) => p.organization_id === orgId);
+	const minutes = (orgPolicy ?? data[0]).first_response_minutes;
 	if (minutes < 60) return `${minutes} minutes`;
 	if (minutes < 1440) return `${Math.round(minutes / 60)} hours`;
 	return `${Math.round(minutes / 1440)} days`;
 }
 
-/**
- * Load the org's stored SMTP credentials (set via Settings → Connect Email).
- * Returns undefined if the org hasn't connected an outbound mailbox, in which
- * case sendEmail() safely no-ops.
- */
-async function getOrgSmtpConfig(orgId: string): Promise<SmtpConfig | undefined> {
-	const { data: org } = await supabaseAdmin
-		.from("organizations")
-		.select("email_config")
-		.eq("id", orgId)
-		.single();
-
-	const smtp = org?.email_config?.smtp;
-	if (!smtp?.user || !smtp?.pass) return undefined;
-	return {
-		host: smtp.host || "smtp.gmail.com",
-		port: smtp.port || 587,
-		user: smtp.user,
-		pass: smtp.pass,
-	};
+async function getOrgName(orgId: string): Promise<string> {
+	const { data } = await supabaseAdmin.from("organizations").select("name").eq("id", orgId).maybeSingle();
+	return data?.name ?? "Support";
 }
 
 /**

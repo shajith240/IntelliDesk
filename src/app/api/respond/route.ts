@@ -1,9 +1,11 @@
 // Response send endpoint: sends an email via SMTP, marks the response as sent, and updates ticket SLA and status.
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/server/db/supabase";
-import { sendEmail } from "@/server/email/smtp";
+import { sendEmail, escapeHtml } from "@/server/email/smtp";
+import { getMailbox, recordMailboxSync } from "@/server/email/mailbox";
 import { requireAuth } from "@/server/auth/helpers";
 import { getOrgId } from "@/server/auth/org-context";
+import { can, forbidden, notFound } from "@/server/auth/policy";
 
 export async function POST(req: NextRequest) {
 	const session = await requireAuth();
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
 			.from("auto_responses")
 			.select(
 				`*,
-        tickets(id, ticket_number, subject),
+        tickets(id, ticket_number, subject, assigned_agent),
         emails(id, from_address, from_name, message_id, subject)`,
 			)
 			.eq("organization_id", orgId)
@@ -68,28 +70,48 @@ export async function POST(req: NextRequest) {
 			id: string;
 			ticket_number: string;
 			subject: string;
+			assigned_agent: string | null;
 		};
+		if (!can.viewTicket(session, ticket)) return notFound("No unsent response found for this ticket");
+		if (!can.workTicket(session, ticket)) {
+			return forbidden("Only the assigned agent or an admin can send a reply on this ticket");
+		}
 		const email = autoResponse.emails as {
 			from_address: string;
 			message_id: string | null;
 			subject: string;
 		};
 
+		let mailbox: Awaited<ReturnType<typeof getMailbox>> = null;
+		try {
+			mailbox = await getMailbox(orgId);
+		} catch (err) {
+			await recordMailboxSync(orgId, err instanceof Error ? err : new Error(String(err)));
+		}
+		if (!mailbox) {
+			return NextResponse.json(
+				{ error: "No working support mailbox is connected. An admin can connect one in Settings." },
+				{ status: 409 },
+			);
+		}
 		const { data: orgData } = await supabaseAdmin
 			.from("organizations")
-			.select("email_config")
+			.select("name")
 			.eq("id", orgId)
 			.single();
 
 		const sent = await sendEmail({
 			to: email.from_address,
-			subject: `Re: ${email.subject} [${ticket.ticket_number}]`,
+			// Inbound subjects are untrusted; strip line breaks so they can't inject headers.
+			subject: `Re: ${email.subject.replace(/[\r\n]+/g, " ")} [${ticket.ticket_number}]`,
 			html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(responseText)}</div>`,
 			text: responseText,
 			inReplyTo: email.message_id || undefined,
-			smtpConfig: orgData?.email_config?.smtp || undefined,
+			smtpConfig: mailbox.smtp,
+			fromName: orgData?.name,
 		});
 		if (!sent) {
+			await recordMailboxSync(orgId, new Error("SMTP send failed"));
 			return NextResponse.json(
 				{ error: "Email could not be sent. Check the organization's SMTP configuration." },
 				{ status: 502 },
@@ -135,6 +157,9 @@ export async function POST(req: NextRequest) {
 				to: email.from_address,
 				edited: true,
 			},
+			performed_by: session.user.id,
+			actor_user_id: session.user.id,
+			actor_type: "user",
 		});
 		if (auditError) throw auditError;
 
@@ -150,13 +175,4 @@ export async function POST(req: NextRequest) {
 			{ status: 500 },
 		);
 	}
-}
-
-function escapeHtml(value: string): string {
-	return value
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/\"/g, "&quot;")
-		.replace(/'/g, "&#039;");
 }
