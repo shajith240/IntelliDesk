@@ -268,12 +268,6 @@ export function isLikelySpam(
 		spamScore += 2;
 	}
 
-	// Skip emails from the same address as the IMAP user (self-sent emails)
-	const imapUser = process.env.IMAP_USER?.toLowerCase() || "";
-	if (imapUser && lowerFrom === imapUser) {
-		spamScore += 3;
-	}
-
 	// Check for excessive links
 	const linkCount = (body.match(/https?:\/\//g) || []).length;
 	if (linkCount > 15) spamScore += 2;

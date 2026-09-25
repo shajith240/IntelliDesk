@@ -108,7 +108,6 @@ NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP=false
 | `EMAIL_INGEST_SECRET` | server only | Required `Authorization: Bearer` value for `POST /api/emails/ingest` |
 | `MAILBOX_ENCRYPTION_KEY` | server only | 32-byte base64 key for AES-256-GCM encryption of mailbox passwords. Changing or losing it means every mailbox must be reconnected. |
 | `NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP` | public, optional | `true` re-enables self-service workspace signup. Off by default. |
-| `NEXT_PUBLIC_DEMO_MODE` | public, optional | Enables development-only demo affordances |
 
 If `CRON_SECRET` or `EMAIL_INGEST_SECRET` is unset, the corresponding endpoint returns `503` instead of running unprotected — it fails closed, not open.
 
