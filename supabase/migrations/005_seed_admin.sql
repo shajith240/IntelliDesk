@@ -9,7 +9,7 @@ INSERT INTO organizations (name, slug, domain, plan, max_agents)
 VALUES ('sharpflow', 'sharpflow', 'gmail.com', 'free', 1)
 ON CONFLICT (slug) DO NOTHING;
 
--- 2. Create the admin user (password: Venkat@1984, bcrypt cost 12)
+-- 2. Create the admin user (bcrypt cost 12). Never put a real password in a migration: rotate it after seeding.
 INSERT INTO users (organization_id, email, name, password_hash, role, is_active)
 VALUES (
   (SELECT id FROM organizations WHERE slug = 'sharpflow'),

@@ -13,6 +13,15 @@ const signupSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+	// Workspaces are provisioned deliberately; members are added by their admin
+	// from Settings. Public self-serve signup is opt-in per deployment.
+	if (process.env.NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP !== "true") {
+		return NextResponse.json(
+			{ error: "Sign-up is closed. Ask your workspace admin to add you." },
+			{ status: 403 },
+		);
+	}
+
 	try {
 		const body = await request.json();
 		const parsed = signupSchema.safeParse(body);

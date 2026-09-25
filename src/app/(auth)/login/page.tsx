@@ -57,7 +57,11 @@ function LoginForm() {
       });
 
       if (!result || result.error || result.ok === false) {
-        setError("Incorrect email or password.");
+        setError(
+          result?.code === "rate_limited"
+            ? "Too many failed attempts. Wait 15 minutes, then try again."
+            : "Incorrect email or password.",
+        );
         requestAnimationFrame(() => {
           errorMessageRef.current?.focus();
         });
@@ -175,12 +179,14 @@ function LoginForm() {
         </Button>
       </form>
 
-      <div className="mt-6 text-center text-sm text-subtle">
-        New to IntelliDesk?{" "}
-        <Link href="/signup" className="font-medium text-primary hover:underline">
-          Create a workspace
-        </Link>
-      </div>
+      {process.env.NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP === "true" && (
+        <div className="mt-6 text-center text-sm text-subtle">
+          New to IntelliDesk?{" "}
+          <Link href="/signup" className="font-medium text-primary hover:underline">
+            Create a workspace
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
