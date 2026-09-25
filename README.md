@@ -14,6 +14,7 @@ Nothing is sent to a customer without an agent explicitly approving it. AI outpu
 - [Conventions](#conventions)
 - [Email pipeline](#email-pipeline)
 - [API reference](#api-reference)
+- [Roles](#roles)
 - [Database](#database)
 - [Using the app](#using-the-app)
 - [Deploying to Vercel](#deploying-to-vercel)
@@ -23,14 +24,16 @@ Nothing is sent to a customer without an agent explicitly approving it. AI outpu
 
 ## Features
 
-- **Email ingestion** over IMAP polling or an authenticated webhook, with spam filtering, duplicate detection, and thread/customer identification.
+- **One-step mailbox connection**: an admin connects Gmail with a guided app-password flow (or any IMAP/SMTP provider). Credentials are verified before saving and stored encrypted.
+- **Reliable email intake** over IMAP polling or an authenticated webhook: each message is stored before it is marked read, so a timed-out run never loses mail. Includes spam filtering, duplicate detection, and thread/customer identification.
 - **AI classification** of every message: category, priority, sentiment, language, a summary, and a confidence score, stored on the ticket.
-- **AI-drafted replies**, matched against the organization's knowledge base and generated with Gemini. A draft is never sent automatically; an agent reviews and confirms it first.
+- **AI-drafted replies**, matched against the organization's knowledge base and generated with Gemini. Only a high-confidence knowledge-base answer is sent automatically; every other draft waits for an agent to review and confirm it.
 - **SLA tracking** per priority level, with first-response and resolution targets, breach detection, and an at-risk view.
 - **Command Center** dashboard: open-ticket metrics, SLA risk, recent activity, and the live work queue.
 - **Ticket workspace**: full conversation thread, AI analysis (clearly labeled as AI output), verified ticket details, and the reply composer.
 - **Knowledge base** management that feeds the retrieval step used to draft replies.
-- **Organization-scoped, role-based access** (admin / agent / viewer) under NextAuth-issued sessions.
+- **Admin-led assignment**: only admins assign tickets. Flagged, unassigned tickets collect in **Needs Review**, where candidates are ranked by availability, then by open-ticket load.
+- **Organization-scoped roles** enforced on every route (see [Roles](#roles)).
 - **Keyboard-driven UI**: command palette, `g`-prefixed navigation, and list navigation with `j` / `k`.
 
 ## Tech stack
@@ -87,6 +90,11 @@ PINECONE_EMBEDDING_DIMENSIONS=
 CRON_SECRET=
 # Protects the /api/emails/ingest webhook
 EMAIL_INGEST_SECRET=
+# Encrypts stored mailbox passwords. Generate with: openssl rand -base64 32
+# Must be identical in every environment that shares the database.
+MAILBOX_ENCRYPTION_KEY=
+# Leave false for a company deployment: admins add members from Settings.
+NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP=false
 ```
 
 | Variable | Scope | Purpose |
@@ -98,13 +106,15 @@ EMAIL_INGEST_SECRET=
 | `PINECONE_API_KEY`, `PINECONE_INDEX`, `PINECONE_HOST`, `PINECONE_EMBEDDING_DIMENSIONS` | server only | Vector search for knowledge-base retrieval |
 | `CRON_SECRET` | server only | Required `Authorization: Bearer` value for `/api/emails/poll` and `/api/emails/process-queue` |
 | `EMAIL_INGEST_SECRET` | server only | Required `Authorization: Bearer` value for `POST /api/emails/ingest` |
+| `MAILBOX_ENCRYPTION_KEY` | server only | 32-byte base64 key for AES-256-GCM encryption of mailbox passwords. Changing or losing it means every mailbox must be reconnected. |
+| `NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP` | public, optional | `true` re-enables self-service workspace signup. Off by default. |
 | `NEXT_PUBLIC_DEMO_MODE` | public, optional | Enables development-only demo affordances |
 
 If `CRON_SECRET` or `EMAIL_INGEST_SECRET` is unset, the corresponding endpoint returns `503` instead of running unprotected — it fails closed, not open.
 
 When running a production build outside Vercel (`npm start`), also set `AUTH_TRUST_HOST=true`; Auth.js otherwise rejects requests from untrusted hosts. Vercel and `npm run dev` set this automatically.
 
-Mailbox credentials (IMAP/SMTP) are configured per organization from the app's Settings page, not from environment variables; they are stored in Supabase.
+Mailbox credentials are configured per organization from **Settings → Support mailbox**, not from environment variables. They are verified against the real IMAP and SMTP servers, then stored encrypted in `mailbox_connections`; the password is never returned to the browser. If `MAILBOX_ENCRYPTION_KEY` is missing, connecting a mailbox returns `503`.
 
 ## Project structure
 
@@ -147,22 +157,24 @@ Feature folders under `src/features/`:
 
 ## Email pipeline
 
-1. A message arrives by IMAP poll or through `POST /api/emails/ingest`.
+1. A message arrives by IMAP poll or through `POST /api/emails/ingest`. A polled message is stored as an unprocessed row first and only then marked read in the mailbox.
 2. It is parsed and sanitized, then checked against local spam and duplicate rules.
 3. The thread and customer are identified against existing accounts/contacts.
 4. Gemini classifies the message and generates its embedding.
 5. The organization-scoped ticket is created or updated in Supabase, and its embedding is written to Pinecone.
-6. A candidate reply is generated from the best-matching knowledge-base article, if one exists, and stored unsent.
-7. An authenticated agent reviews the draft in the ticket workspace and sends it through `POST /api/respond`, which emails the customer over SMTP and marks the ticket resolved.
+6. A candidate reply is generated from the best-matching knowledge-base article, if one exists. A high-confidence match is sent immediately from the connected mailbox; anything else is stored unsent. A message the classifier flags for human review lands in **Needs Review** for an admin to assign.
+7. The assigned agent reviews the draft in the ticket workspace and sends it through `POST /api/respond`, which emails the customer from the connected mailbox and marks the ticket resolved.
 8. Every step is recorded to the ticket, its SLA timestamps, and the audit log.
 
-`POST /api/emails/process-queue` reprocesses stored, unprocessed email records. `GET|POST /api/emails/poll` polls every connected mailbox. Both require `Authorization: Bearer $CRON_SECRET` and accept `GET` so Vercel Cron can call them directly:
+`GET|POST /api/emails/poll` reads every connected mailbox, then processes the stored queue. `POST /api/emails/process-queue` only processes the queue. Both require `Authorization: Bearer $CRON_SECRET` and accept `GET` so Vercel Cron can call them directly:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://your-app.vercel.app/api/emails/poll
 ```
 
-Polling is idempotent: the pipeline skips any message whose `Message-ID` has already been processed, so a duplicate or overlapping run does no harm. Each run is capped at 60 seconds (`maxDuration`); anything left over is picked up by the next run.
+Polling is safe to repeat. A message is stored once per `Message-ID`; each queued row is claimed with a compare-and-set, so overlapping runs never process the same email twice. Processing stops at a 50-second budget and the rest waits for the next run. A message that fails 5 times is parked with its `processing_error` instead of being retried forever.
+
+The Vercel Hobby plan only allows a daily cron, so `.github/workflows/poll-mailboxes.yml` calls the poll endpoint every 10 minutes from GitHub Actions (free and unlimited for public repositories). It needs two repository secrets, **Settings → Secrets and variables → Actions**: `APP_URL` (the deployed URL, no trailing slash) and `CRON_SECRET` (the same value as on Vercel). Without them the workflow skips with a warning.
 
 ## API reference
 
@@ -171,21 +183,37 @@ All routes are under `/api` and live in `src/app/api/`. Unless noted, a route re
 | Route | Methods | Notes |
 | --- | --- | --- |
 | `/api/auth/[...nextauth]` | NextAuth | Sign-in/session endpoints managed by Auth.js |
-| `/api/auth/signup` | `POST` | Creates an organization and its first admin user |
+| `/api/auth/signup` | `POST` | Creates an organization and its first admin; returns `403` unless `NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP=true` |
 | `/api/dashboard` | `GET` | Command Center metrics, SLA summary, recent activity |
 | `/api/tickets` | `GET` | Filtered, sorted, paginated ticket list |
-| `/api/tickets/[id]` | `GET`, `PATCH` | Ticket detail with SLA status and similar tickets; field updates |
+| `/api/tickets` `?view=review` | `GET` | Needs Review: flagged, unassigned, open tickets (admin, viewer) |
+| `/api/tickets/[id]` | `GET`, `PATCH` | Ticket detail with SLA status and similar tickets; status, priority, category and team updates. Assignment and SLA fields are rejected. |
+| `/api/tickets/[id]/assign` | `POST` | Admin only. `{ assignee_id \| null, note? }`: assigns or unassigns atomically, with history and audit |
 | `/api/respond` | `POST` | Sends the reviewed AI draft, marks the ticket resolved |
 | `/api/faqs`, `/api/faqs/[id]` | `GET`, `POST`, `PUT`, `DELETE` | Knowledge-base articles |
 | `/api/search` | `GET` | Semantic ticket/article search via Pinecone |
-| `/api/team` | `GET` | Organization members |
+| `/api/team` | `GET`, `POST` | Members; admins add a member and receive a one-time initial password |
+| `/api/team/[id]` | `PATCH` | Admin only: change name, role or active state. Deactivating returns the member's open tickets to the pool. |
+| `/api/team/workload` | `GET` | Admin only: assignable members ranked by availability, then open tickets |
+| `/api/me`, `/api/me/password` | `GET`, `PATCH`, `POST` | Own profile, availability toggle, password change |
 | `/api/customers` | `GET` | Contact/account lookup |
-| `/api/settings/email-config` | `GET`, `POST`, `DELETE` | Mailbox (IMAP/SMTP) connection for the organization |
+| `/api/settings/email-config` | `GET`, `POST`, `DELETE` | Mailbox status (admin, viewer); connect and disconnect (admin). Never returns the password. |
 | `/api/emails/ingest` | `POST` | Webhook intake; requires `Authorization: Bearer $EMAIL_INGEST_SECRET`, not a user session |
 | `/api/emails/poll`, `/api/emails/process-queue` | `GET`, `POST` | Cron-driven pipeline runs; require `Authorization: Bearer $CRON_SECRET` |
-| `/api/emails/bulk` | `POST` | Bulk email import for a session-authenticated agent |
+| `/api/emails/bulk` | `POST` | Admin only: bulk email import |
 
-`/api/cleanup`, `/api/migrate`, `/api/seed`, and `/api/seed/test-emails` are development-only utility routes: each one checks `NODE_ENV` and refuses to run in production.
+## Roles
+
+| | Admin | Agent | Viewer |
+| --- | --- | --- | --- |
+| See tickets | All | Only tickets assigned to them | All (read-only) |
+| Assign / unassign tickets | Yes | No, not even to themselves | No |
+| Work a ticket (status, priority, reply) | Any | Their own | No |
+| Needs Review, Command Center | Yes | No (lands on My Work) | Yes |
+| Members, mailbox, knowledge-base edits | Yes | No | No |
+| Availability toggle | Yes | Yes | No |
+
+Every API route checks these rules through `src/server/auth/policy.ts`; hiding a button in the UI is never the only guard. An agent asking for another agent's ticket gets `404`, not `403`, so ticket IDs can't be probed. Sessions re-check role and active status every 5 minutes, so a deactivated member loses access without waiting for their token to expire.
 
 ## Database
 
@@ -197,13 +225,22 @@ Apply the SQL files in `supabase/migrations/` in order:
 | `002_auth.sql` | Authentication fields on `users` |
 | `003_rls.sql` | Row-level security policies |
 | `004_email_config.sql` | Per-organization IMAP/SMTP configuration |
-| `005_seed_admin.sql` | Seed administrator account |
+| `005_seed_admin.sql` | Seed administrator account (rotate its password immediately) |
+| `006_lockdown_public_api.sql` | Closes the Supabase Data API: RLS on every table with no policies, and all `anon`/`authenticated` grants revoked. The app reaches the database only through the service-role key on the server. |
+| `007_integrity_and_assignment.sql` | Composite `(id, organization_id)` foreign keys so no row can point across organizations; `assign_ticket()`; `ticket_assignments` history; `mailbox_connections`; `auth_login_attempts` |
+| `008_email_intake_queue.sql` | Intake queue columns: `processing_attempts`, `processing_error`, `last_attempt_at` |
+
+With the Supabase CLI linked to a project, `supabase db push` applies pending migrations. `supabase/tests/assignment_integrity.sql` checks the integrity rules inside a transaction that it rolls back, so it is safe to run against a live database:
+
+```bash
+psql "$DATABASE_URL" -f supabase/tests/assignment_integrity.sql
+```
 
 If a Supabase project already has this schema and data, do not rerun the migrations blindly — confirm the expected tables and columns exist first.
 
 ## Using the app
 
-After signing in, agents land on the **Command Center**: queue metrics, the open work queue, SLA risk, and recent activity. Clicking a ticket opens a workspace panel (`?ticket=<id>` in the URL) with the customer conversation, the AI analysis (always marked with the IntelliDesk AI label — "AI suggestion" for analysis, "AI draft" for replies), verified ticket details, and the reply composer. Sending a reply requires an explicit confirmation; it emails the customer and marks the ticket resolved.
+After signing in, admins and viewers land on the **Command Center** and agents on **My Work**. The Command Center shows queue metrics, the open work queue, SLA risk, and recent activity. Clicking a ticket opens a workspace panel (`?ticket=<id>` in the URL) with the customer conversation, the AI analysis (always marked with the IntelliDesk AI label — "AI suggestion" for analysis, "AI draft" for replies), verified ticket details, and the reply composer. Sending a reply requires an explicit confirmation; it emails the customer and marks the ticket resolved.
 
 Data refreshes every 30 seconds and after every mutation. The status indicator in the top bar reflects whether the last refresh succeeded — the app polls and does not use a push/realtime connection.
 
@@ -213,7 +250,7 @@ Keyboard shortcuts: `/` or `Ctrl K` opens search, `g` then `d`/`i`/`m`/`a`/`k`/`
 
 1. Import the repository and leave **Root Directory** empty (the default) — the app lives at the repository root. Framework preset: Next.js. Build command: `npm run build` (default). Do not use static export; the app needs route handlers, authentication, and dynamic data.
 2. Add every variable from the [Environment variables](#environment-variables) table under **Settings → Environment Variables**, for both Production and Preview. Set `NEXTAUTH_URL` to the deployed URL.
-3. `vercel.json` registers a cron job for `/api/emails/poll`. Schedules are in UTC. The committed schedule (`0 6 * * *`, daily) is the only frequency the Hobby plan allows; on Pro, tighten it, e.g. `*/10 * * * *`. Vercel sends `Authorization: Bearer $CRON_SECRET` automatically once `CRON_SECRET` is set. Local development does not run cron jobs — call the endpoint manually with the `curl` command in [Email pipeline](#email-pipeline).
+3. `vercel.json` registers a daily cron job for `/api/emails/poll` as a fallback (the Hobby plan allows nothing more frequent). Vercel sends `Authorization: Bearer $CRON_SECRET` automatically once `CRON_SECRET` is set. For 10-minute polling, add the `APP_URL` and `CRON_SECRET` repository secrets described in [Email pipeline](#email-pipeline). Local development does not run cron jobs: call the endpoint manually with the `curl` command there.
 4. IMAP connections are not held open between requests: each cron invocation connects, fetches new messages, processes them, and disconnects.
 5. To collect Core Web Vitals, enable **Speed Insights** in the Vercel dashboard. This requires adding the `@vercel/speed-insights` package and rendering `<SpeedInsights />` in `src/app/layout.tsx`; it is not installed by default.
 
@@ -222,15 +259,19 @@ Keyboard shortcuts: `/` or `Ctrl K` opens search, `g` then `d`/`i`/`m`/`a`/`k`/`
 - The Supabase **service-role key** is used from route handlers only, behind `import "server-only"` and the ESLint import boundary described in [Conventions](#conventions). It must never reach a file that ships to the browser.
 - Every API route that touches ticket or organization data checks the session (`requireAuth()`, or `auth()` directly) and scopes its query to the caller's `organization_id` — there is no unscoped read path.
 - `/api/emails/ingest`, `/api/emails/poll`, and `/api/emails/process-queue` accept no session; they authenticate with a bearer secret instead, and fail closed (`503`) if the secret is not configured.
-- Development-only routes (`/api/cleanup`, `/api/migrate`, `/api/seed*`) actively refuse to run when `NODE_ENV=production`.
-- AI-generated content (classification, drafts) is never sent or acted on automatically; it is always surfaced as a suggestion pending human review.
+- The Supabase Data API is closed: RLS is on for every table with no policies, and the `anon` and `authenticated` roles have no grants. The public anon key can't read or write anything.
+- Tenant isolation is enforced by the database as well as the code: composite foreign keys and triggers reject any row that references another organization's user, ticket, team or email.
+- Sign-in is throttled (5 failures per email, 20 per IP, per 15 minutes), takes the same time whether or not the email exists, and public signup is off by default.
+- Mailbox passwords are encrypted with AES-256-GCM, bound to their organization. Custom mail hosts must resolve to public addresses (SSRF guard), and IMAP and SMTP always use TLS.
+- There are no seed, migrate or cleanup HTTP routes; schema changes go through `supabase/migrations/`.
+- AI output is labeled as AI in the UI. The only automatic send is a high-confidence knowledge-base answer; its HTML is fully escaped.
 
 ## Known limitations
 
 - **Analytics has no historical data.** The dashboard reflects the current state of the queue; there is no time-series storage yet, so nothing shows trends.
 - **No push/realtime updates.** The UI relies on 30-second polling; a change made by another agent can take up to that long to appear elsewhere.
 - **Single mailbox per organization.** Multiple connected inboxes per organization are not supported.
-- No automated test suite exists yet; verification is `npm run lint` and `npm run build`, plus manual QA.
+- The only automated tests are the database integrity checks in `supabase/tests/`; application verification is `npm run lint`, `npm run build`, and manual QA.
 - No `LICENSE` file is included. Add one before treating this repository as reusable outside the team.
 
 ## Commands
