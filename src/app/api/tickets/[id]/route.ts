@@ -43,12 +43,13 @@ export async function GET(
         *,
         contacts(id, name, email, role, phone),
         accounts(id, company_name, domain, tier),
+        teams(id, name),
         ticket_messages(
           id, kind, author_type, author_user_id, body_text, delivery_status, delivery_error, created_at,
           users(id, name),
           emails(from_address, from_name, to_address, subject, language)
         ),
-        auto_responses(id, match_type, response_text, match_score, sent, sent_message_id, created_at)
+        auto_responses(id, match_type, response_text, match_score, sent_message_id, created_at)
       `,
 			)
 			.eq("id", id)
@@ -197,7 +198,6 @@ export async function PATCH(
 			ticket_id: id,
 			action: "ticket_updated",
 			details: { updates },
-			performed_by: session.user.id,
 			actor_user_id: session.user.id,
 			actor_type: "user",
 		});

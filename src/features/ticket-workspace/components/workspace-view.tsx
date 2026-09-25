@@ -37,7 +37,7 @@ export function WorkspaceView({ detail, onOpenTicket, onClose, onDirtyChange }: 
 	// The knowledge-base evidence shown in the sidebar: the pending draft, else the last one sent.
 	const lastSentDraft =
 		ticket.auto_responses
-			.filter((row) => row.sent)
+			.filter((row) => row.sent_message_id !== null)
 			.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
 
 	const main = (

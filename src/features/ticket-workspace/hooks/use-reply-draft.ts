@@ -65,7 +65,7 @@ interface ComposerSession {
 export function useReplyDraft(detail: TicketDetailResponse) {
 	const ticket = detail.ticket;
 	// The pending AI draft: the newest auto-response that hasn't been sent yet.
-	const pending = latestByCreatedAt(ticket.auto_responses.filter((r) => !r.sent && !r.sent_message_id));
+	const pending = latestByCreatedAt(ticket.auto_responses.filter((r) => r.sent_message_id === null));
 	const recipient = findRecipient(ticket);
 	const canReply = ticket.status !== "Closed";
 

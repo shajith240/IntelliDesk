@@ -17,14 +17,17 @@ export async function GET(req: NextRequest) {
 	try {
 		const { searchParams } = new URL(req.url);
 		const category = searchParams.get("category");
-		const search = searchParams.get("search");
+		// The search text is interpolated into a PostgREST filter string, so strip
+		// the characters that filter syntax uses (commas, parentheses, wildcards).
+		const search = (searchParams.get("search") ?? "").replace(/[,()*%\\:"]/g, " ").trim().slice(0, 100);
 		const page = parseInt(searchParams.get("page") || "1");
 		const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 		const offset = (page - 1) * limit;
 
 		let query = supabaseAdmin
 			.from("faqs")
-			.select("*", { count: "exact" })
+			// times_used is derived (COUNT of citations), never stored: it can't drift.
+			.select("*, auto_response_citations(count)", { count: "exact" })
 			.eq("organization_id", orgId);
 
 		if (category) {
@@ -41,7 +44,10 @@ export async function GET(req: NextRequest) {
 		if (error) throw error;
 
 		return NextResponse.json({
-			faqs: data,
+			faqs: (data ?? []).map(({ auto_response_citations, ...faq }) => ({
+				...faq,
+				times_used: (auto_response_citations as unknown as { count: number }[] | null)?.[0]?.count ?? 0,
+			})),
 			total: count,
 			page,
 			limit,

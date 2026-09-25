@@ -241,6 +241,18 @@ Apply the SQL files in `supabase/migrations/` in order:
 | `009_conversation_model.sql` | `ticket_messages` (customer emails, replies, internal notes); the status workflow as data (`ticket_statuses`, `ticket_status_transitions`) enforced by a trigger; outbound emails in `emails`; `complete_ticket_reply()` |
 | `010_record_inbound_message.sql` | `record_inbound_message()`: atomic, idempotent intake of an inbound email (append, reopen, follow-up or new ticket) |
 | `011_ai_settings_and_spam_review.sql` | `organizations.ai_auto_send` (off by default), `ai_credentials` (encrypted workspace Gemini key), spam overrides on `emails` |
+| `012_normalize_expand.sql` | Per-organization ticket numbers (`ticket_counters`), `auto_response_citations` join table, one account per domain per workspace, contacts unique per workspace, `organizations.timezone`, append-only `audit_logs` |
+| `013_normalize_contract.sql` | Drops every redundant or derivable column (see the header of the file for the list and why), the legacy `ticket_emails` table, and makes `tickets.ai_confidence` a generated column |
+
+### Normalization decisions
+
+- **Derived values aren't stored.** "Was this draft sent" is `sent_message_id IS NOT NULL`; how often an article is used is a `COUNT` over `auto_response_citations`; SLA breach is computed from due dates. A stored copy is a second source of truth that drifts.
+- **When a derived value is worth storing, the database computes it.** `tickets.ai_confidence` is `GENERATED ALWAYS AS (ai_classification->>'confidence')`, so it can be sorted and averaged cheaply but can never disagree with the AI verdict it comes from.
+- **No transitive dependencies.** A ticket stores `assigned_team_id`; the team's name is read through the foreign key, not copied onto the ticket.
+- **No repeating groups (1NF).** Citations and the old id arrays became a join table with real foreign keys, so a deleted article can't leave a dangling id.
+- **Tenant consistency is structural.** Every cross-table reference carries `organization_id` in a composite foreign key, so a row can't point into another workspace even if application code is wrong.
+- **Deliberate denormalization:** `emails` keeps `to_address`/`cc` as the raw header text, because it is the transport log and is never queried by recipient except for rate limiting. `ai_classification` stays JSON: it is the AI's original verdict (a snapshot), while `category`/`severity` columns hold the current values people may change.
+- **Global user email uniqueness is intentional:** people sign in with an email and no workspace picker, so one email identifies one account.
 
 With the Supabase CLI linked to a project, `supabase db push` applies pending migrations. The files in `supabase/tests/` check the database rules inside a transaction that is rolled back, so they are safe to run against a live database:
 
@@ -288,6 +300,8 @@ Keyboard shortcuts: `/` or `Ctrl K` opens search, `g` then `d`/`i`/`m`/`a`/`k`/`
 - Sign-in is throttled (5 failures per email, 20 per IP, per 15 minutes), takes the same time whether or not the email exists, and public signup is off by default.
 - Mailbox passwords are encrypted with AES-256-GCM, bound to their organization. Custom mail hosts must resolve to public addresses (SSRF guard), and IMAP and SMTP always use TLS.
 - There are no seed, migrate or cleanup HTTP routes; schema changes go through `supabase/migrations/`.
+- `audit_logs` is append-only, enforced by a trigger: only clearing a deleted user's or ticket's id is allowed; anything else (retention, deleting a workspace) needs `SET LOCAL intellidesk.audit_maintenance = 'on'` in that transaction.
+- Search text is stripped of PostgREST filter syntax before it is interpolated into a filter.
 - AI output is labeled as AI in the UI. By default the AI only drafts; automatic sending is an admin opt-in, and even then a reply goes out unreviewed only if every rule in `src/server/pipeline/auto-reply-policy.ts` passes: a strong knowledge-base match, no links, addresses, phone numbers or amounts the articles don't contain (`grounding.ts`), a low-risk topic, a customer who isn't upset, a sender who isn't automated, and at most two automatic replies per address per day. Follow-ups on an existing ticket are always answered by a person.
 - Prompt injection: instructions go in the model's system instruction and customer text is passed as delimited, untrusted data; output is constrained to a JSON schema. The model can't take actions: it only produces text that the rules above gate.
 - Mail loops: our own messages, bounces and out-of-office replies (`Auto-Submitted`, `X-Autoreply`, `Precedence`, null `Return-Path`, system senders) are stored but never ticketed; lists and no-reply senders are ticketed but never auto-answered (`src/server/email/automated.ts`). Our automatic replies carry `Auto-Submitted: auto-replied` (RFC 3834).
@@ -298,7 +312,7 @@ Keyboard shortcuts: `/` or `Ctrl K` opens search, `g` then `d`/`i`/`m`/`a`/`k`/`
 - **Analytics has no historical data.** The dashboard reflects the current state of the queue; there is no time-series storage yet, so nothing shows trends.
 - **No push/realtime updates.** The UI relies on 30-second polling; a change made by another agent can take up to that long to appear elsewhere.
 - **Single mailbox per organization.** Multiple connected inboxes per organization are not supported.
-- Automated tests cover the database rules (`supabase/tests/`, 38 checks) and the pure email/AI safety logic (`npm test`); routes and UI are verified with `npm run lint`, `npm run build`, and scripted browser runs, not a committed end-to-end suite yet.
+- Automated tests cover the database rules (`supabase/tests/`, 45 checks) and the pure email/AI safety logic (`npm test`); routes and UI are verified with `npm run lint`, `npm run build`, and scripted browser runs, not a committed end-to-end suite yet.
 - No `LICENSE` file is included. Add one before treating this repository as reusable outside the team.
 
 ## Commands

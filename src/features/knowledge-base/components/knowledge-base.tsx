@@ -227,16 +227,11 @@ export function KnowledgeBase() {
 												<Lozenge appearance="default">{article.category}</Lozenge>
 											</div>
 											<p className="mt-2 line-clamp-2 text-sm text-subtle">{article.answer}</p>
-											{(article.times_used !== undefined ||
-												article.success_rate !== undefined ||
-												article.created_at) && (
+											{(article.times_used !== undefined || article.created_at) && (
 												<div className="mt-2 flex flex-wrap gap-3 text-xs text-subtlest">
 													{typeof article.times_used === "number" && (
-														<span>{article.times_used} times used</span>
-													)}
-													{typeof article.success_rate === "number" && (
 														<span>
-															{Math.round(article.success_rate * 100)}% success rate
+															Cited in {article.times_used} AI {article.times_used === 1 ? "draft" : "drafts"}
 														</span>
 													)}
 													{article.created_at && (

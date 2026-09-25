@@ -97,7 +97,6 @@ export async function POST(req: NextRequest) {
 			organization_id: orgId,
 			action: "member_added",
 			details: { member_id: data.id, role },
-			performed_by: session.user.id,
 			actor_user_id: session.user.id,
 			actor_type: "user",
 		});

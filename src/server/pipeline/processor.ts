@@ -304,7 +304,6 @@ export async function processEmail(
 				auto_response_sent: autoResponseSent,
 				processing_time_ms: Date.now() - startTime,
 			},
-			performed_by: "system",
 			actor_type: "system",
 		});
 
@@ -388,11 +387,26 @@ async function draftOrSendAutoResponse(input: {
 			match_type: autoResponse.response_type === "auto" ? "perfect" : "partial",
 			response_text: autoResponse.response_text,
 			match_score: autoResponse.confidence || 0,
-			sent: false,
 		})
 		.select("id")
 		.single();
 	if (draftError) throw new Error(`Failed to store the AI draft: ${draftError.message}`);
+
+	// Which articles the draft was grounded in (a relation, not an id array).
+	const citations = (autoResponse.faq_matches ?? [])
+		.filter((match) => match.faq_id)
+		.slice(0, 3)
+		.map((match, index) => ({
+			auto_response_id: draft.id,
+			faq_id: match.faq_id!,
+			organization_id: orgId,
+			rank: index + 1,
+			score: Math.min(1, Math.max(0, match.score)),
+		}));
+	if (citations.length > 0) {
+		const { error: citationError } = await supabaseAdmin.from("auto_response_citations").insert(citations);
+		if (citationError) console.error("Citation insert failed:", citationError.message);
+	}
 
 	if (autoResponse.response_type !== "auto") return false;
 

@@ -116,7 +116,6 @@ export async function PATCH(
 			organization_id: orgId,
 			action: "member_updated",
 			details: { member_id: id, updates, released_tickets: loosesTickets },
-			performed_by: session.user.id,
 			actor_user_id: session.user.id,
 			actor_type: "user",
 		});

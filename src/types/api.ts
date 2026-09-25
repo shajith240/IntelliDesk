@@ -105,7 +105,7 @@ export interface AutoResponseRow {
 	match_type: MatchType;
 	response_text: string;
 	match_score: number;
-	sent: boolean;
+	/** The reply sent from this draft; null while it is still a pending draft. */
 	sent_message_id: string | null;
 	created_at: string;
 }
@@ -125,6 +125,8 @@ export type TicketDetail = Omit<Ticket, "account" | "contact" | "emails"> & {
 		tier: AccountTier;
 	} | null;
 	ticket_messages: TicketMessageRow[];
+	/** Joined through the composite (assigned_team_id, organization_id) foreign key. */
+	teams: { id: string; name: string } | null;
 	/** The Closed ticket this one continues (tickets.follow_up_of), if any. */
 	follow_up_parent: { id: string; ticket_number: string } | null;
 	auto_responses: AutoResponseRow[];
@@ -214,7 +216,6 @@ export interface AuditLogRow {
 	entity_id?: string | null;
 	action: string;
 	details: Record<string, unknown> | null;
-	performed_by?: string | null;
 	created_at: string;
 	/** Joined by /api/dashboard; null when the event isn't tied to a ticket in this org. */
 	ticket_number: string | null;

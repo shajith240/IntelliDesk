@@ -245,7 +245,6 @@ export async function addInternalNote(input: {
 		ticket_id: input.ticketId,
 		action: "note_added",
 		details: { message_id: data.id },
-		performed_by: input.userId,
 		actor_user_id: input.userId,
 		actor_type: "user",
 	});

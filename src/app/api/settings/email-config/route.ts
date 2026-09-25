@@ -143,7 +143,6 @@ export async function POST(req: NextRequest) {
 		organization_id: orgId,
 		action: "mailbox_connected",
 		details: { provider: input.provider, email: input.email },
-		performed_by: session.user.id,
 		actor_user_id: session.user.id,
 		actor_type: "user",
 	});
@@ -169,7 +168,6 @@ export async function DELETE() {
 		organization_id: orgId,
 		action: "mailbox_disconnected",
 		details: {},
-		performed_by: session.user.id,
 		actor_user_id: session.user.id,
 		actor_type: "user",
 	});

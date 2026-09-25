@@ -43,7 +43,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 		organization_id: orgId,
 		action: "email_marked_not_spam",
 		details: { email_id: id },
-		performed_by: session.user.id,
 		actor_user_id: session.user.id,
 		actor_type: "user",
 	});

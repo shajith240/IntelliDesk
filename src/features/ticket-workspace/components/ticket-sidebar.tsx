@@ -139,7 +139,7 @@ export function TicketSidebar({ ticket, sla, similarTickets, evidence, onOpenTic
 					</SidebarField>
 
 					<SidebarField label="Category">{ticket.category ?? "—"}</SidebarField>
-					<SidebarField label="Team">{ticket.assigned_team ?? "—"}</SidebarField>
+					<SidebarField label="Team">{ticket.teams?.name ?? "—"}</SidebarField>
 					<SidebarField label="Created">{formatDateTime(ticket.created_at)}</SidebarField>
 					<SidebarField label="Updated">{formatDateTime(ticket.updated_at)}</SidebarField>
 				</dl>

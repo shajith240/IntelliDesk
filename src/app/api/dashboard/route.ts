@@ -1,6 +1,7 @@
 // Dashboard stats endpoint: compiles ticket counts, email metrics, SLA status, and activity feed for the org.
 import { NextResponse } from "next/server";
 import { OPEN_STATUSES } from "@/lib/ticket-meta";
+import { startOfDayInTimeZone } from "@/lib/time-zone";
 import { supabaseAdmin } from "@/server/db/supabase";
 import { getSLAMetrics, getSLAAlerts } from "@/server/pipeline/sla-tracker";
 import { requireAuth } from "@/server/auth/helpers";
@@ -29,9 +30,13 @@ export async function GET() {
 	const agentId = session.user.id;
 
 	try {
-		const startOfTodayIso = new Date(
-			new Date().setHours(0, 0, 0, 0),
-		).toISOString();
+		// "Today" starts at midnight in the workspace's timezone, not the server's.
+		const { data: org } = await supabaseAdmin
+			.from("organizations")
+			.select("timezone")
+			.eq("id", orgId)
+			.maybeSingle();
+		const startOfTodayIso = startOfDayInTimeZone(org?.timezone ?? "UTC").toISOString();
 
 		// Start the slow SLA computation and the activity feed immediately so they
 		// overlap with the count queries below instead of running after them.
@@ -171,20 +176,23 @@ export async function GET() {
 			totalEmailsQuery,
 			spamEmailsQuery,
 			aiConfidenceQuery,
+			// Replies actually delivered today (by people or the AI), from the conversation itself.
 			scopeToAgent
 				? supabaseAdmin
-						.from("auto_responses")
+						.from("ticket_messages")
 						.select("id, tickets!inner(assigned_agent)", { count: "exact", head: true })
 						.eq("organization_id", orgId)
-						.eq("sent", true)
-						.gte("sent_at", startOfTodayIso)
+						.eq("kind", "reply")
+						.eq("delivery_status", "sent")
+						.gte("created_at", startOfTodayIso)
 						.eq("tickets.assigned_agent", agentId)
 				: supabaseAdmin
-						.from("auto_responses")
-						.select("*", { count: "exact", head: true })
+						.from("ticket_messages")
+						.select("id", { count: "exact", head: true })
 						.eq("organization_id", orgId)
-						.eq("sent", true)
-						.gte("sent_at", startOfTodayIso),
+						.eq("kind", "reply")
+						.eq("delivery_status", "sent")
+						.gte("created_at", startOfTodayIso),
 			agentTicketIdsPromise,
 			recentActivityPromise,
 		]);

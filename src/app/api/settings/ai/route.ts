@@ -147,7 +147,6 @@ async function audit(orgId: string, userId: string, action: string, details: Rec
 		organization_id: orgId,
 		action,
 		details,
-		performed_by: userId,
 		actor_user_id: userId,
 		actor_type: "user",
 	});

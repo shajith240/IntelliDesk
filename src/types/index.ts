@@ -84,10 +84,6 @@ export interface Contact {
 	role: string | null;
 	department: string | null;
 	phone: string | null;
-	last_login: string | null;
-	subscribed_modules: string[];
-	is_lead: boolean;
-	lead_status: LeadStatus | null;
 	created_at: string;
 }
 
@@ -108,7 +104,6 @@ export interface Email {
 	processed: boolean;
 	is_spam: boolean;
 	language: string | null;
-	embedding_id: string | null;
 	created_at: string;
 }
 
@@ -119,12 +114,12 @@ export interface Ticket {
 	category: EmailCategory | null;
 	subcategory: string | null;
 	severity: Severity;
+	/** Generated column: ai_classification.confidence (read-only). */
 	ai_confidence: number | null;
 	subject: string;
 	summary: string | null;
 	account_id: string | null;
 	contact_id: string | null;
-	assigned_team: string | null;
 	assigned_team_id: string | null;
 	assigned_agent: string | null;
 	sla_first_response_due: string | null;
@@ -133,10 +128,6 @@ export interface Ticket {
 	sla_resolved_at: string | null;
 	/** A customer wrote back after this ticket was Closed; this ticket continues it. */
 	follow_up_of: string | null;
-	sla_breach: boolean;
-	escalation_count: number;
-	auto_response_sent: boolean;
-	auto_response_type: AutoResponseType | null;
 	is_flagged_for_review: boolean;
 	ai_classification?: Record<string, unknown>;
 	created_at: string;
@@ -163,10 +154,8 @@ export interface FAQ {
 	solution_steps: string[];
 	video_url: string | null;
 	manual_ref: string | null;
-	success_rate: number;
-	avg_resolution_minutes: number | null;
-	times_used: number;
-	embedding_id: string | null;
+	/** Derived: how many AI drafts cited this article (COUNT over auto_response_citations). */
+	times_used?: number;
 	created_at: string;
 }
 
@@ -177,10 +166,8 @@ export interface AutoResponse {
 	response_text: string;
 	match_type: MatchType;
 	match_score: number;
-	cited_faq_ids: string[];
-	cited_ticket_ids: string[];
-	sent: boolean;
-	sent_at: string | null;
+	/** The reply sent from this draft, if any; "sent" is derived from it. */
+	sent_message_id: string | null;
 	created_at: string;
 }
 
@@ -195,7 +182,6 @@ export interface Team {
 	id: string;
 	name: string;
 	description: string | null;
-	category_routing: EmailCategory[];
 }
 
 export interface AuditLog {
@@ -203,7 +189,8 @@ export interface AuditLog {
 	ticket_id: string;
 	action: string;
 	details: Record<string, unknown> | null;
-	performed_by: string;
+	actor_user_id: string | null;
+	actor_type: "system" | "user" | "cron" | "webhook";
 	created_at: string;
 }
 
