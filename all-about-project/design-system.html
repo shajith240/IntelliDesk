@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Design System &amp; Styling — IntelliDesk AI Project Docs</title>
+<title>Design System — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,222 +319,169 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>Design System &amp; Styling</h1>
-    <p class="page-intro">The token architecture, light/dark mode implementation, motion system, and how the UI component library uses class-variance-authority and token utilities to build composable, accessible components.</p>
+    <h1>Design System</h1>
+<p class="page-intro">The visual language: HSL color tokens with a light and a dark theme, how they map to Tailwind v4 utilities, typography, motion and reduced motion, component variants, and the conventions that carry meaning (status, priority, AI output, internal notes, confidence).</p>
 
-    <h2>Design tokens &amp; theming</h2>
+<h2>Tokens &amp; theming</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">How are color tokens structured, and what format are they in?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Every color token is defined as an HSL triplet (hue, saturation, lightness) on the <code>:root</code> pseudo-class for light mode and <code>.dark</code> class for dark mode. This format allows composition with alpha without redefining colors: <code>hsl(var(--primary) / 0.5)</code> yields the primary color at 50% opacity. The tokens include surfaces (background, sunken, raised, overlay), text (foreground, subtle, subtlest, on-bold), borders, fills, brand colors, semantic colors (danger, warning, success, info, discovery, orange), and priority colors (highest through low).</p>
-        <pre><code>:root {
-  color-scheme: light;
-  --background: 0 0% 100%;
-  --foreground: 218 54% 19.6%;
-  --text-subtle: 218 24% 35.1%;
-  --primary: 215 90% 47.1%;
-  --danger: 4 64.1% 48%;
-  --success: 155 64.9% 38%;
-}</code></pre>
-        <span class="source-cite">src/app/globals.css:12-74 (light mode); :76-129 (dark mode)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How are colors defined?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>As CSS custom properties holding bare HSL components (<code>--primary: 215 90% 47.1%</code>) on <code>:root</code> for light mode and on <code>.dark</code> for dark mode. Storing the components rather than a full color lets utilities add opacity (<code>hsl(var(--primary) / 0.5)</code>). Groups: surfaces (background, sunken, raised, overlay), text (foreground, subtle, subtlest), borders, fills, primary, and semantic pairs of base / subtle / text for danger, warning, success, info and discovery, plus priority colors.</p>
+<pre><code>--danger: 4 64.1% 48%;
+--danger-subtle: 3 100% 96.1%;
+--danger-text: 4 65.7% 41.2%;
+--warning: 47 97.4% 44.9%;
+--warning-subtle: 48 100% 92%;
+--warning-text: 26 100% 32.4%;</code></pre>
+    <span class="source-cite">src/app/globals.css:12-74 (light), 76-129 (dark), 44-49</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How do tokens map to Tailwind utilities?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The <code>@theme inline</code> block in globals.css maps every HSL token to a Tailwind color name prefixed with <code>--color-</code>. For example, <code>--color-primary: hsl(var(--primary));</code> makes <code>bg-primary</code>, <code>text-primary</code>, <code>border-primary</code>, etc. available as Tailwind utilities. This single mapping layer means design decisions live only in the token definitions; components never write raw hex or Tailwind palette colors. Non-color tokens (radius, shadows, easing, fonts) are also defined in <code>@theme inline</code>.</p>
-        <pre><code>@theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-primary: hsl(var(--primary));
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --ease-out: cubic-bezier(0.15, 1, 0.3, 1);
-}</code></pre>
-        <span class="source-cite">src/app/globals.css:131-195</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How do tokens become Tailwind classes?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Tailwind v4 is configured in CSS. An <code>@theme inline</code> block maps each variable to a Tailwind theme key (<code>--color-warning-subtle: hsl(var(--warning-subtle))</code>), which generates utilities like <code>bg-warning-subtle</code> and <code>text-warning-text</code>. Radius (<code>sm</code> 3px, <code>md</code> 4px, <code>lg</code> 8px, <code>xl</code> 12px), elevation shadows and font families are mapped the same way. There is no <code>tailwind.config.js</code>.</p>
+    <span class="source-cite">src/app/globals.css:131-195</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How is dark mode implemented?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Dark mode is class-based, not OS-preference-based. The <code>next-themes</code> library sets the <code>.dark</code> class on <code>&lt;html&gt;</code>, and globals.css defines a custom variant <code>@custom-variant dark (&:where(.dark, .dark *))</code> so the <code>dark:</code> prefix in Tailwind utilities follows the class, not <code>prefers-color-scheme: dark</code>. When <code>.dark</code> is present, all token values on the <code>.dark</code> pseudo-class override the <code>:root</code> definitions, re-computing the entire palette for the dark theme in one go.</p>
-        <span class="source-cite">src/app/globals.css:10 (custom variant); :76-129 (.dark token overrides)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How does dark mode work?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><code>next-themes</code> sets a <code>.dark</code> class on <code>&lt;html&gt;</code> (light by default, system preference supported, transitions disabled during the switch to avoid flashes). A custom variant makes Tailwind's <code>dark:</code> follow that class rather than the OS setting, and the <code>.dark</code> block redefines every token, so components don't need per-mode classes. The switch is the theme menu in the top bar.</p>
+<pre><code>@custom-variant dark (&amp;:where(.dark, .dark *));</code></pre>
+    <span class="source-cite">src/app/globals.css:9-10; src/app/providers.tsx:26; src/components/layout/theme-menu.tsx</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What are the actual HSL values for the dark theme's primary color?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>In light mode, <code>--primary: 215 90% 47.1%</code> (a darker blue). In dark mode (inside <code>.dark</code>), <code>--primary: 218 100.0% 65.1%</code> (a much brighter, more saturated blue). The light-mode surfaces are white/off-white; dark-mode surfaces are very dark navy: <code>--background: 220 13.0% 4.5%</code> and <code>--surface-sunken: 210 14.3% 2.7%</code>. The dark theme uses navy-tinted elevation shadows (white borders at low opacity) rather than black shadows.</p>
-        <pre><code>:root {
-  --primary: 215 90% 47.1%;
-  --background: 0 0% 100%;
-}
+<div class="qa-item">
+  <div class="qa-question">What typography is used?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Three families loaded with <code>next/font/google</code> (self-hosted, no layout shift): IBM Plex Sans for the UI, IBM Plex Mono for ticket numbers, codes and timestamps, and Fraunces as the display face. They are exposed as CSS variables and mapped to <code>font-sans</code>, <code>font-mono</code> and <code>font-display</code>.</p>
+    <span class="source-cite">src/app/fonts.ts:7-30; src/app/globals.css:192-194</span>
+  </div>
+</div>
 
-.dark {
-  --primary: 218 100.0% 65.1%;
-  --background: 220 13.0% 4.5%;
-  --elevation-raised: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.6);
-}</code></pre>
-        <span class="source-cite">src/app/globals.css (light mode at 12-74; dark mode at 76-129)</span>
-      </div>
-    </div>
-
-    <h2>Motion &amp; accessibility</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">What is the motion system, and how does it handle reduced motion?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>All animations run for 100–150ms with the global easing function <code>var(--ease-out): cubic-bezier(0.15, 1, 0.3, 1)</code>, a snappy ease-out curve. The library includes named keyframes for common transitions: fade-in/out (opacity), pop-in/out (scale + translate), dialog-in (slide + scale), sheet-in/out-left/right (translate), and toast-in. These are applied via Radix UI component <code>data-state</code> attributes (e.g., <code>.anim-pop[data-state="open"]</code>). Under <code>prefers-reduced-motion: reduce</code>, every animation and transition duration is collapsed to 0.01ms, and iteration count is set to 1, effectively disabling motion entirely. Motion never carries semantic meaning on its own.</p>
-        <pre><code>@keyframes id-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
-.anim-pop[data-state="open"], .anim-pop[data-state="delayed-open"] { animation: id-pop-in 150ms var(--ease-out); }
-
-@media (prefers-reduced-motion: reduce) {
+<div class="qa-item">
+  <div class="qa-question">How are motion and reduced motion handled?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>A small set of named keyframes (<code>id-fade-*</code>, <code>id-pop-*</code>, <code>id-dialog-in</code>, sheet slide-ins, toast, skeleton shimmer, and slow drifting fields for the login hero) is shared by all components. A global <code>prefers-reduced-motion: reduce</code> rule shortens every animation and transition to 0.01 ms, so motion is off everywhere for users who ask for it.</p>
+<pre><code>@media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }</code></pre>
-        <span class="source-cite">src/app/globals.css:240-308</span>
-      </div>
-    </div>
+    <span class="source-cite">src/app/globals.css:240-250, 273-300, 302-309</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What does the focus-visible outline look like?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Every focusable element gets a 2px solid outline in the ring color (<code>hsl(var(--ring))</code>, which is a blue in light mode <code>215 97.4% 55.1%</code> and bright blue in dark mode <code>218 100.0% 71.6%</code>), with a 2px offset. This is set globally in <code>@layer base</code> via <code>:focus-visible</code>, so all native and custom interactive elements inherit it without needing per-component focus styling.</p>
-        <pre><code>:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
-}</code></pre>
-        <span class="source-cite">src/app/globals.css:218-221</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How is focus shown?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>A base <code>:focus-visible</code> outline, placed inside <code>@layer base</code> so component utilities (<code>outline-none</code>, <code>focus-visible:ring-*</code>) can override it. Putting the reset in a layer fixed a bug where the global focus ring showed up on components that had explicitly removed it.</p>
+    <span class="source-cite">src/app/globals.css:201-221</span>
+  </div>
+</div>
 
-    <h2>Component patterns</h2>
+<h2>Components</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">How do components use <code>cva</code> and <code>cn()</code> to build variants?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p><code>cva</code> (class-variance-authority) defines a component's variant matrix (e.g., a Button with variant="primary" and size="lg"). Each variant option maps to a set of Tailwind utilities as a string, and cva merges them on the fly. The resulting class string is then passed to <code>cn()</code>, which uses <code>clsx</code> for conditional joining and <code>tailwind-merge</code> for conflict resolution (e.g., if a variant sets <code>bg-fill</code> and a caller passes <code>bg-primary</code>, the latter wins). This pattern keeps component styling declarative and isolated from markup.</p>
-        <pre><code>const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 ...",
-  {
-    variants: {
-      variant: {
-        primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
-        danger: "bg-danger text-on-bold hover:bg-danger/90",
-      },
-      size: {
-        sm: "h-7 px-2 text-[13px]",
-        lg: "h-10 px-4",
-      },
-    },
-  },
-);
+<div class="qa-item">
+  <div class="qa-question">How are component variants built?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>With <code>class-variance-authority</code>: a component declares its variants and sizes once, and <code>cn()</code> (clsx + tailwind-merge) resolves conflicts when callers add classes. Buttons have <code>default</code>, <code>primary</code>, <code>subtle</code>, <code>danger</code>, <code>discovery</code> and <code>link</code> variants, several sizes, and a <code>loading</code> state.</p>
+<pre><code>variant: {
+	default: "bg-fill text-subtle hover:bg-fill-hover hover:text-foreground active:bg-fill-pressed",
+	primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
+	subtle: "bg-transparent text-subtle hover:bg-fill hover:text-foreground active:bg-fill-hover",
+	danger: "bg-danger text-on-bold hover:bg-danger/90",
+	discovery: "bg-discovery text-on-bold hover:bg-discovery/90",
+	link: "text-primary underline-offset-4 hover:underline",</code></pre>
+    <span class="source-cite">src/components/ui/button.tsx:13-19; src/lib/utils.ts</span>
+  </div>
+</div>
 
-const Button = React.forwardRef(({ variant, size, className, ...props }, ref) => (
-  &lt;button className={cn(buttonVariants({ variant, size, className }))} {...props} /&gt;
-));</code></pre>
-        <span class="source-cite">src/components/ui/button.tsx (entire file)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How are ticket statuses shown?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>As lozenges (small uppercase labels) whose appearance comes from one map: New = default (grey), In Progress = inprogress (blue), Pending = moved (amber: waiting on the customer), Resolved and Closed = success (green). Every status display (lists, header, analytics) uses <code>StatusLozenge</code>, so adding a status meant one entry.</p>
+    <span class="source-cite">src/lib/ticket-meta.ts (STATUS_META); src/components/ui/lozenge.tsx</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What does the <code>cn()</code> utility do?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p><code>cn(...inputs)</code> is a small wrapper combining <code>clsx</code> (for conditional class joining) and <code>tailwind-merge</code> (for resolving Tailwind conflicts). It merges arrays, objects, and template strings while removing duplicates and resolving specificity conflicts, so passing <code>cn("bg-fill", "bg-primary")</code> yields <code>bg-primary</code>. Every component and utility function in the codebase uses <code>cn()</code> to build className props safely.</p>
-        <pre><code>export function cn(...inputs: ClassValue[]): string {
-  return twMerge(clsx(inputs));
-}</code></pre>
-        <span class="source-cite">src/lib/utils.ts (entire file)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How is priority conveyed without relying on color?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Each priority has a distinct icon shape as well as a color: P1 double chevron up (Highest), P2 chevron up (High), P3 equals (Medium), P4 chevron down (Low), with a text label where space allows. Color-blind users can tell them apart by shape.</p>
+    <span class="source-cite">src/components/ui/priority-icon.tsx:2-20; src/lib/ticket-meta.ts (PRIORITY_META)</span>
+  </div>
+</div>
 
-    <h2>Specific components &amp; patterns</h2>
+<div class="qa-item">
+  <div class="qa-question">How is AI output and AI confidence shown?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Anything produced by the model carries the IntelliDesk AI mark (a monogram, not a sparkle icon) with a label: "AI summary"/"AI suggestion", "AI draft", "Sent automatically". Confidence is a five-segment meter filled in proportion to the score, colored by band, with a text summary so it isn't color-only:</p>
+    <table class="data-table">
+      <tr><th>Score</th><th>Band</th><th>Summary</th></tr>
+      <tr><td>≥ 85</td><td>success</td><td>High confidence</td></tr>
+      <tr><td>70–84</td><td>info</td><td>Moderate confidence — spot-check</td></tr>
+      <tr><td>50–69</td><td>warning</td><td>Low confidence — review carefully</td></tr>
+      <tr><td>&lt; 50</td><td>danger</td><td>Very low confidence — verify everything</td></tr>
+    </table>
+    <span class="source-cite">src/components/ui/ai-mark.tsx; src/components/ui/confidence-meter.tsx:16-33</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How does the SLA badge display time remaining or breach state?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The <code>SlaBadge</code> component accepts a due timestamp and an optional completion timestamp, and reads the SLA state (met, breached, warning, or no policy). If met, it shows a green checkmark and "Met". If breached (past due), it shows a red alert icon and the overdue duration in negative notation (e.g., <code>-3h</code>). If at risk, it shows a yellow clock and time remaining (e.g., <code>45m</code>). The badge is fixed-width (68px), never wraps, and uses a tabular font for alignment. The icon and text are paired; color is never used alone to convey state.</p>
-        <pre><code>export function SlaBadge({ due, completedAt, now, target, className }: SlaBadgeProps) {
-  const reading = readSla(due, completedAt, now);
-  const base = "inline-flex h-5 w-[68px] shrink-0 items-center gap-1 rounded-sm px-1.5 font-mono text-[11px] font-medium leading-none tabular whitespace-nowrap";
+<div class="qa-item">
+  <div class="qa-question">How do internal notes and delivery states look different from customer-facing messages?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Internal notes use the warning palette (amber background and border), a lock icon and an "Internal note" lozenge, and the composer turns amber in note mode with "Only your team sees notes" — so nobody confuses a note with a reply. Replies show "Sending…" (inprogress) or "Not delivered" (removed/danger, with the error text).</p>
+    <span class="source-cite">src/features/ticket-workspace/components/conversation-column.tsx; reply-composer.tsx</span>
+  </div>
+</div>
 
-  if (reading.tone === "met") {
-    return &lt;span className={cn(base, "text-success-text", className)} title={full}&gt;
-      &lt;Check className="h-3 w-3" /&gt;
-      &lt;span&gt;Met&lt;/span&gt;
-    &lt;/span&gt;;
-  }
-}</code></pre>
-        <span class="source-cite">src/components/ui/sla-badge.tsx (entire file)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How is the SLA state shown?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><code>SlaBadge</code> shows time remaining or how long ago the target was breached, colored by state (on track, at risk, breached) with an icon and a full-date tooltip; the ticket sidebar shows first-response and resolution targets separately.</p>
+    <span class="source-cite">src/components/ui/sla-badge.tsx; src/features/ticket-workspace/components/ticket-sidebar.tsx</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How does the confidence meter represent AI output quality?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The <code>ConfidenceMeter</code> displays a 5-segment proportional bar filled in proportion to a 0–100% confidence score. Each of the 5 segments fills 20% of the bar. A 90% score fills 4.5 segments. The meter is colored by band: green ≥85% (high confidence), blue ≥70% (moderate, spot-check), amber ≥50% (low, review recommended), red below (very low, review required). The <code>confidenceBand(value)</code> function returns both the fill color and a text label, so the meter and any accompanying text never disagree. The component is accessible via ARIA attributes (<code>role="meter"</code>, <code>aria-valuenow</code>, etc.).</p>
-        <pre><code>export function confidenceBand(value: number) {
-  if (value >= 85) return { fill: "bg-success", text: "text-success-text", label: "high", summary: "High confidence" };
-  if (value >= 70) return { fill: "bg-info", text: "text-info-text", label: "moderate", summary: "Moderate confidence — spot-check" };
-  if (value >= 50) return { fill: "bg-warning", text: "text-warning-text", label: "low, review recommended", ... };
-  return { fill: "bg-danger", text: "text-danger-text", label: "very low, review required", ... };
-}</code></pre>
-        <span class="source-cite">src/components/ui/confidence-meter.tsx:16-33</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How are loading, empty and error states handled?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Every data view has all three: skeletons shaped like the final content (shimmer animation), an <code>EmptyState</code> with an icon, title and description ("Nothing in spam"), and an <code>ErrorState</code> with a retry button. Inline problems use <code>SectionMessage</code> (information, warning, error, success, discovery).</p>
+    <span class="source-cite">src/components/ui/skeleton.tsx; empty-state.tsx; error-state.tsx; section-message.tsx</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What semantic colors exist, and what do they mean?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Each semantic color has a bold utility (e.g., <code>bg-danger</code>), a subtle background (e.g., <code>bg-danger-subtle text-danger-text</code>), and a text variant. <code>danger</code> (red) is for SLA breaches and destructive actions. <code>warning</code> (orange/amber) is for SLA at-risk and attention-needed states. <code>success</code> (green) is for resolved tickets and SLA met. <code>info</code> (blue) is for in-progress and informational states. <code>discovery</code> (purple) is reserved for anything suggested by AI, always paired with an explicit "Suggested by AI" or "AI draft" text label. <code>orange</code> is used for P2 (high) priority. Every color is also defined with Jira status equivalents: "New" is grey (no semantic), "In Progress" is blue (info-subtle), "Resolved/Closed" is green (success-subtle).</p>
-        <span class="source-cite">docs/colors-reference.md (entire file); src/app/globals.css:44-67 (light) and 103-124 (dark)</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How is priority conveyed without relying on color alone?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Priority is never shown by color alone. P1 (Highest, red) uses a double chevron up icon. P2 (High, orange) uses a single chevron up. P3 (Medium, golden) uses an equals sign. P4 (Low, blue) uses a chevron down. The <code>PriorityIcon</code> component pairs each icon shape with the corresponding <code>text-priority-*</code> color utility, so users and screen readers both perceive the priority. This multi-modal approach satisfies color-blind accessibility and WCAG AA contrast requirements.</p>
-        <span class="source-cite">docs/colors-reference.md: "Priority is never shown by color alone. `PriorityIcon` pairs each color with a distinct shape."</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">What are the radius and elevation token values?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Radius tokens are 3px (lozenges like status badges), 4px (controls like buttons and inputs), 8px (panels and cards), and 12px (dialogs). Elevation is provided by two shadow presets: <code>shadow-raised</code> for sticky headers and cards, and <code>shadow-overlay</code> for menus and dialogs. In light mode, shadows are navy-tinted. In dark mode, they use white borders at low opacity (e.g., <code>1px rgba(255, 255, 255, 0.04)</code>) for a softer, less heavy appearance. The global <code>@layer base</code> applies <code>box-sizing: border-box</code> to all elements.</p>
-        <pre><code>--radius-sm: 3px;
---radius-md: 4px;
---radius-lg: 8px;
---radius-xl: 12px;
-
---elevation-raised: 0 1px 1px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
---elevation-overlay: 0 8px 12px rgba(9, 30, 66, 0.15), 0 0 1px rgba(9, 30, 66, 0.31);</code></pre>
-        <span class="source-cite">src/app/globals.css:179-188 (light mode); 126-127 (dark mode)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How does the ticket workspace adapt to screen size?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>From the <code>md</code> breakpoint it's a two-column grid: conversation and docked composer on the left, a 320 px (360 px on <code>xl</code>) details sidebar on the right. Below that, the same content becomes two tabs, Conversation and Details. Ticket lists use container queries instead, so they drop columns based on their own width.</p>
+    <span class="source-cite">src/features/ticket-workspace/components/workspace-view.tsx; src/features/queue/lib/grid.ts</span>
+  </div>
+</div>
 
   </main>
 </div>

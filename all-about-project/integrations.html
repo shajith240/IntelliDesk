@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>External Services &amp; Integrations — IntelliDesk AI Project Docs</title>
+<title>External Services — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,226 +319,158 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>External Services &amp; Integrations</h1>
-    <p class="page-intro">The four external services that power this application: Supabase for data persistence, Pinecone for semantic search, Google Gemini for AI classification and embeddings, and IMAP/SMTP for email ingestion and sending. Each is accessed via a server-only client initialized as a singleton.</p>
+    <h1>External Services</h1>
+<p class="page-intro">Every third-party system the app talks to, what it's used for, which module owns the integration, how credentials are handled, and what happens when it fails. All integrations live under <code>src/server/</code> and never run in the browser.</p>
 
-    <h2>Supabase (PostgreSQL database)</h2>
+<h2>Overview</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">How is Supabase used in this application?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Supabase provides the PostgreSQL database and storage for all persistent data: organizations, users, tickets, emails, SLA policies, knowledge-base articles, and audit logs. The app uses the Supabase service-role client (not the anon key) from all route handlers, which bypasses row-level security policies and requires explicit organization filtering in every query.</p>
-        <p>Row-level security (RLS) policies in the database prevent unauthorized access at the SQL layer as a defense-in-depth measure. Mailbox credentials (IMAP/SMTP) are also stored in Supabase under <code>email_config</code>, encrypted at rest and fetched per-organization when the cron job runs.</p>
-        <span class="source-cite">README.md "Database" section; src/server/db/supabase.ts</span>
-      </div>
+<div class="qa-item">
+  <div class="qa-question">Which external services does IntelliDesk use?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Service</th><th>Used for</th><th>Owning module</th><th>Credential</th></tr>
+      <tr><td>Supabase Postgres</td><td>System of record: 20 tables, functions, triggers</td><td><code>src/server/db/supabase.ts</code></td><td><code>SUPABASE_SERVICE_ROLE_KEY</code> (server only)</td></tr>
+      <tr><td>Pinecone</td><td>Vectors for dedup, knowledge-base retrieval, semantic search</td><td><code>src/server/db/pinecone.ts</code></td><td><code>PINECONE_API_KEY</code>, index/host</td></tr>
+      <tr><td>Google Gemini</td><td>Classification, reply drafting (<code>gemini-2.5-flash</code>), embeddings (<code>gemini-embedding-001</code>)</td><td><code>src/server/gemini/*</code></td><td>Workspace key (encrypted in DB) or platform <code>GEMINI_API_KEY</code></td></tr>
+      <tr><td>Company mailbox (Gmail or any IMAP/SMTP)</td><td>Reading customer email, sending replies</td><td><code>src/server/email/*</code></td><td>App password, AES-256-GCM encrypted per workspace</td></tr>
+      <tr><td>GitHub Actions</td><td>10-minute schedule calling the intake endpoint</td><td><code>.github/workflows/poll-mailboxes.yml</code></td><td>Repository secrets <code>APP_URL</code>, <code>CRON_SECRET</code></td></tr>
+      <tr><td>Vercel</td><td>Hosting, daily cron fallback</td><td><code>vercel.json</code></td><td>Environment variables</td></tr>
+    </table>
+    <span class="source-cite">src/server/gemini/generate.ts:5; src/server/gemini/embeddings.ts:24; .github/workflows/poll-mailboxes.yml</span>
+  </div>
+</div>
+
+<h2>Supabase &amp; Pinecone</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How does the app connect to Supabase, and why only with the service role?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>A single lazily created client with the service-role key, exposed through a proxy so importing the module has no side effects. The service role bypasses RLS, which is fine because it exists only on the server and every query filters by organization. Browser roles (<code>anon</code>, <code>authenticated</code>) have no privileges at all since migration 006, so the public anon key can't read anything.</p>
+    <span class="source-cite">src/server/db/supabase.ts:1-20; supabase/migrations/006_lockdown_public_api.sql:55-63</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How is Pinecone organized?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>One index, with a namespace per organization and purpose: <code>{orgId}_emails</code> (duplicate detection), <code>{orgId}_tickets</code> (similar tickets, search), <code>{orgId}_faqs</code> (knowledge-base retrieval). Vector ids are the Postgres row ids, which is why no <code>embedding_id</code> column is needed. Every upsert and query checks the vector dimension against <code>PINECONE_EMBEDDING_DIMENSIONS</code> (default 768), and <code>deleteVectors</code> removes an article's vector when the article is deleted.</p>
+    <span class="source-cite">src/server/auth/org-context.ts:20-22; src/server/db/pinecone.ts:11-12, 28-30</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why truncate Gemini embeddings to 768 dimensions?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p><code>gemini-embedding-001</code> returns 3072 dimensions, and the installed SDK doesn't expose the output-dimensionality option. The model is trained with Matryoshka representation learning, so the leading dimensions carry most of the meaning: the code takes the first <em>N</em> values and re-normalizes to unit length so cosine similarity stays valid, matching whatever dimension the Pinecone index was created with.</p>
+    <span class="source-cite">src/server/gemini/embeddings.ts:1-20</span>
+  </div>
+</div>
+
+<h2>Gemini</h2>
+
+<div class="qa-item">
+  <div class="qa-question">Which key does an AI call use?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p><code>getAiContext(orgId)</code> decrypts the workspace's own key from <code>ai_credentials</code> if one is saved; otherwise it uses the platform <code>GEMINI_API_KEY</code>; with neither it throws <code>AiNotConfiguredError</code> and the email waits in the queue. The context carries its <code>source</code> so a failing workspace key can be flagged in Settings.</p>
+    <span class="source-cite">src/server/gemini/client.ts (getAiContext, recordAiKeyFailure)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How are Gemini failures handled?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Every call goes through <code>withRetry</code>: transient errors (429, 5xx, network) retry after ~1 s and ~4 s with ±25% jitter; permanent ones (bad key, forbidden model) fail immediately. Failures surface as <code>AiCallError</code> with a <code>transient</code> flag. User-facing routes translate them with <code>aiErrorResponse</code> (503 "AI isn't set up" / "busy", 502 for a bad key); the pipeline lets them propagate so the email is retried later.</p>
+    <span class="source-cite">src/server/gemini/client.ts:24-31, 56, 71-80 (RETRY_DELAYS_MS, toAiCallError, aiErrorResponse)</span>
+    <p>Prompting and safety details: <a href="ai-safety.html">AI Design &amp; Safety</a>.</p>
+  </div>
+</div>
+
+<h2>Email (IMAP / SMTP)</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How is a mailbox connected?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Gmail uses fixed settings (IMAP <code>imap.gmail.com:993</code>, SMTP <code>smtp.gmail.com:587</code>) and a 16-letter app password; any other provider supplies hosts with IMAP on 993 and SMTP on 465 or 587. Before saving, custom hosts must resolve to public IP addresses (SSRF guard), and the server performs a real IMAP login and SMTP handshake. Only then is the password encrypted and stored in <code>mailbox_connections</code> (one per workspace). The secret is never returned by the API.</p>
+    <span class="source-cite">src/server/email/mailbox.ts (GMAIL_SETTINGS, assertPublicMailHost, verifyMailboxCredentials); src/app/api/settings/email-config/route.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What transport security is enforced?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>IMAP always uses implicit TLS on 993 with certificate verification. SMTP uses implicit TLS on 465 and <em>requires</em> STARTTLS on any other port (<code>requireTLS</code>), with certificate verification and TLS 1.2 minimum, so credentials are never sent in clear text. Connection, greeting and socket timeouts keep a dead server from hanging a serverless function.</p>
+    <span class="source-cite">src/server/email/smtp.ts:13-26; src/server/email/mailbox.ts:185-190</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What does fetching and sending look like?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p><strong>Fetching:</strong> unseen INBOX messages from the last two days are collected first, then each is parsed with mailparser, handed to the store callback, and only then flagged <code>\Seen</code> (unparseable messages are marked seen so they don't block the queue).</p>
+    <p><strong>Sending:</strong> every outgoing email gets our own Message-ID on the mailbox's domain plus <code>In-Reply-To</code>/<code>References</code> of the conversation, a header-safe subject (no CR/LF), and a From display name set to the organization name. Automatic AI replies also carry <code>Auto-Submitted: auto-replied</code> and <code>X-Auto-Response-Suppress: All</code> so other systems don't answer them.</p>
+    <span class="source-cite">src/server/email/imap.ts:47-101; src/server/email/smtp.ts (sendEmail, newMessageId, headerSafe)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How are mailbox problems surfaced?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Each poll or send records its outcome with <code>recordMailboxSync</code>: success sets <code>status = active</code> and <code>last_synced_at</code>; failure sets <code>status = error</code> and a human-readable <code>last_error</code> from <code>describeMailboxError</code> (e.g. "use a 16-character app password"). The Settings card shows "Needs attention" with that message and a Reconnect button.</p>
+    <span class="source-cite">src/server/email/mailbox.ts (recordMailboxSync, describeMailboxError); src/features/settings/components/mailbox-form.tsx</span>
+  </div>
+</div>
+
+<h2>Scheduling &amp; hosting</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How does the GitHub Actions schedule work?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+<pre><code>on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: poll-mailboxes
+  cancel-in-progress: false</code></pre>
+    <span class="source-cite">.github/workflows/poll-mailboxes.yml:9-19</span>
+    <p>The job has no repository permissions, never runs twice at once, and skips with a warning if <code>APP_URL</code> or <code>CRON_SECRET</code> isn't configured. It fails the workflow run if the endpoint doesn't return 200, which makes intake problems visible in GitHub.</p>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What vendor limits matter for this project?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <div class="callout warning"><strong>Vendor facts (not verified in code)</strong>
+      <ul>
+        <li>Vercel Hobby: cron at most daily (hence GitHub Actions); commercial use not permitted — a paid customer needs Vercel Pro.</li>
+        <li>Supabase free: 500 MB database; projects pause after about a week without activity (the 10-minute poll keeps it active); no automatic backups.</li>
+        <li>Pinecone Starter: a limited number of vectors on the free plan; enough for a small team.</li>
+        <li>Gemini free tier: rate-limited, and Google may use free-tier data to improve its models — the Settings page tells admins to use a paid key for customer data.</li>
+        <li>GitHub Actions schedules can run a few minutes late under load.</li>
+      </ul>
     </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How is the Supabase service-role client initialized?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The Supabase client is initialized as a lazy singleton using a Proxy pattern in <code>src/server/db/supabase.ts</code>:</p>
-        <pre><code>import "server-only";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-
-let _supabaseAdmin: SupabaseClient | null = null;
-
-function getSupabaseAdmin(): SupabaseClient {
-  if (!_supabaseAdmin) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    _supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-  }
-  return _supabaseAdmin;
-}
-
-export const supabaseAdmin = new Proxy({} as SupabaseClient, {
-  get(_target, prop) {
-    const client = getSupabaseAdmin();
-    const value = (client as unknown as Record<string | symbol, unknown>)[prop];
-    if (typeof value === "function") {
-      return value.bind(client);
-    }
-    return value;
-  },
-});</code></pre>
-        <p>The Proxy intercepts property access and returns the singleton client. This pattern ensures the client is initialized on first use and reused thereafter, reducing connection overhead in serverless functions. Every function call is bound to the client instance.</p>
-        <span class="source-cite">src/server/db/supabase.ts lines 1-25; package @supabase/supabase-js ^2.108.2</span>
-      </div>
-    </div>
-
-    <h2>Pinecone (vector search)</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">What is Pinecone used for, and how is it configured?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Pinecone stores vector embeddings of every ticket and knowledge-base article, indexed by organization namespace. During the email pipeline, each new ticket's embedding (generated by Gemini) is upserted to Pinecone. When drafting a reply, the pipeline queries Pinecone for the top 5 most similar knowledge-base articles and uses them to prompt Gemini for a reply draft.</p>
-        <p>Configuration is split between environment variables:</p>
-        <ul>
-          <li><code>PINECONE_API_KEY</code> — API authentication</li>
-          <li><code>PINECONE_INDEX</code> — Index name (default "intellidesk")</li>
-          <li><code>PINECONE_HOST</code> — Optional direct index host for performance (Pinecone provides this in the console)</li>
-          <li><code>PINECONE_EMBEDDING_DIMENSIONS</code> — Must match both the index creation dimension and Gemini's embedding model output (currently 3072 for gemini-embedding-001)</li>
-        </ul>
-        <span class="source-cite">src/server/db/pinecone.ts; README.md lines 82-85</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How does Pinecone enforce embedding dimension correctness?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Before upserting or querying, the Pinecone client validates vector dimensions against <code>EMBEDDING_DIMENSIONS</code>. This prevents silent mismatches between the index and incoming vectors:</p>
-        <pre><code>export const EMBEDDING_DIMENSIONS = Number(
-  process.env.PINECONE_EMBEDDING_DIMENSIONS || 768,
-);
-
-export async function upsertVectors(
-  namespace: string,
-  vectors: {
-    id: string;
-    values: number[];
-    metadata: RecordMetadata;
-  }[],
-) {
-  // Validate vector dimensions before upserting
-  for (const v of vectors) {
-    if (v.values.length !== EMBEDDING_DIMENSIONS) {
-      throw new Error(
-        `Vector dimension mismatch: expected ${EMBEDDING_DIMENSIONS}, got ${v.values.length}. ` +
-        `Ensure you are using gemini-embedding-001 which produces ${EMBEDDING_DIMENSIONS}-dimensional vectors.`
-      );
-    }
-  }
-  // ... upsert proceeds
-}</code></pre>
-        <p>If a vector dimension is incorrect (e.g., a different embedding model produces 1024 dimensions instead of 3072), the error is thrown immediately with a helpful message before any data is written. Query vectors are similarly validated.</p>
-        <span class="source-cite">src/server/db/pinecone.ts lines 11-55; package @pinecone-database/pinecone ^7.1.0</span>
-      </div>
-    </div>
-
-    <h2>Google Gemini (AI classification and embeddings)</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">What does Gemini do in this application, and how is it used?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Gemini is used for three tasks:</p>
-        <ul>
-          <li><strong>Message classification</strong> — Every incoming email is sent to Gemini with a structured prompt to classify its category (Technical Support, Billing/Invoice, etc.), priority (P1-P4), sentiment, and confidence score. The response is stored on the ticket.</li>
-          <li><strong>Embeddings</strong> — Each ticket and FAQ article is embedded via Gemini's embedding model (<code>gemini-embedding-001</code>) to produce a 3072-dimensional vector, which is stored in Pinecone for semantic search.</li>
-          <li><strong>Reply drafting</strong> — When an agent opens a ticket, the pipeline queries Pinecone for the top knowledge-base articles, sends them to Gemini with the ticket context, and generates a draft response. The agent reviews and confirms before sending.</li>
-        </ul>
-        <span class="source-cite">README.md lines 28-29, 45; src/server/gemini/client.ts</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How is the Gemini client initialized?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The Gemini client uses a similar lazy-singleton pattern to Supabase:</p>
-        <pre><code>import "server-only";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-let genAI: GoogleGenerativeAI | null = null;
-
-export function getGenAI(): GoogleGenerativeAI {
-  if (!genAI) {
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  }
-  return genAI;
-}
-
-export function getModel(modelName: string = "gemini-2.5-flash") {
-  return getGenAI().getGenerativeModel({ model: modelName });
-}</code></pre>
-        <p>The <code>getModel()</code> helper abstracts model selection, defaulting to <code>gemini-2.5-flash</code> but allowing override. This avoids instantiating the client multiple times across different route handlers.</p>
-        <span class="source-cite">src/server/gemini/client.ts; package @google/generative-ai ^0.24.1</span>
-      </div>
-    </div>
-
-    <h2>Email (IMAP and SMTP)</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the application ingest emails via IMAP?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The <code>pollNewEmails()</code> function in <code>src/server/email/imap.ts</code> runs on every cron job invocation:</p>
-        <ul>
-          <li>Fetches the organization's IMAP configuration from Supabase (<code>email_config</code> table).</li>
-          <li>Connects to the mailbox via the <code>imapflow</code> library (pure IMAP, no OAuth relay).</li>
-          <li>Queries unseen emails from the last 2 days (to avoid bulk-importing old inbox history on first run).</li>
-          <li>For each message, uses <code>mailparser</code>'s <code>simpleParser()</code> to extract headers, body (text + HTML), from/to/subject, references, and message ID.</li>
-          <li>Marks the email as seen in the mailbox (best-effort; failures are logged and don't block).</li>
-          <li>Returns a <code>RawEmail</code> object for pipeline processing.</li>
-        </ul>
-        <p>The <code>processedUIDs</code> in-memory set tracks emails that were parsed successfully to avoid re-processing if the mailbox's seen flag doesn't persist (edge case on slow connections).</p>
-        <span class="source-cite">src/server/email/imap.ts lines 57-141; packages imapflow (pure IMAP) + mailparser</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the application send replies via SMTP?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The <code>sendEmail()</code> function in <code>src/server/email/smtp.ts</code> uses nodemailer to send email replies:</p>
-        <pre><code>export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
-  const transporter = getTransporter(options.smtpConfig);
-  if (!transporter) {
-    console.warn("SMTP credentials not configured, skipping send");
-    return false;
-  }
-
-  const user = options.smtpConfig!.user;
-
-  try {
-    await transporter.sendMail({
-      from: `"IntelliDesk AI Support" <${user}>`,
-      to: options.to,
-      subject: options.subject,
-      text: options.text,
-      html: options.html,
-      inReplyTo: options.inReplyTo,
-      references: options.references?.join(" "),
-    });
-    return true;
-  } catch (err) {
-    console.error("SMTP send error:", err);
-    return false;
-  }
-}</code></pre>
-        <p>The function returns <code>true</code> on success or <code>false</code> if credentials are missing. SMTP configuration (host, port, username, password) comes from the organization's <code>email_config</code> row in Supabase, not from environment variables. The <code>inReplyTo</code> and <code>references</code> headers preserve the email thread.</p>
-        <span class="source-cite">src/server/email/smtp.ts lines 33-57; package nodemailer</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">What email parsing utilities exist for cleaning and extracting data?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The <code>src/server/email/parser.ts</code> module provides several utilities for processing email content:</p>
-        <ul>
-          <li><strong><code>stripHtml()</code></strong> — Removes HTML tags and entities, leaving plain text for embedding and classification.</li>
-          <li><strong><code>cleanEmailBody()</code></strong> — Removes quoted replies and forward markers (lines starting with "&gt;" or "On ... wrote:") to isolate the new message content.</li>
-          <li><strong><code>extractSignature()</code></strong> — Extracts the sender's name, role, company, email, and phone from the signature block using regex patterns.</li>
-          <li><strong><code>isLikelySpam()</code></strong> — Scores the email against keywords and sender patterns (marketing, automated, newsletters) and returns true if spam confidence is high. This avoids creating tickets for unwanted emails.</li>
-          <li><strong><code>normalizeSubject()</code></strong> — Removes "Re:", "Fwd:", and bracketed tags from the subject to identify threads correctly.</li>
-          <li><strong><code>detectLanguage()</code></strong> — Detects if the email body contains Hindi (Devanagari) characters, returning "hindi", "mixed", or "english".</li>
-          <li><strong><code>extractTicketReferences()</code></strong> — Finds ticket numbers in the email body using patterns like "#12345", "Ticket-123", or "TKT-00001".</li>
-        </ul>
-        <span class="source-cite">src/server/email/parser.ts</span>
-      </div>
-    </div>
+    <span class="source-cite">src/features/settings/components/ai-settings.tsx (paid-tier advice); README.md (Deploying to Vercel)</span>
+  </div>
+</div>
 
   </main>
 </div>

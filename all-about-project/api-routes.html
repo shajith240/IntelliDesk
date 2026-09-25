@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,16 +319,16 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
@@ -326,132 +336,204 @@
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
     <h1>API &amp; Backend Routes</h1>
-    <p class="page-intro">The 20 API endpoint handlers, focusing on the most complex: ticket CRUD, dashboard aggregation, email polling and processing, response sending, and FAQ management. All protected routes enforce authentication and organization-scoped filtering; webhook routes use bearer tokens. Three routes are dev-only and blocked in production.</p>
+<p class="page-intro">All 24 route handlers under <code>src/app/api/</code>: who may call each one, what it accepts, what it returns, which status codes mean what, and what side effects (audit rows, database functions, emails) it has. The permission model behind the "Auth" column is explained in <a href="roles-permissions.html">Roles &amp; Permissions</a>.</p>
 
-    <h2>Ticket Management</h2>
+<h2>Route map</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">What does GET /api/tickets return and how does filtering work?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Returns a paginated list of tickets for the authenticated user's organization. Supports filtering by status (New, In Progress, Resolved, Closed), severity (P1–P4), category, and search (in subject/ticket_number/summary). Pagination defaults to page 1, limit 20, max 100. Sorting is by created_at (default), updated_at, severity, status, or ticket_number. The response includes related contact and account objects via Supabase select joins.</p>
-        <p>SLA due dates are computed at read time if missing, by fetching sla_policies once and calculating <code>created_at + policy_minutes</code> for each ticket.</p>
-        <pre><code>{
-  "tickets": [...],
-  "total": 42,
-  "page": 1,
-  "limit": 20,
-  "total_pages": 3
-}</code></pre>
-        <span class="source-cite">src/app/api/tickets/route.ts:15-179 (GET handler with filtering, pagination, SLA fill-in)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What are all the API routes?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Method(s)</th><th>Path (/api/…)</th><th>Auth</th><th>Purpose</th></tr>
+      <tr><td>—</td><td>auth/[...nextauth]</td><td>public</td><td>NextAuth sign-in / session endpoints</td></tr>
+      <tr><td>POST</td><td>auth/signup</td><td>public, off by default</td><td>Create workspace + first admin; 403 unless <code>NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP=true</code></td></tr>
+      <tr><td>GET, PATCH</td><td>me</td><td>session</td><td>Own profile; toggle <code>is_available</code> (admin/agent)</td></tr>
+      <tr><td>POST</td><td>me/password</td><td>session</td><td>Change own password</td></tr>
+      <tr><td>GET</td><td>dashboard</td><td>session (agent-scoped)</td><td>Command Center metrics</td></tr>
+      <tr><td>GET</td><td>tickets</td><td>session (agent-scoped)</td><td>Filtered, paginated list; <code>?view=review</code> = Needs Review</td></tr>
+      <tr><td>GET, PATCH</td><td>tickets/[id]</td><td>session; PATCH = assigned agent or admin</td><td>Detail with conversation; status/priority/category/team</td></tr>
+      <tr><td>POST</td><td>tickets/[id]/messages</td><td>assigned agent or admin</td><td>Reply (emailed) or internal note</td></tr>
+      <tr><td>POST</td><td>tickets/[id]/assign</td><td>admin</td><td>Assign/unassign via <code>assign_ticket()</code></td></tr>
+      <tr><td>GET, POST</td><td>team</td><td>session; POST admin</td><td>Members; add member with one-time password</td></tr>
+      <tr><td>PATCH</td><td>team/[id]</td><td>admin</td><td>Name / role / active</td></tr>
+      <tr><td>GET</td><td>team/workload</td><td>admin</td><td>Assignee candidates ranked by availability and load</td></tr>
+      <tr><td>GET</td><td>customers</td><td>session</td><td>Accounts/contacts lookup</td></tr>
+      <tr><td>GET, POST</td><td>faqs</td><td>session; POST admin</td><td>Knowledge base list (with derived <code>times_used</code>) / create</td></tr>
+      <tr><td>PUT, DELETE</td><td>faqs/[id]</td><td>admin</td><td>Update (re-embeds) / delete (and delete vector)</td></tr>
+      <tr><td>GET</td><td>search</td><td>session (agent-scoped)</td><td>Semantic search over tickets, emails, FAQs</td></tr>
+      <tr><td>GET, POST, DELETE</td><td>settings/email-config</td><td>GET admin/viewer; writes admin</td><td>Mailbox status / connect (verified, encrypted) / disconnect</td></tr>
+      <tr><td>GET, PATCH, POST, DELETE</td><td>settings/ai</td><td>GET admin/viewer; writes admin</td><td>AI status; auto-send toggle; save / remove workspace Gemini key</td></tr>
+      <tr><td>GET</td><td>emails/spam</td><td>admin</td><td>Spam caught in the last 30 days</td></tr>
+      <tr><td>POST</td><td>emails/[id]/not-spam</td><td>admin</td><td>Return a false positive to the intake queue</td></tr>
+      <tr><td>POST</td><td>emails/bulk</td><td>admin</td><td>Bulk import through the pipeline</td></tr>
+      <tr><td>POST</td><td>emails/ingest</td><td>bearer <code>EMAIL_INGEST_SECRET</code></td><td>Webhook intake for one email</td></tr>
+      <tr><td>GET, POST</td><td>emails/poll</td><td>bearer <code>CRON_SECRET</code></td><td>Read every mailbox, then drain the queue</td></tr>
+      <tr><td>GET, POST</td><td>emails/process-queue</td><td>bearer <code>CRON_SECRET</code></td><td>Drain the queue only</td></tr>
+    </table>
+    <span class="source-cite">find src/app/api -name route.ts (24 files); PLAN.txt route list</span>
+    <div class="callout missing"><strong>Removed routes</strong> <code>/api/respond</code> was replaced by <code>/api/tickets/[id]/messages</code>. <code>/api/seed</code>, <code>/api/seed/test-emails</code>, <code>/api/cleanup</code> and <code>/api/migrate</code> were unauthenticated development routes that could modify or wipe data; they were deleted (commit 041ab64), and schema changes now go only through <code>supabase/migrations/</code>.</div>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What validation does PATCH /api/tickets/[id] perform on updates?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Only these fields are allowed to be updated: status, severity, category, assigned_team, assigned_agent, sla_first_response_at, sla_resolved_at. Status is validated against the enum [New, In Progress, Resolved, Closed]; severity against [P1, P2, P3, P4]. If assigned_agent is set to a non-null user ID, a lookup query checks that the user exists in the same organization, is active, and has is_active=true. If null (unassigning), no lookup is required. Changing status to Resolved or Closed auto-sets sla_resolved_at to now. All updates are org-scoped; a ticket from org A cannot be updated if you belong to org B.</p>
-        <span class="source-cite">src/app/api/tickets/[id]/route.ts:87-160 (PATCH handler, whitelist, validation, assignee active-membership check)</span>
-      </div>
-    </div>
+<h2>Shared conventions</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">What data does GET /api/tickets/[id] return?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Returns a single ticket with full relations: contact details (name, email, role, phone), account tier and company, ticket-email associations and full email bodies, and auto-responses. Also computes and returns SLA status (whether first-response and resolution deadlines have been met, and if either is overdue) and finds up to 5 related tickets by category for the user to reference.</p>
-        <pre><code>{
-  "ticket": { id, subject, severity, status, ... },
-  "sla": { first_response_ok, resolution_ok, ... },
-  "similar_tickets": [...]
-}</code></pre>
-        <span class="source-cite">src/app/api/tickets/[id]/route.ts:8-71 (GET handler with full joins and SLA computation)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What does every session-authenticated route do first?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <ol>
+      <li><code>requireAuth()</code> returns the session or a 401 response.</li>
+      <li><code>getOrgId(session)</code> gives the caller's organization; every query filters by it.</li>
+      <li>A <code>can.*</code> check from the policy module; failures return <code>forbidden()</code> (403) or <code>notFound()</code> (404).</li>
+      <li>Path ids are validated against a UUID regex before touching the database (a malformed id is a 404, not a database error).</li>
+      <li>Bodies are parsed defensively (<code>400 "Request body must be JSON"</code>) and validated, mostly with zod <code>.strict()</code> schemas that reject unknown fields.</li>
+    </ol>
+    <span class="source-cite">src/server/auth/helpers.ts:12; src/server/auth/org-context.ts:8; src/server/auth/policy.ts:20-39</span>
+  </div>
+</div>
 
-    <h2>Dashboard &amp; Aggregation</h2>
+<div class="qa-item">
+  <div class="qa-question">What do the status codes mean across the API?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Code</th><th>Meaning in this API</th></tr>
+      <tr><td>400</td><td>Invalid input, including a status change the workflow doesn't allow ("A Closed ticket can't be set to In Progress") and a mailbox/AI key the provider rejected</td></tr>
+      <tr><td>401</td><td>No session</td></tr>
+      <tr><td>403</td><td>Authenticated but not allowed (e.g. a viewer writing, an agent assigning)</td></tr>
+      <tr><td>404</td><td>Doesn't exist <em>or</em> an agent asking for a ticket not assigned to them (same answer on purpose)</td></tr>
+      <tr><td>409</td><td>State conflict: no mailbox connected, replying to a Closed ticket, no customer address, duplicate member email</td></tr>
+      <tr><td>502</td><td>An upstream refused: SMTP rejected the message, or the Gemini key is invalid</td></tr>
+      <tr><td>503</td><td>Not configured: cron/ingest secret unset (fails closed), encryption key missing, AI not set up, AI temporarily busy</td></tr>
+    </table>
+    <span class="source-cite">src/app/api/tickets/[id]/route.ts:60; src/server/tickets/replies.ts (ReplyError); src/server/gemini/client.ts (aiErrorResponse); src/server/auth/cron.ts</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How is the dashboard query structured to avoid N+1 problems?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>GET /api/dashboard kicks off the slowest queries (SLA metrics and audit-log activity) immediately as promises, rather than awaiting them sequentially. It then runs 11 independent count/fetch queries in a single <code>Promise.all()</code>, so they execute in parallel. After those complete, the SLA promise and metrics promise (which depends on SLA) are awaited. For the activity feed, after the activity rows are fetched, a single batched query retrieves all referenced ticket numbers and subjects at once using <code>.in("id", ticketIds)</code>, not a loop. The response includes ticket counts (total, open, resolved today, awaiting review), breakdowns by category/severity/status, average AI confidence, SLA metrics, SLA alerts with customer names, and recent activity.</p>
-        <span class="source-cite">src/app/api/dashboard/route.ts:21-209 (parallel SLA, Promise.all batch, batched ticket lookups for activity enrichment)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How is search text protected against PostgREST filter injection?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Supabase's <code>.or()</code> takes a filter <em>string</em>. Interpolating raw text like <code>x%,answer.ilike.*</code> could add conditions. Both list endpoints strip the characters filter syntax uses before interpolating.</p>
+<pre><code>const search = (searchParams.get("search") ?? "").replace(/[,()*%\\:"]/g, " ").trim().slice(0, 100);</code></pre>
+    <span class="source-cite">src/app/api/faqs/route.ts:22; src/app/api/tickets/route.ts:40-45</span>
+  </div>
+</div>
 
-    <h2>Email Processing &amp; Webhook Routes</h2>
+<h2>Tickets &amp; conversation</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">How does the email polling endpoint work and why is it safe to call repeatedly?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>GET/POST /api/emails/poll (bearer-token auth, Vercel Cron) iterates over all organizations that have email_config set, calls <code>pollNewEmails()</code> to fetch unseen messages from IMAP, and processes each email through the pipeline. To avoid rate-limit hits on AI services, there's a 4-second delay between emails. The endpoint is idempotent: running it twice fetches the same unseen messages again and processes them again (the pipeline is responsible for detecting duplicates at a lower level). It's safe to call repeatedly because it doesn't modify state in a way that breaks if called twice.</p>
-        <pre><code>export async function GET(req: NextRequest) {
-  return handle(req);
-}
+<div class="qa-item">
+  <div class="qa-question">GET /api/tickets — what filters exist and how is it scoped?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Query parameters: <code>status</code> (comma list, validated with <code>isStatus</code>), <code>severity</code>, <code>category</code>, <code>search</code>, <code>assigned</code>, <code>page</code>, <code>limit</code>, <code>sort</code>/<code>order</code>, and <code>view=review</code>. Agents are forced to <code>assigned_agent = self</code> whatever they ask for; <code>view=review</code> (unassigned + flagged + open) is 403 for agents. Missing SLA due dates are filled from the organization's SLA policy (org row preferred over the global default). The response includes <code>total</code> and <code>total_pages</code>.</p>
+    <span class="source-cite">src/app/api/tickets/route.ts:31, 102-116, 146, 185</span>
+  </div>
+</div>
 
-export async function POST(req: NextRequest) {
-  return handle(req);
-}</code></pre>
-        <span class="source-cite">src/app/api/emails/poll/route.ts:63-69 (GET and POST both supported for Vercel Cron flexibility); lines 11-61 (polling logic, per-email rate limiting)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">GET /api/tickets/[id] — what does the detail contain?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>The ticket plus: <code>contacts</code>, <code>accounts</code>, <code>teams</code> (through the composite FK), <code>ticket_messages</code> with author (<code>users</code>) and transport (<code>emails</code>), <code>auto_responses</code> (drafts, with <code>sent_message_id</code>), <code>follow_up_parent</code> (second query), <code>sla</code> status, <code>allowed_statuses</code> read from the workflow table, and up to 5 similar tickets (agent-scoped).</p>
+    <span class="source-cite">src/app/api/tickets/[id]/route.ts:36-98; src/types/api.ts (TicketDetailResponse)</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What does the email queue processor do and when would it be called?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>GET/POST /api/emails/process-queue (bearer-token auth, Vercel Cron) fetches up to 50 unprocessed emails from the database (where processed=false), reprocesses them through the pipeline, and marks them as processed. This is used for retries when an email failed on first attempt, and for processing test/seed emails. Unlike poll which fetches from IMAP, this one consumes a local queue. It applies a 2-second rate limit between emails to avoid overwhelming AI services. The response includes a summary: total processed, how many succeeded/duplicated/spammed/errored.</p>
-        <span class="source-cite">src/app/api/emails/process-queue/route.ts:11-96 (queue processing, rate limiting, status aggregation)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">PATCH /api/tickets/[id] — what can be changed?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p><code>status</code>, <code>severity</code>, <code>category</code> (validated against fixed lists) and <code>assigned_team_id</code> (admin only; a foreign team is rejected by the composite FK → 400 "Invalid team"). Server-owned fields — <code>assigned_agent</code>, <code>sla_first_response_at</code>, <code>sla_resolved_at</code>, <code>organization_id</code>, <code>ticket_number</code> — are refused with 400. The resolution timestamp and allowed transitions are enforced by the <code>enforce_ticket_status</code> trigger; a <code>check_violation</code> with hint <code>invalid_status_transition</code> becomes a readable 400. Writes <code>ticket_updated</code> to the audit log.</p>
+    <span class="source-cite">src/app/api/tickets/[id]/route.ts:111-200</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What is POST /api/emails/ingest and how does it differ from poll?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>POST /api/emails/ingest (bearer-token auth) accepts incoming emails from an external email relay service. The request body contains a raw email (from_address, subject, body_text, etc.) and organization_id, and must include these required fields: from_address, subject, received_at, organization_id. The endpoint immediately processes the email through the pipeline and returns the result. Unlike poll (which iterates organizations) or process-queue (which works from a local queue), ingest is called by an external service pushing emails in real-time. It's org-scoped by the organization_id in the payload, not extracted from a session.</p>
-        <span class="source-cite">src/app/api/emails/ingest/route.ts:7-63</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">POST /api/tickets/[id]/messages — how do replies and notes work?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Body is a zod discriminated union: <code>{ kind: "reply", body, status_after?: "In Progress" | "Pending" | "Resolved", draft_id? }</code> or <code>{ kind: "note", body }</code>, body 1–20,000 characters. The caller must be able to view (else 404) and work the ticket (else 403). Notes are inserted directly (audit <code>note_added</code>). Replies go through <code>sendTicketReply</code>: 409 for a Closed ticket, a ticket with no customer address, or no connected mailbox; 400 for a disallowed <code>status_after</code>; 502 when SMTP rejects (the failed reply stays in the conversation as "Not delivered"). Success returns 201 with the message id, the ticket's new status, and the recipient. <code>maxDuration = 60</code>.</p>
+    <span class="source-cite">src/app/api/tickets/[id]/messages/route.ts:12-89; src/server/tickets/replies.ts</span>
+  </div>
+</div>
 
-    <h2>Response &amp; FAQ Management</h2>
+<div class="qa-item">
+  <div class="qa-question">POST /api/tickets/[id]/assign — how does assignment map errors?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Admin only. Body <code>{ assignee_id: uuid | null, note?: string ≤ 500 }</code>. It calls the <code>assign_ticket</code> RPC and maps Postgres error codes: <code>P0002</code> (no_data_found) → 404, <code>42501</code> (insufficient_privilege) → 403, <code>23514</code>/<code>23503</code> (assignee not an active admin/agent of this org) → 400.</p>
+    <span class="source-cite">src/app/api/tickets/[id]/assign/route.ts:18-62</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How does POST /api/respond work and what validation does it perform?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Sends an email reply to a customer and marks the response as sent. Requires either response_id or ticket_id, and a non-empty response_text (max 20,000 chars). It fetches the unsent auto_response record, extracts the ticket and original email, loads the org's SMTP config, sends the email via SMTP with proper In-Reply-To headers, updates the response to sent=true and stores the response_text, then auto-sets the ticket status to Resolved and backfills sla_first_response_at if it was null. All updates are org-scoped and the response query filters sent=false and organization_id before accepting the record.</p>
-        <pre><code>if (responseText.length > 20000) {
-  return NextResponse.json(
-    { error: "Response text is too long" },
-    { status: 400 },
-  );
-}</code></pre>
-        <span class="source-cite">src/app/api/respond/route.ts:8-153 (POST handler, validation, email sending, ticket/response updates)</span>
-      </div>
-    </div>
+<h2>Team, me &amp; auth</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">What is the request/response shape for FAQ management endpoints?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>GET /api/faqs returns paginated FAQs (default limit 20, max 100) for the org, supports filtering by category and full-text search in question/answer. POST /api/faqs creates a new FAQ, requires question, answer, and category fields, generates an embedding for the Q+A, and upserts the vector into Pinecone under the org's namespaced FAQ index. The response includes the created FAQ object with its id. PUT and DELETE /api/faqs/[id] are not shown in the PLAN.txt route table; check if the impl exists or note as not implemented.</p>
-        <pre><code>// POST request
-{ "question": "...", "answer": "...", "category": "..." }
+<div class="qa-item">
+  <div class="qa-question">How are members added, changed and deactivated?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p><strong>POST /api/team</strong> (admin): <code>{ name, email, role }</code>; generates a 16-character initial password from an unambiguous alphabet (~95 bits), stores its bcrypt hash, returns it once; 409 on duplicate email; audit <code>member_added</code>. <strong>GET /api/team</strong> lists members; <code>?include=inactive</code> is admin-only.</p>
+    <p><strong>PATCH /api/team/[id]</strong> (admin): <code>name</code>, <code>role</code>, <code>is_active</code> (strict schema, at least one field). An admin can't demote or deactivate themselves, the last active admin can't be removed, and deactivating or making someone a viewer releases their open tickets through <code>assign_ticket(…, null)</code> with a note; audit <code>member_updated</code>.</p>
+    <span class="source-cite">src/app/api/team/route.ts:20, 48-109; src/app/api/team/[id]/route.ts:12-127</span>
+  </div>
+</div>
 
-// GET response
-{ "faqs": [...], "total": 12, "page": 1, "limit": 20 }</code></pre>
-        <span class="source-cite">src/app/api/faqs/route.ts:9-112 (GET pagination, POST with embedding generation)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What do /api/me, /api/me/password and /api/auth/signup do?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li><strong>GET /api/me</strong> — own profile. <strong>PATCH</strong> <code>{ is_available: boolean }</code> for admins and agents (viewers get 403: they're never assignees).</li>
+      <li><strong>POST /api/me/password</strong> — current password must match (400 otherwise); new password at least 12 characters; bcrypt cost 12.</li>
+      <li><strong>POST /api/auth/signup</strong> — 403 "Sign-up is closed" unless the deployment opts in; otherwise creates an organization and its first admin (409 on existing email).</li>
+    </ul>
+    <span class="source-cite">src/app/api/me/route.ts:30-58; src/app/api/me/password/route.ts; src/app/api/auth/signup/route.ts:6-21</span>
+  </div>
+</div>
 
-    <h2>Development-Only Routes</h2>
+<div class="qa-item">
+  <div class="qa-question">GET /api/team/workload — how are assignee candidates ranked?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Admin only. Active admins and agents with a count of their open tickets (open = New/In Progress/Pending), sorted available first, then fewest open tickets, then name.</p>
+    <span class="source-cite">src/app/api/team/workload/route.ts:13-52</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Which routes are blocked in production and why?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Three routes check <code>NODE_ENV</code> and return 404 in production: DELETE /api/cleanup (deletes all tickets, emails, responses, audit logs, and Pinecone vectors; used to reset after importing junk), PATCH/POST /api/migrate (runs migrations), and POST /api/seed (seeds test data; POST /api/seed/test-emails is also dev-only). These are guarded because they're irreversible and dangerous if called in production. In development, they return normally; in production, they return a plain 404 so external callers get no hint that these endpoints exist.</p>
-        <pre><code>export async function DELETE() {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }</code></pre>
-        <span class="source-cite">src/app/api/cleanup/route.ts:12-15 (NODE_ENV guard pattern); PLAN.txt rows 33, 42, 45-46 (cleanup, migrate, seed, seed/test-emails listed as dev-only)</span>
-      </div>
-    </div>
+<h2>Knowledge base, search &amp; dashboard</h2>
+
+<div class="qa-item">
+  <div class="qa-question">What happens when an admin creates, edits or deletes an article?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p><strong>POST</strong> embeds the article <em>before</em> saving it, so an AI failure saves nothing (503 "AI isn't set up…" or "busy"), then upserts the vector into the organization's <code>faqs</code> namespace. <strong>PUT</strong> re-embeds only if the question or answer changed. <strong>DELETE</strong> removes the row and its vector, so the AI stops quoting a deleted answer. <strong>GET</strong> returns each article with <code>times_used</code> computed as <code>COUNT(auto_response_citations)</code>.</p>
+    <span class="source-cite">src/app/api/faqs/route.ts; src/app/api/faqs/[id]/route.ts; src/server/db/pinecone.ts (deleteVectors)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How do search and the dashboard respect roles?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p><strong>GET /api/search</strong> embeds the query with the workspace's AI key, queries the org's Pinecone namespaces, then hydrates results from Postgres with organization filters; agents only get their own tickets back. <strong>GET /api/dashboard</strong> computes counts by status/severity/category, SLA metrics and alerts, recent activity, "needs assignment" and "sent today" (delivered replies in <code>ticket_messages</code>); for agents every number is restricted to tickets assigned to them. "Today" starts at midnight in the organization's timezone.</p>
+    <span class="source-cite">src/app/api/search/route.ts:16; src/app/api/dashboard/route.ts:29-40, 180-195</span>
+  </div>
+</div>
+
+<h2>Settings, spam &amp; email intake</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How do the mailbox and AI settings endpoints behave?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p><strong>/api/settings/email-config</strong>: GET returns status only (never the secret). POST accepts Gmail <code>{ provider: "gmail", email, app_password }</code> (16 letters, spaces ignored) or custom <code>{ provider: "imap_smtp", …, imap_port: 993, smtp_port: 465 | 587 }</code>; custom hosts must resolve to public addresses (SSRF guard); credentials are verified by a real IMAP login and SMTP handshake, then encrypted and upserted; audit <code>mailbox_connected</code>. DELETE removes the row (audit <code>mailbox_disconnected</code>). 503 if the encryption key is missing. <code>maxDuration = 60</code>.</p>
+    <p><strong>/api/settings/ai</strong>: GET returns <code>auto_send</code> and key status (<code>workspace</code> with hint/status/error, <code>platform</code>, or <code>none</code>). PATCH <code>{ auto_send }</code> (audit <code>ai_auto_send_changed</code>). POST <code>{ api_key }</code> is format-checked, verified with a free <code>countTokens</code> call, encrypted and saved, and emails that gave up while AI was down are requeued (audit <code>ai_key_saved</code>). DELETE removes the key (audit <code>ai_key_removed</code>).</p>
+    <span class="source-cite">src/app/api/settings/email-config/route.ts:19-164; src/app/api/settings/ai/route.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How do spam review and recovery work?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><strong>GET /api/emails/spam</strong> (admin): inbound emails with <code>is_spam</code> from the last 30 days, newest first, max 100, each with a 200-character preview. <strong>POST /api/emails/[id]/not-spam</strong> (admin): sets <code>is_spam = false</code>, records who and when (<code>not_spam_by/at</code>), resets it into the intake queue; the pipeline then skips both spam filters for it. 404 if already recovered; audit <code>email_marked_not_spam</code>.</p>
+    <span class="source-cite">src/app/api/emails/spam/route.ts:14-29; src/app/api/emails/[id]/not-spam/route.ts:15-51</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How are the machine-to-machine email routes protected and what do they return?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p><strong>poll</strong> and <strong>process-queue</strong> require <code>Authorization: Bearer $CRON_SECRET</code> (GET is accepted because Vercel Cron sends GET). <code>poll</code> ingests every connected mailbox, then drains the queue within a 50-second budget under the 60-second <code>maxDuration</code>, and deletes login attempts older than 30 days; it returns <code>{ intake, drain }</code> counts. <strong>ingest</strong> requires <code>EMAIL_INGEST_SECRET</code> and an <code>organization_id</code> that must exist (400 "Unknown organization"). Missing secrets → 503.</p>
+    <span class="source-cite">src/app/api/emails/poll/route.ts:9-32; src/app/api/emails/process-queue/route.ts; src/app/api/emails/ingest/route.ts:11-52</span>
+  </div>
+</div>
 
   </main>
 </div>

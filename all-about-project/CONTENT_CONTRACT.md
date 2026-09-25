@@ -1,10 +1,13 @@
 # Content contract — read this fully before writing any page
 
+This site is the project's reference ("bible"): it must be complete and current. Previous versions of pages
+described commit 08357c7 and are OUTDATED — never copy a claim from an old page without re-verifying it in code.
+
 You are filling in ONE page of an interview-prep documentation site for a real, existing codebase. `template.html` in this same folder is the exact, locked, verified skeleton. Copy it byte-for-byte and only fill in the `<!-- PAGE CONTENT GOES HERE -->` region inside `<main class="content">`. Also replace `PAGE_TITLE` in `<title>` with your page's title.
 
 ## Hard rules
 
-1. **Do not touch anything outside the content region.** Not the `<style>` block, not the sidebar `<nav>`, not the `<script>`. If you think a class is missing, don't invent one — use only: `page-intro`, `qa-item`, `qa-question`, `qa-difficulty` (+`basic`/`intermediate`/`advanced`), `qa-answer`, `source-cite`, `callout` (+`warning`/`missing`), `data-table`. These are ALL defined already.
+1. **Do not touch anything outside the content region.** Not the `<style>` block, not the sidebar `<nav>`, not the `<script>`. If you think a class is missing, don't invent one — use only: `page-intro`, `qa-item`, `qa-question`, `qa-difficulty` (+`basic`/`intermediate`/`advanced`), `qa-answer`, `source-cite`, `callout` (+`warning`/`missing`), `data-table`. These are ALL defined already. Plain `<h2>`, `<h3>`, `<p>`, `<ul>`/`<ol>`/`<li>`, `<table class="data-table">`, `<code>`, `<pre><code>`, `<strong>`, `<em>`, `<a href>` are fine without classes.
 2. **Every technical claim must come from a file you actually opened this task.** Not memory, not the ground-truth block below extrapolated, not "this is typically how Next.js apps do it." Open the file, read it, then write the claim, and add a `<span class="source-cite">src/path/to/file.ts:LINE</span>` (or a line range) under the relevant `.qa-answer`. If you did not open a file to check something, do not assert it as fact — write "not verified" or skip the claim.
 3. **If a feature doesn't exist, say so.** Use `<div class="callout missing"><strong>Not implemented</strong>...</div>` — e.g., there is no automated test suite; say that plainly rather than describing a testing setup that isn't there. Do not pad with generic advice about how testing "should" work unless clearly labeled as a recommendation, not current state.
 4. **No invented code.** Every `<pre><code>` block must be an excerpt you copied from a real file (trim for length if needed, but don't rewrite/paraphrase the code itself), immediately followed by a `source-cite`.
@@ -22,7 +25,9 @@ You are filling in ONE page of an interview-prep documentation site for a real, 
    Pick `basic` / `intermediate` / `advanced` honestly based on how deep the question goes.
 6. **Ground truth numbers**: use the exact numbers from `PLAN.txt`'s "GROUND TRUTH" block in this folder — do not recompute or estimate your own counts. If your page needs a number not in that block, compute it yourself with a real shell command and cite the command in a `source-cite`.
 7. **Tone**: plain, direct, confident where the code supports it, explicitly hedged where it doesn't. This will be read before a technical interview — the goal is that every answer, if challenged with "show me," has a real file and line number behind it.
-8. **Length**: aim for 8–14 Q&A items per page, organized under 2–4 `<h2>` sections. Depth over padding — do not manufacture filler questions.
+8. **Completeness over brevity**: cover EVERYTHING in the page's scope — every table, route, rule, threshold, decision. Typically 12–25 Q&A items under 3–6 `<h2>` sections, plus reference tables (`data-table`) where a list is clearer than prose. Depth over padding — no filler questions, but nothing in scope left out.
+9. **Escape HTML** inside `<code>`/`<pre>` (`&lt;`, `&gt;`, `&amp;`).
+10. **Cross-link** related pages with plain `<a href="other-page.html">`.
 
 ## When you're done
 

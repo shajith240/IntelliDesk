@@ -1,99 +1,121 @@
-GROUND TRUTH (measured 2026-09-24, via shell commands against the actual repo — do not recompute, do not deviate)
-================================================================================
-API route files (src/app/api/**/route.ts):        20
-App Router pages (src/app/**/page.tsx):            9
-App Router layouts (src/app/**/layout.tsx):        3
-UI primitive files (src/components/ui):           23
-App-shell/layout components (src/components/layout): 12
-Feature domains (src/features/*):                  7  (analytics, auth, command-center,
-                                                        knowledge-base, queue, settings,
-                                                        ticket-workspace)
-Feature files total:                              31
-Server-only files (src/server/**/*.ts):           19
-Shared hooks (src/hooks):                          3
-Shared lib files (src/lib):                        4
-Type definition files (src/types):                 2
-DB migrations (supabase/migrations):               5
-Automated test files:                              0  (no test suite exists — document honestly)
-Total .ts/.tsx files under src/:                 129
-DB tables (from migrations):                      12  (organizations, users, accounts, contacts,
-                                                        teams, tickets, emails, ticket_emails,
-                                                        sla_policies, faqs, auto_responses, audit_logs)
-TODO/FIXME/DEPRECATED markers in src/:              0 (none found)
+GROUND TRUTH (measured 2026-09-25 against commit ffccba5 with shell commands and the live database —
+do not recompute, do not deviate; if you need a number that isn't here, measure it yourself and cite the command)
+=====================================================================================================
+Repository layout
+  API route files (src/app/api/**/route.ts):          24
+  App Router pages (src/app/**/page.tsx):             11  ((auth)/login, (auth)/signup, / (redirect),
+                                                          dashboard, dashboard/queue, dashboard/review,
+                                                          dashboard/my-work, dashboard/analytics,
+                                                          dashboard/knowledge-base, dashboard/settings,
+                                                          dashboard/spam)
+  App Router layouts:                                  3
+  UI primitives (src/components/ui):                  23
+  App-shell components (src/components/layout):       13
+  Feature domains (src/features/*):                    8  (analytics, auth, command-center, knowledge-base,
+                                                          queue, settings, spam, ticket-workspace) — 37 files
+  Server-only modules (src/server/**/*.ts):           28  (auth 6, crypto 1, db 2, email 8, gemini 6,
+                                                          pipeline 5 [incl. auto-reply-policy], tickets 1)
+  Shared hooks / lib / types files:                 3 / 6 / 2
+  Total .ts/.tsx files under src/:                   153
+  TODO/FIXME markers in src/:                          0
 
-Dependency versions (package.json, exact):
-  next 16.1.4 · react 19.2.3 · typescript ^5 · tailwindcss ^4
-  next-auth ^5.0.0-beta.30 · @supabase/supabase-js ^2.108.2
-  @google/generative-ai ^0.24.1 · @pinecone-database/pinecone ^7.1.0
-  swr ^2.5.1 · zod ^4.3.6
+Database (Supabase Postgres 17, public schema, live)
+  Migrations (supabase/migrations):                   13  (001 … 013)
+  Tables:                                             20  accounts, ai_credentials, audit_logs, auth_login_attempts,
+                                                          auto_response_citations, auto_responses, contacts, emails,
+                                                          faqs, mailbox_connections, organizations, sla_policies, teams,
+                                                          ticket_assignments, ticket_counters, ticket_messages,
+                                                          ticket_status_transitions, ticket_statuses, tickets, users
+  Archived (schema "archive", not used):               2  tickets_old, customers_old (moved by 006)
+  Removed tables:                                          ticket_emails (dropped by 013)
+  Functions:                                           9  assign_ticket, complete_ticket_reply, record_inbound_message,
+                                                          enforce_ticket_assignee, enforce_ticket_status,
+                                                          generate_ticket_number, protect_audit_log, fill_contact_org,
+                                                          update_updated_at
+  RLS: enabled on every public table with NO policies; anon/authenticated have no grants (006).
+       The app reaches the DB only with the service-role key on the server.
 
-API routes (method — path, relative to src/app/api/):
-  —        auth/[...nextauth]/route.ts        (NextAuth handler)
-  POST     auth/signup/route.ts
-  DELETE   cleanup/route.ts                    (dev-only, checks NODE_ENV)
-  GET      customers/route.ts
-  GET      dashboard/route.ts
-  POST     emails/bulk/route.ts
-  POST     emails/ingest/route.ts              (bearer-secret, no session)
-  GET/POST emails/poll/route.ts                (bearer-secret, cron)
-  GET/POST emails/process-queue/route.ts       (bearer-secret, cron)
-  PUT/DELETE faqs/[id]/route.ts
-  GET/POST faqs/route.ts
-  PATCH/POST migrate/route.ts                  (dev-only)
-  POST     respond/route.ts
-  GET      search/route.ts
-  POST/PATCH/PUT seed/route.ts                 (dev-only)
-  POST     seed/test-emails/route.ts           (dev-only)
-  GET/POST/DELETE settings/email-config/route.ts
-  GET      team/route.ts
-  GET/PATCH tickets/[id]/route.ts
-  GET      tickets/route.ts
+Automated tests
+  Database test suites (supabase/tests/*.sql):         5 files, 45 PASS checks, each in BEGIN…ROLLBACK
+                                                          assignment_integrity 13, conversation_model 12,
+                                                          inbound_messages 7, normalization 7, ai_settings 6
+  Unit tests (tests/unit/*.test.ts, node:test):        4 files, 16 tests  — `npm test`
+                                                          automated-mail 7, grounding 4, time-zone 3, email-domains 2
+  End-to-end: scripted Playwright runs were used during development (not committed as a suite).
 
-Pages (src/app/**/page.tsx):
-  (auth)/login, (auth)/signup, dashboard, dashboard/analytics, dashboard/knowledge-base,
-  dashboard/my-work, dashboard/queue, dashboard/settings, and src/app/page.tsx (redirects to /dashboard)
+npm scripts: dev, build, start, lint, test
 
-Domains confirmed ABSENT (checked directly — do not invent pages for these):
-  No payments/Stripe. No websockets/realtime (SWR polling only, 30s interval).
-  No background job queue (cron endpoints are HTTP-triggered, not a queue).
-  No CLI. No mobile client. No search engine besides Pinecone.
+Dependencies (package.json): next 16.1.4 · react 19.2.3 · typescript ^5 · tailwindcss ^4 ·
+  next-auth ^5.0.0-beta.30 · @supabase/supabase-js ^2.108.2 · @google/generative-ai ^0.24.1 ·
+  @pinecone-database/pinecone ^7.1.0 · swr ^2.5.1 · zod ^4.3.6 · imapflow ^1.2.12 ·
+  nodemailer ^8.0.1 · mailparser ^3.9.3 · bcryptjs ^3.0.3
 
-Auth model: NextAuth v5, credentials provider (email+bcrypt), JWT session (30-day maxAge).
-  Session shape: { id, email, name, role: "admin"|"agent"|"viewer", organization_id, image? }
-  Every ticket/org-scoped route calls requireAuth()+getOrgId() (or auth() directly) and filters by organization_id.
-  Cron/webhook routes (emails/poll, emails/process-queue, emails/ingest) use a bearer-secret
-  check instead of a session (src/server/auth/cron.ts), and fail closed (503) if the secret
-  env var is unset.
+API routes (methods — path under src/app/api/)
+  —                   auth/[...nextauth]        NextAuth handler (credentials, JWT)
+  POST                auth/signup               403 unless NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP=true
+  GET                 customers
+  GET                 dashboard                 role-scoped metrics; "today" in the workspace timezone
+  POST                emails/bulk               admin
+  POST                emails/ingest             bearer EMAIL_INGEST_SECRET, no session
+  GET/POST            emails/poll               bearer CRON_SECRET: ingest all mailboxes, then drain queue
+  GET/POST            emails/process-queue      bearer CRON_SECRET: drain queue only
+  GET                 emails/spam               admin
+  POST                emails/[id]/not-spam      admin
+  GET/POST            faqs                      writes admin-only
+  PUT/DELETE          faqs/[id]                 admin
+  GET/PATCH           me                        profile; availability toggle (admin/agent)
+  POST                me/password
+  GET                 search                    Pinecone semantic search, agent-scoped
+  GET/PATCH/POST/DELETE settings/ai             workspace Gemini key + auto-send toggle
+  GET/POST/DELETE     settings/email-config     mailbox connect/disconnect (verified, encrypted)
+  GET/POST            team                      POST admin: add member, one-time password
+  PATCH               team/[id]                 admin: role/active/name; releases tickets on deactivate
+  GET                 team/workload             admin: assignee candidates
+  POST                tickets/[id]/assign       admin: assign_ticket() RPC
+  POST                tickets/[id]/messages     reply (emailed) or internal note
+  GET/PATCH           tickets/[id]
+  GET                 tickets                   agents see only their tickets; ?view=review
+  REMOVED since the previous docs: /api/respond (replaced by tickets/[id]/messages),
+  /api/seed, /api/seed/test-emails, /api/cleanup, /api/migrate (unauthenticated dev routes, deleted).
 
-Recent git history (top of log, oldest of these shown last):
-  08357c7 redesign ticket workspace, add animated auth hero, deepen dark theme
-  53b5072 refactor: reorganize project into src/features + src/server layering
-  dcb3fff redesign frontend as a Jira-style support operations workspace
-  b3e7b2b ui: switch primary to cyan-teal
-  66befee ui: pastel palette + slide-over drawer + new fonts + landing page glow-up
-  aa8ad2d fix(pipeline): repair embedding dims, wire SMTP auto-send, org-scope FAQ retrieval
-  247a751 fix: overhaul dashboard layout, fix global CSS reset, add user dropdown
-  (older commits are earlier scaffolding/prototyping, superseded by the above)
+Roles: admin (everything; only role that assigns), agent (only tickets assigned to them),
+  viewer (read-only, sees all). Central policy: src/server/auth/policy.ts. Page guards: src/server/auth/page-guard.ts.
 
-PAGE LIST (14 files, all in all-about-project/, all copy template.html exactly)
-================================================================================
-1. index.html                          — Start here: what the project is, how to use this site, page index
-2. architecture.html                   — System Architecture Overview
-3. data-model.html                     — Data Model & Database Schema
-4. auth-security.html                  — Authentication & Security
-5. api-routes.html                     — API & Backend Routes
-6. frontend-architecture.html          — Frontend Architecture (features/, components/, hooks, state)
-7. design-system.html                  — Design System & Styling (tokens, dark theme, motion)
-8. feature-walkthrough-pipeline.html   — E2E walkthrough #1: email arrives -> ticket -> AI classification -> draft
-9. feature-walkthrough-agent.html      — E2E walkthrough #2: agent opens ticket -> reviews AI draft -> sends reply
-10. engineering-decisions.html         — Key engineering decisions & trade-offs (written by orchestrator directly)
-11. bugs-lessons.html                  — Bugs fixed & lessons learned this session (written by orchestrator directly)
-12. testing.html                       — Testing strategy (honest: no automated suite yet; what verification exists)
-13. deployment.html                    — Deployment & DevOps (Vercel, cron, env vars)
-14. integrations.html                  — External services (Supabase, Pinecone, Gemini, IMAP/SMTP)
+Ticket statuses: New, In Progress, Pending (waiting on customer), Resolved, Closed (terminal).
+  Transitions are rows in ticket_status_transitions, enforced by trigger enforce_ticket_status.
 
-Pages 10 and 11 are written directly by the orchestrator (first-hand knowledge of the changes
-made this session, with exact reasoning) rather than delegated, to avoid a subagent having to
-reconstruct intent from diffs alone.
+Secrets / env: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  SUPABASE_SERVICE_ROLE_KEY, NEXTAUTH_SECRET, NEXTAUTH_URL, GEMINI_API_KEY (optional platform fallback),
+  PINECONE_API_KEY/INDEX/HOST/EMBEDDING_DIMENSIONS, CRON_SECRET, EMAIL_INGEST_SECRET,
+  MAILBOX_ENCRYPTION_KEY (AES-256 key for mailbox + AI key secrets), NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP.
+  GitHub Actions secrets: APP_URL, CRON_SECRET (.github/workflows/poll-mailboxes.yml, every 10 min).
 
-Pages 2-9 and 12-14 are delegated to Haiku subagents in grounded pairs (see dispatch below).
+Git history since the previous docs (newest first):
+  ffccba5 refactor: read derived values instead of stored copies
+  d430f2c db: normalize the schema (expand/contract)
+  d405738 feat: mail-loop protection, safe AI replies, own AI key, spam review
+  6ba6526 db: workspace AI settings, encrypted AI keys and spam overrides
+  b5d90be feat: agent replies, internal notes and the ticket workflow
+  c6e7843 db: conversation model, ticket workflow and atomic inbound intake
+  308268c docs: document roles, mailbox connection, intake queue and new secrets
+  484d91d feat: one-step encrypted mailbox connection and reliable email intake
+  c9a20ed feat: admin-only ticket assignment and enforced roles
+  041ab64 security: harden sign-in and remove unauthenticated dev routes
+  a2826f2 db: enforce referential integrity and add the assignment model (expand)
+  df3c686 security: close the public Supabase Data API
+  6922ffc docs: add grounded interview-prep documentation site
+  08357c7 feat: redesign ticket workspace, add animated auth hero, deepen dark theme   (previous docs baseline)
+
+Confirmed ABSENT (don't invent): payments/billing, websockets/realtime (SWR polling), a job-queue service
+  (the intake queue is rows in `emails` drained by HTTP-triggered runs), attachments (dropped), business-hours
+  SLA calendars, password-reset emails, workspace branding UI, a committed end-to-end test suite.
+
+PAGE LIST (22 pages; every page copies template.html and fills only the content region)
+=====================================================================================================
+Start:        index.html, interview-cheatsheet.html, product-business.html
+System:       architecture.html, data-model.html, database-design.html, auth-security.html,
+              roles-permissions.html, api-routes.html
+Email & AI:   feature-walkthrough-pipeline.html, ai-safety.html, integrations.html
+Frontend:     frontend-architecture.html, design-system.html
+Walkthroughs: feature-walkthrough-agent.html, admin-operations.html
+Engineering:  engineering-decisions.html, bugs-lessons.html, testing.html, deployment.html, roadmap.html

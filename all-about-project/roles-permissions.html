@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roles &amp; Permissions — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Roles &amp; Permissions</h1>
+<p class="page-intro">The three roles, the complete permission matrix, how ticket assignment works, and how each rule is enforced in three places: the UI hides what you can't do, the API refuses it, and the database refuses it again.</p>
+
+<h2>The roles</h2>
+
+<div class="qa-item">
+  <div class="qa-question">What are the roles and what is each for?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Role</th><th>Who</th><th>In one line</th></tr>
+      <tr><td><strong>admin</strong></td><td>Support lead / owner</td><td>Runs the workspace: sees everything, is the only role that assigns tickets, manages team, mailbox, AI and knowledge base</td></tr>
+      <tr><td><strong>agent</strong></td><td>Support staff</td><td>Works only the tickets an admin assigned to them</td></tr>
+      <tr><td><strong>viewer</strong></td><td>Manager, stakeholder</td><td>Read-only access to the whole workspace; can never hold a ticket</td></tr>
+    </table>
+<pre><code>export const can = {
+	/** See every ticket in the organization (agents only see their own). */
+	viewAllTickets: (s: Actor) =&gt; isAdmin(s) || isViewer(s),
+	assignTickets: isAdmin,
+	manageTeam: isAdmin,
+	manageSettings: isAdmin,
+	manageKnowledgeBase: isAdmin,
+	importEmails: isAdmin,
+	/** Admins and agents appear in the assignee pool and can mark themselves (un)available. */
+	setOwnAvailability: (s: Actor) =&gt; isAdmin(s) || isAgent(s),
+
+	viewTicket(s: Actor, ticket: AssignableTicket) {
+		return isAdmin(s) || isViewer(s) || (isAgent(s) &amp;&amp; ticket.assigned_agent === s.user.id);
+	},
+
+	/** Change status/priority/category and send replies. */
+	workTicket(s: Actor, ticket: AssignableTicket) {
+		return isAdmin(s) || (isAgent(s) &amp;&amp; ticket.assigned_agent === s.user.id);
+	},
+};</code></pre>
+    <span class="source-cite">src/server/auth/policy.ts:20-39</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What is the full permission matrix?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Capability</th><th>Admin</th><th>Agent</th><th>Viewer</th><th>Enforced by</th></tr>
+      <tr><td>See tickets</td><td>All</td><td>Only assigned to them (others 404)</td><td>All</td><td><code>can.viewTicket</code>, tickets/search/dashboard scoping</td></tr>
+      <tr><td>Change status / priority / category</td><td>Any ticket</td><td>Own tickets</td><td>No</td><td><code>can.workTicket</code>; workflow trigger</td></tr>
+      <tr><td>Reply to customer, add internal note</td><td>Any ticket</td><td>Own tickets</td><td>No (403)</td><td><code>can.workTicket</code> in messages route</td></tr>
+      <tr><td>Assign / unassign</td><td>Yes</td><td>No — not even to themselves</td><td>No</td><td><code>can.assignTickets</code> + <code>assign_ticket()</code> actor check</td></tr>
+      <tr><td>Set a ticket's team</td><td>Yes</td><td>No</td><td>No</td><td>PATCH route</td></tr>
+      <tr><td>Needs Review queue</td><td>Yes</td><td>No (403)</td><td>Yes (read)</td><td>tickets route <code>view=review</code></td></tr>
+      <tr><td>Command Center, Incoming Queue, Analytics</td><td>Yes</td><td>No (redirected to My Work)</td><td>Yes</td><td><code>requirePageRole("admin","viewer")</code></td></tr>
+      <tr><td>My Work</td><td>Yes</td><td>Yes</td><td>No</td><td><code>requirePageRole("admin","agent")</code></td></tr>
+      <tr><td>Knowledge base: read</td><td>Yes</td><td>Yes</td><td>Yes</td><td>page guard</td></tr>
+      <tr><td>Knowledge base: create / edit / delete</td><td>Yes</td><td>No</td><td>No</td><td><code>can.manageKnowledgeBase</code></td></tr>
+      <tr><td>Members: add, change role, deactivate</td><td>Yes</td><td>No</td><td>No</td><td><code>can.manageTeam</code></td></tr>
+      <tr><td>Mailbox, AI settings: change</td><td>Yes</td><td>No</td><td>No</td><td><code>can.manageSettings</code></td></tr>
+      <tr><td>Mailbox, AI settings: view status</td><td>Yes</td><td>No</td><td>Yes</td><td>GET routes</td></tr>
+      <tr><td>Settings and Spam pages</td><td>Yes</td><td>No</td><td>No</td><td><code>requirePageRole("admin")</code></td></tr>
+      <tr><td>Spam review / "Not spam"</td><td>Yes</td><td>No</td><td>No</td><td><code>can.manageSettings</code></td></tr>
+      <tr><td>Bulk email import</td><td>Yes</td><td>No</td><td>No</td><td><code>can.importEmails</code></td></tr>
+      <tr><td>Availability toggle</td><td>Yes</td><td>Yes</td><td>No (never assignable)</td><td><code>can.setOwnAvailability</code></td></tr>
+      <tr><td>Change own password</td><td>Yes</td><td>Yes</td><td>Yes</td><td>session</td></tr>
+    </table>
+    <span class="source-cite">src/server/auth/policy.ts; grep requirePageRole src/app (8 dashboard pages); api-routes.html</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How are pages protected, and where does each role land?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>The middleware sends anyone without a session on <code>/dashboard/*</code> to the login page. Each dashboard page then calls <code>requirePageRole</code> in the server component; a role that isn't allowed is redirected to its home: agents to My Work, everyone else to the Command Center. The sidebar only lists pages the role can open (each nav item declares its <code>roles</code>).</p>
+<pre><code>function homeFor(role: UserRole): string {
+	return role === "agent" ? "/dashboard/my-work" : "/dashboard";
+}</code></pre>
+    <span class="source-cite">src/server/auth/page-guard.ts:7-23; src/middleware.ts; src/components/layout/nav.ts</span>
+  </div>
+</div>
+
+<h2>Assignment</h2>
+
+<div class="qa-item">
+  <div class="qa-question">Why do agents get 404 instead of 403 for other people's tickets?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>A 403 would confirm that the ticket id exists. Answering 404 for both "doesn't exist" and "not yours" lets agents learn nothing about tickets outside their queue. The same scoping applies to the ticket list, search results, the dashboard numbers and "similar tickets".</p>
+    <span class="source-cite">src/app/api/tickets/[id]/route.ts:60-61, 85; src/app/api/search/route.ts:16; src/app/api/dashboard/route.ts:29</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How is a ticket assigned, step by step?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <ol>
+      <li>The admin opens the assign menu; candidates come from <code>/api/team/workload</code>, ranked available first, then by fewest open tickets.</li>
+      <li><code>POST /api/tickets/[id]/assign</code> checks <code>can.assignTickets</code> and calls <code>assign_ticket(org, ticket, assignee, actor, note)</code>.</li>
+      <li>In one transaction the function verifies the actor is an <em>active admin of this organization</em>, locks the ticket (<code>FOR UPDATE</code>), updates the assignee, inserts <code>ticket_assignments</code> history and writes a <code>ticket_assigned</code> / <code>ticket_unassigned</code> audit row.</li>
+      <li>The <code>enforce_ticket_assignee</code> trigger rejects an assignee who isn't an active admin or agent of the same organization, and the composite foreign key independently rejects cross-tenant users.</li>
+    </ol>
+    <span class="source-cite">src/app/api/tickets/[id]/assign/route.ts:18-62; supabase/migrations/013_normalize_contract.sql:30-80; 007_integrity_and_assignment.sql:53-78</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Could an agent assign a ticket to themselves through some other route?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>No. <code>PATCH /api/tickets/[id]</code> refuses <code>assigned_agent</code> for everyone (as well as SLA timestamps, ticket number and organization); the assign route is admin-only; and even a direct database call to <code>assign_ticket</code> with an agent as actor raises <code>insufficient_privilege</code>. The database tests include exactly that attempt.</p>
+    <span class="source-cite">src/app/api/tickets/[id]/route.ts (server-owned fields); supabase/tests/assignment_integrity.sql (check 3)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How do tickets needing human review reach a person?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>The classifier sets <code>is_flagged_for_review</code> (low confidence, refunds, legal, angry customers…). Open, unassigned, flagged tickets appear in <strong>Needs Review</strong> (<code>/dashboard/review</code>, <code>?view=review</code>) with a count in the sidebar. The admin assigns each to an available teammate from the ranked list.</p>
+    <span class="source-cite">src/app/dashboard/review/page.tsx; src/app/api/tickets/route.ts (view=review); src/server/gemini/classify.ts</span>
+    <div class="callout missing"><strong>Not implemented</strong> No automatic routing and no notification to the admin when something lands in Needs Review; it's visible in the sidebar badge only. Both are on the roadmap.</div>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What does "available" mean, and how is it different from "active"?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><code>is_active</code> means the account is enabled (an admin can deactivate it; inactive users can't sign in). <code>is_available</code> is a person's own "I can take tickets" flag, toggled from the user menu, used only to rank assignment candidates. Viewers have neither role in assignment.</p>
+    <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:133-135; src/app/api/me/route.ts:30-58</span>
+  </div>
+</div>
+
+<h2>Team management rules</h2>
+
+<div class="qa-item">
+  <div class="qa-question">What rules protect the team and the workspace?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li>Only admins add members; a new member gets a random 16-character initial password shown once to the admin.</li>
+      <li>An admin can't remove their own admin access ("Ask another admin to do it").</li>
+      <li>A workspace must always keep at least one active admin.</li>
+      <li>Deactivating a member, or making them a viewer, releases their open tickets back to the pool through <code>assign_ticket(…, null)</code>, with the reason recorded in the history.</li>
+      <li>A deactivated user's session ends within 5 minutes (JWT re-validation) and they can no longer sign in.</li>
+    </ul>
+    <span class="source-cite">src/app/api/team/route.ts:48-109; src/app/api/team/[id]/route.ts:56-127; src/server/auth/config.ts:104-105</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How does the UI reflect permissions?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><code>useCanWorkTicket</code> mirrors the server rule so the composer, status menu and priority controls become read-only for viewers and for agents on tickets that aren't theirs; the assign menu, Settings, Spam and knowledge-base editing only render for admins. This is convenience only — every action is re-checked by the API and database.</p>
+<pre><code>export function useCanWorkTicket(ticket: { assigned_agent: string | null }): boolean {
+	const { data: session } = useSession();
+	const role = session?.user.role;
+	return role === "admin" || (role === "agent" &amp;&amp; ticket.assigned_agent === session?.user.id);
+}</code></pre>
+    <span class="source-cite">src/features/ticket-workspace/hooks/use-can-work-ticket.ts:7-11</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Explain "defense in depth" using this project.<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Rule</th><th>UI</th><th>API</th><th>Database</th></tr>
+      <tr><td>Only admins assign</td><td>Assign menu hidden</td><td><code>can.assignTickets</code>, PATCH refuses <code>assigned_agent</code></td><td><code>assign_ticket()</code> actor check</td></tr>
+      <tr><td>Viewers can't hold tickets</td><td>Not in candidate list</td><td>Workload excludes viewers</td><td><code>enforce_ticket_assignee</code> trigger</td></tr>
+      <tr><td>No cross-tenant data</td><td>—</td><td>Org from session, filter on every query</td><td>Composite foreign keys; RLS closed</td></tr>
+      <tr><td>Valid status changes only</td><td>Menu shows allowed moves</td><td>Readable 400</td><td>Transitions table + trigger</td></tr>
+      <tr><td>Audit history is permanent</td><td>—</td><td>No update/delete endpoints</td><td>Append-only trigger</td></tr>
+    </table>
+    <span class="source-cite">see database-design.html and auth-security.html</span>
+  </div>
+</div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

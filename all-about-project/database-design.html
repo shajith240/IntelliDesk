@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Design &amp; Migrations — IntelliDesk AI Project Docs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f8f9fa;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111214; color: #e4e6ea; }
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .sidebar { background: #17181b; border-right-color: #2c2e33; }
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .sidebar.open { display: block; position: fixed; z-index: 10; width: 80vw; height: 100vh; }
+  }
+
+  .sidebar h1 { font-size: 16px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #888; margin-bottom: 18px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    padding: 14px 10px 4px;
+  }
+
+  .nav-link {
+    display: block;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    color: #555;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13.5px;
+  }
+
+  .nav-link:hover { background: #f0f0f0; }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link { color: #aab0bb; }
+    .nav-link:hover { background: #24262b; }
+    .nav-group-label { color: #6b7078; }
+  }
+
+  .nav-link.active {
+    background: #2451e0;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .nav-link.active { background: #3a6bff; color: #fff; }
+  }
+
+  #search-input {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    background: #fff;
+    color: #222;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #search-input { background: #1c1e22; color: #e4e6ea; border-color: #3a3d44; }
+  }
+
+  .content {
+    padding: 40px;
+    max-width: 920px;
+  }
+
+  @media (max-width: 768px) {
+    .content { padding: 20px; }
+  }
+
+  .content h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .content > .page-intro { color: #555; margin-bottom: 28px; font-size: 15px; max-width: 720px; }
+
+  @media (prefers-color-scheme: dark) {
+    .content > .page-intro { color: #9aa0ab; }
+  }
+
+  .content h2 { font-size: 21px; margin-top: 36px; margin-bottom: 14px; }
+  .content h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; }
+
+  .qa-item {
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-item { border-color: #2c2e33; }
+  }
+
+  .qa-question {
+    padding: 14px 16px;
+    background: #f9f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-question { background: #1a1c20; }
+  }
+
+  .qa-question:hover { background: #efefef; }
+  @media (prefers-color-scheme: dark) {
+    .qa-question:hover { background: #212327; }
+  }
+
+  .qa-difficulty {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .qa-difficulty.basic { background: #d4edda; color: #155724; }
+  .qa-difficulty.intermediate { background: #fff3cd; color: #856404; }
+  .qa-difficulty.advanced { background: #f8d7da; color: #721c24; }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-difficulty.basic { background: #1e5631; color: #90ee90; }
+    .qa-difficulty.intermediate { background: #5d4037; color: #ffd700; }
+    .qa-difficulty.advanced { background: #5c1a1a; color: #ff8a8a; }
+  }
+
+  .qa-answer { padding: 0 16px; display: none; }
+  .qa-answer.open { display: block; padding: 4px 16px 16px; }
+
+  .qa-answer p { margin-bottom: 10px; }
+  .qa-answer ul, .qa-answer ol { margin: 0 0 10px 20px; }
+  .qa-answer li { margin-bottom: 4px; }
+
+  .qa-answer code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer code { background: #24262b; }
+  }
+
+  .qa-answer pre {
+    background: #f4f4f5;
+    padding: 12px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .qa-answer pre { background: #1a1c20; border: 1px solid #2c2e33; }
+  }
+
+  .qa-answer pre code { background: none; padding: 0; }
+
+  .source-cite {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #888;
+    font-family: 'SF Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .source-cite { color: #767b85; }
+  }
+
+  .callout {
+    padding: 14px 16px;
+    margin: 14px 0;
+    border-left: 4px solid #2451e0;
+    background: #eaf0ff;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .callout { background: #16233f; border-left-color: #3a6bff; }
+  }
+
+  .callout.warning { border-left-color: #d97706; background: #fff3e0; }
+  @media (prefers-color-scheme: dark) {
+    .callout.warning { background: #3d2a0d; border-left-color: #d97706; }
+  }
+
+  .callout.missing { border-left-color: #b91c1c; background: #fde8e8; }
+  @media (prefers-color-scheme: dark) {
+    .callout.missing { background: #3a1616; border-left-color: #e05252; }
+  }
+
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .data-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .data-table th {
+    background: #f0f0f0;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .data-table th { background: #1a1c20; border-bottom-color: #2c2e33; }
+  }
+
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; }
+  @media (prefers-color-scheme: dark) {
+    .data-table td { border-bottom-color: #24262b; }
+  }
+
+  .data-table tr:hover { background: #f9f9fa; }
+  @media (prefers-color-scheme: dark) {
+    .data-table tr:hover { background: #1a1c20; }
+  }
+
+  .toggle-sidebar {
+    display: none;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .toggle-sidebar { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="sidebar" id="sidebar">
+    <h1>IntelliDesk AI</h1>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
+    <input type="text" id="search-input" placeholder="Filter this page&hellip;">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Start</div>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">System</div>
+      <a class="nav-link" href="architecture.html">System Architecture</a>
+      <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
+      <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
+      <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Frontend</div>
+      <a class="nav-link" href="frontend-architecture.html">Frontend Architecture</a>
+      <a class="nav-link" href="design-system.html">Design System</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Walkthroughs</div>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Engineering</div>
+      <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
+      <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
+      <a class="nav-link" href="testing.html">Testing Strategy</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
+
+    <h1>Database Design &amp; Migrations</h1>
+<p class="page-intro">Why the schema looks the way it does: the normalization decisions, how tenant isolation is enforced by the database itself, how invariants live in constraints and triggers instead of application code, and the history of all 13 migrations including how they were applied to a live database without downtime. For the table-by-table reference, see <a href="data-model.html">Data Model &amp; Schema</a>.</p>
+
+<h2>Design principles</h2>
+
+<div class="qa-item">
+  <div class="qa-question">What is the one-sentence philosophy of this schema?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Every rule that must always hold is enforced by the database, not only by the application: tenant boundaries by composite foreign keys, the ticket workflow by a transitions table and a trigger, multi-step operations by transactional functions, and derived values are either not stored or computed by the database (generated columns). Application code can have bugs; a constraint can't be skipped.</p>
+    <p>The concrete consequence is that the schema is tested directly: 45 checks in <code>supabase/tests/</code> try to break each rule (cross-tenant writes, invalid transitions, editing the audit log) and assert the database refuses.</p>
+    <span class="source-cite">supabase/tests/*.sql (5 suites, 45 PASS checks — see testing.html)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How is multi-tenancy isolated at the database level, not just in queries?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Every tenant-owned table has a non-null <code>organization_id</code>. Parent tables expose a composite unique key <code>(id, organization_id)</code>, and child tables reference it with a composite foreign key. A row therefore cannot point at a row of another organization even if application code passes the wrong id: the pair <code>(foreign_id, my_org)</code> simply doesn't exist in the parent.</p>
+<pre><code>ALTER TABLE public.users    ADD CONSTRAINT users_id_org_key    UNIQUE (id, organization_id);
+ALTER TABLE public.teams    ADD CONSTRAINT teams_id_org_key    UNIQUE (id, organization_id);
+ALTER TABLE public.tickets  ADD CONSTRAINT tickets_id_org_key  UNIQUE (id, organization_id);
+ALTER TABLE public.accounts ADD CONSTRAINT accounts_id_org_key UNIQUE (id, organization_id);
+ALTER TABLE public.emails   ADD CONSTRAINT emails_id_org_key   UNIQUE (id, organization_id);</code></pre>
+    <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:15-32</span>
+    <p>The same pattern is used for every later relationship: ticket messages, citations, AI credentials, spam overrides, the audit log. The test suites include explicit cross-tenant attempts (assigning another org's admin, attaching another org's email to a conversation, citing another org's article) that must fail with <code>foreign_key_violation</code>.</p>
+    <span class="source-cite">supabase/tests/assignment_integrity.sql (1b, 6); supabase/tests/normalization.sql (4)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why use the service-role key and close the Supabase Data API instead of writing RLS policies?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Authentication is NextAuth (JWT), not Supabase Auth, so <code>auth.uid()</code> is always null for the app's users and the RLS policies written in 003 could never work. The real threat was the opposite: before 006, <code>anon</code> and <code>authenticated</code> had full privileges with RLS disabled, so anyone with the public anon key could read password hashes and mailbox credentials through PostgREST.</p>
+    <p>Migration 006 made the database closed-by-default: RLS on everywhere with no policies, all privileges revoked from <code>anon</code>/<code>authenticated</code> (also for future objects via default privileges), and only <code>service_role</code> — used exclusively on the server — can read or write. Every later migration repeats the revoke/grant for its new objects.</p>
+    <span class="source-cite">supabase/migrations/006_lockdown_public_api.sql:1-14, 55-63</span>
+  </div>
+</div>
+
+<h2>Normalization</h2>
+
+<div class="qa-item">
+  <div class="qa-question">Which normal-form violations existed, and how was each fixed?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Problem</th><th>Normal form / principle</th><th>Fix</th><th>Where</th></tr>
+      <tr><td><code>auto_responses.cited_faq_ids text[]</code></td><td>1NF (repeating group), no referential integrity</td><td><code>auto_response_citations(auto_response_id, faq_id, rank, score)</code> with composite FKs, <code>ON DELETE CASCADE</code></td><td>012:50-75, 013</td></tr>
+      <tr><td><code>contacts.subscribed_modules[]</code>, <code>teams.category_routing[]</code></td><td>1NF; also unused</td><td>Dropped</td><td>013:286-291</td></tr>
+      <tr><td><code>tickets.assigned_team</code> (team name text) next to <code>assigned_team_id</code></td><td>3NF: name depends on the team, not the ticket (transitive dependency)</td><td>Name read through the FK (<code>teams(name)</code>); text column and its sync trigger dropped</td><td>007:80-130, 013:255-257</td></tr>
+      <tr><td><code>tickets.sla_breach</code>, <code>auto_response_sent</code>, <code>auto_response_type</code></td><td>Derived data stored (update anomaly)</td><td>Dropped; computed from due dates / messages</td><td>013:257</td></tr>
+      <tr><td><code>auto_responses.sent</code>, <code>sent_at</code></td><td>Derived from <code>sent_message_id</code> and that message's timestamp</td><td>Dropped; "sent" = <code>sent_message_id IS NOT NULL</code></td><td>013:271</td></tr>
+      <tr><td><code>faqs.times_used</code>, <code>success_rate</code>, <code>avg_resolution_minutes</code></td><td>Unaudited counters, never maintained</td><td>Dropped; usage = <code>COUNT(auto_response_citations)</code> computed by the API</td><td>013:276; src/app/api/faqs/route.ts</td></tr>
+      <tr><td><code>audit_logs.performed_by</code> (text) next to <code>actor_user_id</code> + <code>actor_type</code></td><td>Duplicate representation of the same fact</td><td>Backfilled into the FK column (012), then dropped</td><td>012:149-158, 013:293</td></tr>
+      <tr><td><code>ticket_emails</code> join table (M:N) where an email belongs to one ticket</td><td>Wrong cardinality</td><td><code>ticket_messages.email_id UNIQUE</code> (1:0..1), table dropped</td><td>009:131-165, 013:248</td></tr>
+      <tr><td><code>emails.embedding_id</code>, <code>faqs.embedding_id</code></td><td>Derivable: the vector id is the row id</td><td>Dropped</td><td>013:276-281</td></tr>
+    </table>
+    <span class="source-cite">supabase/migrations/013_normalize_contract.sql:1-24 (header lists every drop and its replacement)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">If derived data is bad, why is <code>tickets.ai_confidence</code> still a column?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Because it is used for sorting and averaging on every dashboard load, so it is worth storing — but it is now a <em>generated</em> column that Postgres computes from the stored AI verdict. It can be read and indexed like a column but can never be written or disagree with its source. Before this change, 14 seeded tickets had a confidence value that did not match their (missing) verdict; 012 rebuilt the verdict from those rows before 013 made the column generated.</p>
+<pre><code>ALTER TABLE public.tickets
+  ADD COLUMN ai_confidence real
+    GENERATED ALWAYS AS ((ai_classification -&gt;&gt; 'confidence')::real) STORED;</code></pre>
+    <span class="source-cite">supabase/migrations/013_normalize_contract.sql:264-266; 012_normalize_expand.sql (section 6)</span>
+    <p>This is "controlled denormalization": redundancy the database maintains, versus redundancy the application must remember to maintain. The test <code>conversation_model 11</code> proves a direct write fails with <code>generated_always</code>.</p>
+    <span class="source-cite">supabase/tests/conversation_model.sql (check 11)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Where is the schema deliberately <em>not</em> normalized, and why?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li><strong><code>tickets.ai_classification</code> (JSONB)</strong> — a snapshot of what the AI said when the ticket was created. The <code>category</code>/<code>severity</code> columns hold the <em>current</em> values, which people may change; the JSON is history, so it is not a duplicate.</li>
+      <li><strong><code>emails.to_address</code>, <code>cc</code> (text)</strong> — <code>emails</code> is the raw transport log and keeps headers as received. It is never queried by recipient except for the auto-reply rate limit, which has its own partial index.</li>
+      <li><strong><code>ticket_messages.body_text</code> vs <code>emails.body_text</code></strong> — the message holds the cleaned conversational text (quoted history stripped, HTML converted); the email keeps the raw body for re-processing and forensics. Different data produced by a non-trivial transformation, not a copy.</li>
+      <li><strong><code>audit_logs.details</code> (JSONB)</strong> — event payloads vary by action; an audit log is append-only history, not queried relationally.</li>
+    </ul>
+    <span class="source-cite">README.md "Normalization decisions"; supabase/migrations/011_ai_settings_and_spam_review.sql:50-52</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why is user email globally unique but contact email only unique per workspace?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Users (staff) sign in with just an email and password — there is no workspace picker — so one email must identify exactly one account: <code>UNIQUE (lower(email))</code> on users. Contacts (customers) are data owned by a workspace: the same person may email two different companies that both use the product, so contacts are unique on <code>(organization_id, lower(email))</code>. The old global <code>contacts_email_key</code> prevented that and was dropped in 012, together with a redundant case-sensitive <code>users_email_key</code>.</p>
+    <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:37; 012_normalize_expand.sql:81-91; supabase/tests/normalization.sql (check 3)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How are ticket numbers generated, and why not a sequence?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Originally one global sequence produced <code>TKT-00031</code>, <code>TKT-00087</code>… across all tenants, which leaks each tenant's ticket volume to the others. 012 replaced it with a <code>ticket_counters</code> row per organization, incremented by an upsert inside the insert trigger. The row lock taken by <code>ON CONFLICT DO UPDATE</code> serializes concurrent inserts <em>within one organization only</em>, and numbers are unique per <code>(organization_id, ticket_number)</code>.</p>
+<pre><code>INSERT INTO public.ticket_counters AS c (organization_id, last_number)
+VALUES (NEW.organization_id, 1)
+ON CONFLICT (organization_id) DO UPDATE SET last_number = c.last_number + 1
+RETURNING last_number INTO v_next;
+NEW.ticket_number := 'TKT-' || lpad(v_next::text, 5, '0');</code></pre>
+    <span class="source-cite">supabase/migrations/012_normalize_expand.sql:16-48</span>
+    <p>Trade-off: a sequence never blocks, while the counter row serializes one tenant's ticket inserts. At helpdesk volumes (tickets per second, not thousands) that is irrelevant, and gap-free per-tenant numbers are what users expect.</p>
+  </div>
+</div>
+
+<h2>Invariants enforced by the database</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How is the ticket status workflow enforced?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Statuses are rows in a lookup table (<code>ticket_statuses</code>, with <code>is_open</code>) and the allowed moves are rows in <code>ticket_status_transitions</code>; <code>tickets.status</code> is a foreign key to the lookup instead of a CHECK list. A <code>BEFORE UPDATE OF status</code> trigger rejects any move that isn't a row in the transitions table, and owns <code>sla_resolved_at</code>: set when a ticket leaves the open statuses, cleared when it's reopened, kept when Resolved becomes Closed.</p>
+    <table class="data-table">
+      <tr><th>From \ To</th><th>In Progress</th><th>Pending</th><th>Resolved</th><th>Closed</th></tr>
+      <tr><td>New</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+      <tr><td>In Progress</td><td></td><td>yes</td><td>yes</td><td>yes</td></tr>
+      <tr><td>Pending</td><td>yes</td><td></td><td>yes</td><td>yes</td></tr>
+      <tr><td>Resolved</td><td>yes (reopen)</td><td></td><td></td><td>yes</td></tr>
+      <tr><td>Closed</td><td colspan="4">none — terminal; a customer reply creates a follow-up ticket</td></tr>
+    </table>
+    <span class="source-cite">supabase/migrations/009_conversation_model.sql:26-99</span>
+    <p>Because the rules are data, the API exposes them too: <code>GET /api/tickets/[id]</code> returns <code>allowed_statuses</code> read from the table, and the UI only offers those moves. A disallowed PATCH comes back as a readable 400 mapped from the trigger's <code>check_violation</code>.</p>
+    <span class="source-cite">src/server/tickets/replies.ts (allowedNextStatuses); src/app/api/tickets/[id]/route.ts (PATCH error mapping)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How does a single constraint guarantee that a customer message never points at an outgoing email?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p><code>ticket_messages</code> has a generated column <code>email_direction</code> derived from <code>kind</code> (customer → inbound, reply → outbound). Its foreign key is <code>(email_id, organization_id, email_direction)</code> referencing <code>emails (id, organization_id, direction)</code>. One declarative constraint checks the same tenant <em>and</em> the right direction — no trigger needed.</p>
+<pre><code>email_direction text GENERATED ALWAYS AS (
+  CASE kind WHEN 'customer' THEN 'inbound' WHEN 'reply' THEN 'outbound' END
+) STORED,
+...
+CONSTRAINT ticket_messages_email_fkey FOREIGN KEY (email_id, organization_id, email_direction)
+  REFERENCES public.emails (id, organization_id, direction),</code></pre>
+    <span class="source-cite">supabase/migrations/009_conversation_model.sql:131-165</span>
+    <p>A real limitation surfaced while building it: Postgres forbids <code>ON DELETE SET NULL</code> on a foreign key containing a generated column. The key uses <code>NO ACTION</code> instead, which is arguably better — an email that is part of a conversation can't be deleted on its own; deleting the whole organization still cascades through both tables in one statement.</p>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Which operations are transactional database functions, and why not application code?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Function</th><th>What happens atomically</th><th>Concurrency</th></tr>
+      <tr><td><code>assign_ticket()</code></td><td>Checks the actor is an active admin of the org, updates the assignee, writes <code>ticket_assignments</code> history and the audit row</td><td><code>SELECT … FOR UPDATE</code> on the ticket</td></tr>
+      <tr><td><code>record_inbound_message()</code></td><td>Appends a customer email to a ticket (reopening Pending/Resolved), opens a follow-up for Closed, or creates a new ticket with its first message; priority only rises</td><td><code>FOR UPDATE</code>; idempotent via <code>ticket_messages.email_id UNIQUE</code></td></tr>
+      <tr><td><code>complete_ticket_reply()</code></td><td>After SMTP accepted a reply: outbound email row, message marked sent, first-response time, optional status change (skipped, never raised, if not allowed), AI-draft link, audit row</td><td><code>FOR UPDATE</code> on message and ticket; single-use (must be in <code>sending</code>)</td></tr>
+    </table>
+    <span class="source-cite">supabase/migrations/013_normalize_contract.sql:30, 84, 165 (current definitions); 007, 009, 010 (originals)</span>
+    <p>Supabase's JS client sends each call as its own HTTP request, so a sequence of inserts from the app cannot be one transaction. Putting multi-row invariants in a function is the only way to get all-or-nothing semantics and row locks. Each is tested for atomicity and single use (e.g. calling <code>complete_ticket_reply</code> twice fails).</p>
+    <span class="source-cite">supabase/tests/assignment_integrity.sql (4); conversation_model.sql (7, 8); inbound_messages.sql (1-6)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How is the audit log made tamper-resistant when the app's own key can write anything?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>A <code>BEFORE UPDATE OR DELETE</code> trigger raises <code>insufficient_privilege</code> unless the transaction explicitly opts in with <code>SET LOCAL intellidesk.audit_maintenance = 'on'</code> (for retention or deleting a workspace). The only change allowed without it is referential: when a user or ticket is deleted, its id is cleared from the audit row and nothing else changes — the trigger compares the new row to the old one with only those ids nulled.</p>
+<pre><code>IF TG_OP = 'UPDATE' THEN
+  v_expected := OLD;
+  IF NEW.actor_user_id IS NULL THEN v_expected.actor_user_id := NULL; END IF;
+  IF NEW.ticket_id IS NULL THEN v_expected.ticket_id := NULL; END IF;
+  IF NEW IS NOT DISTINCT FROM v_expected THEN
+    RETURN NEW;
+  END IF;
+END IF;</code></pre>
+    <span class="source-cite">supabase/migrations/012_normalize_expand.sql:102-146</span>
+    <p>012 also changed the audit log's ticket foreign key from <code>ON DELETE CASCADE</code> (deleting a ticket erased its history) to <code>ON DELETE SET NULL (ticket_id)</code>. <code>SET NULL (column)</code> is Postgres 15+ syntax that nulls only the named column of a composite key, keeping <code>organization_id</code> intact.</p>
+    <span class="source-cite">supabase/migrations/012_normalize_expand.sql:139-141; supabase/tests/normalization.sql (check 5)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What other constraints encode business rules?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li><code>enforce_ticket_assignee</code> trigger: an assignee must be an <em>active admin or agent</em> of the same organization (viewers can't hold tickets).</li>
+      <li><code>ticket_messages_kind_shape</code> CHECK: customer messages have no delivery state, replies always do, notes are never linked to an email; only agents carry a user id; a delivery error only exists when delivery failed.</li>
+      <li><code>emails_outbound_not_queued</code> CHECK: outbound mail is always <code>processed</code>, so it can never enter the intake queue.</li>
+      <li><code>organizations.timezone</code> CHECK: <code>now() AT TIME ZONE timezone IS NOT NULL</code> rejects zone names Postgres doesn't know.</li>
+      <li><code>ai_credentials</code>: key hint exactly 4 characters; <code>last_error</code> only while <code>status = 'error'</code>.</li>
+      <li><code>emails_not_spam_pair</code>: a spam override always has a timestamp.</li>
+      <li><code>accounts_org_domain_key</code>: one company account per <code>(organization, lower(domain))</code>.</li>
+    </ul>
+    <span class="source-cite">007:53-78; 009:113-121, 160-168; 011:18-45; 012:81, 98-100</span>
+  </div>
+</div>
+
+<h2>Migration history</h2>
+
+<div class="qa-item">
+  <div class="qa-question">What did each of the 13 migrations do?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>#</th><th>Migration</th><th>Purpose</th></tr>
+      <tr><td>001</td><td>initial_schema</td><td>Original prototype schema: 10 tables (accounts, contacts, teams, tickets, emails, ticket_emails, sla_policies, faqs, auto_responses, audit_logs)</td></tr>
+      <tr><td>002</td><td>auth</td><td><code>organizations</code>, <code>users</code> (password hash, role) and <code>organization_id</code> on data tables</td></tr>
+      <tr><td>003</td><td>rls</td><td>RLS policies based on <code>auth.uid()</code> — ineffective with NextAuth; superseded by 006</td></tr>
+      <tr><td>004</td><td>email_config</td><td>Plaintext IMAP/SMTP JSON on organizations — superseded by encrypted <code>mailbox_connections</code> (007), column dropped in 013</td></tr>
+      <tr><td>005</td><td>seed_admin</td><td>Seed workspace and admin (the plaintext password comment was later scrubbed and the password rotated)</td></tr>
+      <tr><td>006</td><td>lockdown_public_api</td><td>Close the Data API: RLS on, no policies, revoke anon/authenticated, legacy tables to <code>archive</code></td></tr>
+      <tr><td>007</td><td>integrity_and_assignment</td><td>NOT NULL orgs, composite tenant keys, UUID assignee FK + trigger, team FK, availability, contacts org, SLA per org, <code>ticket_assignments</code>, <code>assign_ticket()</code>, <code>mailbox_connections</code>, <code>auth_login_attempts</code>, indexes</td></tr>
+      <tr><td>008</td><td>email_intake_queue</td><td><code>processing_attempts</code>, <code>processing_error</code>, <code>last_attempt_at</code>, partial queue index</td></tr>
+      <tr><td>009</td><td>conversation_model</td><td>Status lookup + transitions + trigger, <code>ticket_messages</code>, email direction, follow-ups, <code>complete_ticket_reply()</code>, backfill, temporary bridge trigger</td></tr>
+      <tr><td>010</td><td>record_inbound_message</td><td>Atomic, idempotent inbound-email commit point</td></tr>
+      <tr><td>011</td><td>ai_settings_and_spam_review</td><td><code>ai_auto_send</code> (off), <code>ai_credentials</code>, spam overrides, spam and rate-limit indexes</td></tr>
+      <tr><td>012</td><td>normalize_expand</td><td>Per-org ticket counters, citations table, account/contact uniqueness, timezone, append-only audit log</td></tr>
+      <tr><td>013</td><td>normalize_contract</td><td>Drop every redundant/derivable column and <code>ticket_emails</code>; generated <code>ai_confidence</code>; functions redefined without dropped columns</td></tr>
+    </table>
+    <span class="source-cite">supabase/migrations/001…013 (headers)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What is expand/contract, and how was it used here?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>A schema change that removes or renames something breaks whichever code version isn't expecting it, and code and database can't switch at the same instant. Expand/contract splits the change so every intermediate state is compatible with the code running at that moment:</p>
+    <ol>
+      <li><strong>Expand</strong> — add new tables/columns and relax constraints; old code keeps working. (012; also 007 and 009 kept the legacy text columns and <code>ticket_emails</code>.)</li>
+      <li><strong>Deploy</strong> code that uses only the new shape.</li>
+      <li><strong>Contract</strong> — drop what nothing uses any more. (013, applied only after the deploy succeeded.)</li>
+    </ol>
+    <p>During the 009 window the old pipeline still wrote only <code>ticket_emails</code>, so 009 installed a temporary <em>bridge trigger</em> copying each such link into <code>ticket_messages</code>; 013 dropped the bridge with the table.</p>
+    <span class="source-cite">supabase/migrations/009_conversation_model.sql:221-245 (bridge); 012_normalize_expand.sql:1-3; 013_normalize_contract.sql:1-3, 248-250</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How were migrations applied safely to a live database?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ol>
+      <li><strong>Rehearse:</strong> run the migration body plus every test suite inside one <code>BEGIN … ROLLBACK</code> against production. Nothing persists, but real data is checked (this is how the <code>sla_policies_severity_check</code> collision in 007 and the generated-column FK restriction in 009 were caught).</li>
+      <li><strong>Back up</strong> the affected tables (<code>pg_dump --data-only</code>).</li>
+      <li><strong>Apply</strong> with <code>supabase db push</code>, which records the version in the migrations history.</li>
+      <li><strong>Reload</strong> PostgREST's schema cache (<code>NOTIFY pgrst, 'reload schema'</code>) so new relationships are visible to the API.</li>
+      <li><strong>Re-run</strong> every test suite against the live database.</li>
+    </ol>
+    <p>Migrations are never renamed or edited after being applied; fixes go in a new migration.</p>
+    <span class="source-cite">README.md (Database, Conventions); deployment.html</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What database-level limitations remain?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <div class="callout warning"><strong>Known limitations</strong>
+      <ul>
+        <li>PostgREST did not detect the self-referencing composite foreign key <code>tickets.follow_up_of</code> for embedding, so the API loads the parent ticket with a second query.</li>
+        <li><code>sla_policies.organization_id</code> is nullable by design (NULL = global default policy, overridden per org).</li>
+        <li>No business-hours calendar or SLA pause while Pending (planned in the roadmap).</li>
+        <li>Free-tier Supabase has no automatic backups; backups were taken manually before each migration.</li>
+      </ul>
+    </div>
+    <span class="source-cite">src/app/api/tickets/[id]/route.ts (follow_up_parent lookup); roadmap.html</span>
+  </div>
+</div>
+
+  </main>
+</div>
+
+<script>
+  var toggleBtn = document.getElementById('toggle-btn');
+  var sidebar = document.getElementById('sidebar');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function () {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  document.querySelectorAll('.qa-question').forEach(function (question) {
+    question.addEventListener('click', function () {
+      question.nextElementSibling.classList.toggle('open');
+    });
+  });
+
+  var searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', function (e) {
+      var query = e.target.value.toLowerCase();
+      document.querySelectorAll('.qa-item').forEach(function (item) {
+        item.style.display = item.textContent.toLowerCase().indexOf(query) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  (function setActiveNav() {
+    var currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentPage) {
+        link.classList.add('active');
+      }
+    });
+  })();
+</script>
+</body>
+</html>

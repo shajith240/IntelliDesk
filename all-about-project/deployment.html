@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Deployment &amp; DevOps — IntelliDesk AI Project Docs</title>
+<title>Deployment &amp; Operations — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,160 +319,173 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>Deployment &amp; DevOps</h1>
-    <p class="page-intro">How this application is deployed to Vercel, how scheduled jobs are configured, and what environment variables and local vs. production differences apply.</p>
+    <h1>Deployment &amp; Operations</h1>
+<p class="page-intro">How the app is deployed, every environment variable and secret, how schema changes reach the live database, and the runbook for the problems an operator actually meets.</p>
 
-    <h2>Vercel deployment model</h2>
+<h2>Deploying</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">How is this application deployed to Vercel?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The app is a standard Next.js application deployed to Vercel using its default configuration:</p>
-        <ul>
-          <li><strong>Repository root</strong> — The app lives at the repository root, not in a subfolder. Vercel's default "Root Directory" setting points to the repo root, so no custom path is needed.</li>
-          <li><strong>Framework preset</strong> — Next.js (automatically detected by Vercel).</li>
-          <li><strong>Build command</strong> — <code>npm run build</code> (default for Next.js); the build runs <code>next build</code>, which produces a production-optimized bundle with the React Compiler enabled.</li>
-          <li><strong>No static export</strong> — The app requires route handlers, server-side authentication, and dynamic data from Supabase, so static export is not used.</li>
-          <li><strong>Runtime features</strong> — Next.js App Router, dynamic routes, API routes, middleware, and cron jobs are all supported.</li>
-        </ul>
-        <span class="source-cite">README.md "Deploying to Vercel" section, lines 212-219; next.config.ts</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How does code reach production?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Vercel builds and deploys every push to <code>main</code> (Next.js preset, root directory empty, <code>npm run build</code>). Before pushing, the local gate is typecheck, lint, unit tests and a production build; database changes are applied separately with the Supabase CLI, in an order that keeps the running code working (below).</p>
+<pre><code>npx tsc --noEmit -p .
+npm run lint
+npm test
+npm run build</code></pre>
+    <span class="source-cite">package.json (scripts: dev, build, start, lint, test); README.md "Deploying to Vercel"</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How is <code>NEXTAUTH_URL</code> configured differently in development vs. production?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The <code>NEXTAUTH_URL</code> environment variable tells NextAuth where the app is running, so it can validate redirect URLs and session cookies:</p>
-        <ul>
-          <li><strong>Local development</strong> — <code>NEXTAUTH_URL=http://localhost:3000</code> (set in <code>.env.local</code>).</li>
-          <li><strong>Production</strong> — <code>NEXTAUTH_URL</code> must be set to the deployed Vercel URL (e.g., <code>https://intellidesk-ai.vercel.app</code>) in the Vercel dashboard under Settings → Environment Variables.</li>
-        </ul>
-        <p>If <code>NEXTAUTH_URL</code> is not set correctly, NextAuth will reject sign-in requests and return a "NEXTAUTH_URL is not set" error. Vercel automatically sets <code>AUTH_TRUST_HOST=true</code> at runtime, so Auth.js trusts Vercel's request headers; no manual configuration is needed there.</p>
-        <span class="source-cite">.env.example line 9; README.md line 105 (AUTH_TRUST_HOST note)</span>
-      </div>
-    </div>
-
-    <h2>Scheduled cron jobs</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How is the email polling cron job configured?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Vercel Cron reads the schedule from <code>vercel.json</code> in the repository root:</p>
-        <pre><code>{
+<div class="qa-item">
+  <div class="qa-question">How is email polling scheduled in production?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Two callers of <code>/api/emails/poll</code>, both sending <code>Authorization: Bearer $CRON_SECRET</code>: a GitHub Actions workflow every 10 minutes (the real schedule) and a Vercel Cron once a day at 06:00 UTC (fallback — the most Vercel Hobby allows).</p>
+<pre><code>{
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [{ "path": "/api/emails/poll", "schedule": "0 6 * * *" }]
 }</code></pre>
-        <p>This configures a daily trigger at 06:00 UTC. Vercel automatically sends an <code>Authorization: Bearer $CRON_SECRET</code> header to the endpoint; the secret is read from the environment variables you set in the Vercel dashboard. The endpoint checks that header via the <code>verifyCronRequest()</code> function and fails closed (503) if the secret is not configured.</p>
-        <p>The schedule format is POSIX cron syntax (minute hour day month day-of-week, all in UTC). The Vercel Hobby plan only allows a single daily schedule; Pro and higher plans support more frequent schedules (e.g., <code>*/10 * * * *</code> for every 10 minutes).</p>
-        <span class="source-cite">vercel.json lines 1-4; README.md line 216</span>
-      </div>
-    </div>
+    <span class="source-cite">vercel.json; .github/workflows/poll-mailboxes.yml:1-6</span>
+    <p>The workflow needs two repository secrets: <code>APP_URL</code> (deployed URL, no trailing slash) and <code>CRON_SECRET</code> (same value as on Vercel). Without them it skips with a warning.</p>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What does the <code>/api/emails/poll</code> endpoint do when the cron job runs?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The endpoint is defined in <code>src/app/api/emails/poll/route.ts</code>. When called by Vercel Cron (or manually via curl with the <code>CRON_SECRET</code>), it:</p>
-        <ul>
-          <li>Verifies the bearer token matches <code>CRON_SECRET</code> using timing-safe comparison (no timing-side-channel vulnerability).</li>
-          <li>Polls every organization's IMAP mailbox connection (stored in Supabase under <code>email_config</code>).</li>
-          <li>For each new unseen email, parses it, extracts the From/To/Subject, checks for spam/duplicates, and identifies the customer thread.</li>
-          <li>Creates or updates a ticket in the <code>tickets</code> table, storing the email with its SLA due dates computed from the org's policies.</li>
-          <li>Generates an AI classification (category, priority, sentiment) and an embedding via Gemini.</li>
-          <li>Stores the embedding in Pinecone under the org's namespace for later retrieval during reply drafting.</li>
-          <li>Logs every step to the <code>audit_logs</code> table.</li>
-        </ul>
-        <p>The endpoint has a 60-second max duration in Next.js; any emails not processed in that time are picked up by the next scheduled run.</p>
-        <span class="source-cite">README.md "Email pipeline" section, lines 148-165</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What's needed to run a production build locally?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><code>npm run build</code> then <code>AUTH_TRUST_HOST=true npm start</code>. Auth.js rejects requests from untrusted hosts outside Vercel/<code>next dev</code>, so the flag is required for a local <code>next start</code>.</p>
+    <span class="source-cite">README.md (Environment variables, AUTH_TRUST_HOST note)</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why does the cron endpoint fail with 503 instead of 401 if the secret is missing?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>By design, if <code>CRON_SECRET</code> is unset in the environment, the endpoint returns <code>503 Endpoint is not configured</code> rather than silently accepting all requests or returning a generic 401 that looks like "you sent the wrong secret."</p>
-        <p>This "fail closed" approach makes misconfiguration immediately obvious: if someone deploys without setting the secret, the cron job will fail loudly and visibly in the Vercel dashboard, rather than silently skipping email polling. The 503 status also signals to Vercel that the job should be retried, so it doesn't give up after one failure.</p>
-        <span class="source-cite">src/server/auth/cron.ts — verifyBearerSecret() implementation; README.md line 103 (secret required, fails with 503)</span>
-      </div>
-    </div>
+<h2>Configuration</h2>
 
-    <h2>Environment variables by purpose</h2>
+<div class="qa-item">
+  <div class="qa-question">What does every environment variable do?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Variable</th><th>Scope</th><th>Purpose</th></tr>
+      <tr><td><code>NEXT_PUBLIC_SUPABASE_URL</code>, <code>…_ANON_KEY</code>, <code>…_PUBLISHABLE_KEY</code></td><td>public</td><td>Project URL and public keys (the anon key can read nothing since 006)</td></tr>
+      <tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td>server</td><td>All database access from route handlers</td></tr>
+      <tr><td><code>NEXTAUTH_SECRET</code>, <code>NEXTAUTH_URL</code></td><td>server</td><td>JWT signing, canonical URL</td></tr>
+      <tr><td><code>GEMINI_API_KEY</code></td><td>server, optional</td><td>Platform fallback key for workspaces without their own</td></tr>
+      <tr><td><code>PINECONE_API_KEY</code>, <code>PINECONE_INDEX</code>, <code>PINECONE_HOST</code>, <code>PINECONE_EMBEDDING_DIMENSIONS</code></td><td>server</td><td>Vector index; dimension must match the index</td></tr>
+      <tr><td><code>MAILBOX_ENCRYPTION_KEY</code></td><td>server</td><td>32-byte base64 AES-256 key for mailbox passwords and workspace AI keys. Must be identical in every environment sharing the database; losing it means reconnecting every mailbox and re-entering every key</td></tr>
+      <tr><td><code>CRON_SECRET</code></td><td>server</td><td>Bearer secret for poll/process-queue (503 if unset)</td></tr>
+      <tr><td><code>EMAIL_INGEST_SECRET</code></td><td>server</td><td>Bearer secret for the ingest webhook (503 if unset)</td></tr>
+      <tr><td><code>NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP</code></td><td>public, optional</td><td><code>true</code> re-enables self-service workspace signup; off by default</td></tr>
+    </table>
+    <span class="source-cite">.env.example; README.md "Environment variables"</span>
+    <p>Mailbox credentials and AI keys are <em>not</em> environment variables: admins enter them in Settings and they're stored encrypted per workspace.</p>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What environment variables are required for the app to run, grouped by purpose?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p><strong>Supabase (database and auth storage):</strong></p>
-        <ul>
-          <li><code>NEXT_PUBLIC_SUPABASE_URL</code> — Project URL (public, safe to commit in .env.local)</li>
-          <li><code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> — Public API key for auth flows (public)</li>
-          <li><code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> — Publishable key (public)</li>
-          <li><code>SUPABASE_SERVICE_ROLE_KEY</code> — Secret key for unrestricted database access from route handlers (server-only, never in browser)</li>
-        </ul>
-        <p><strong>NextAuth (session management):</strong></p>
-        <ul>
-          <li><code>NEXTAUTH_SECRET</code> — Random secret for signing JWT sessions; generate with <code>openssl rand -base64 32</code></li>
-          <li><code>NEXTAUTH_URL</code> — Canonical app URL (e.g., <code>http://localhost:3000</code> locally, <code>https://app.vercel.app</code> in production)</li>
-        </ul>
-        <p><strong>Google Gemini (classification and embeddings):</strong></p>
-        <ul>
-          <li><code>GEMINI_API_KEY</code> — API key from Google AI Studio (server-only)</li>
-        </ul>
-        <p><strong>Pinecone (vector search):</strong></p>
-        <ul>
-          <li><code>PINECONE_API_KEY</code> — API key (server-only)</li>
-          <li><code>PINECONE_INDEX</code> — Index name (e.g., "intellidesk")</li>
-          <li><code>PINECONE_HOST</code> — Optional: direct index host URL from the Pinecone console</li>
-          <li><code>PINECONE_EMBEDDING_DIMENSIONS</code> — Dimension count (3072 for Gemini embedding model; must match index creation)</li>
-        </ul>
-        <p><strong>Cron and webhooks (scheduled jobs):</strong></p>
-        <ul>
-          <li><code>CRON_SECRET</code> — Bearer token for Vercel Cron to call <code>/api/emails/poll</code> and <code>/api/emails/process-queue</code> (server-only); generate with <code>openssl rand -hex 32</code></li>
-          <li><code>EMAIL_INGEST_SECRET</code> — Bearer token for external mail relay to call <code>/api/emails/ingest</code> webhook (server-only); generate with <code>openssl rand -hex 32</code></li>
-        </ul>
-        <p><strong>Optional development features:</strong></p>
-        <ul>
-          <li><code>NEXT_PUBLIC_DEMO_MODE</code> — If true, shows "Load sample tickets" action in empty states (local development only)</li>
-          <li><code>IMAP_USER</code> — Optional: local IMAP user email for filtering self-sent emails during testing</li>
-        </ul>
-        <span class="source-cite">README.md "Environment variables" section, lines 69-102; .env.example</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How do you generate the secrets?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+<pre><code>openssl rand -base64 32   # MAILBOX_ENCRYPTION_KEY
+openssl rand -hex 32      # CRON_SECRET, EMAIL_INGEST_SECRET</code></pre>
+    <span class="source-cite">Commands from the generation comments in .env.example</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What is the difference between public and server-only environment variables?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p><strong>Public variables</strong> (prefixed with <code>NEXT_PUBLIC_</code>) are compiled into the client-side JavaScript bundle and are safe to commit to version control. Examples: Supabase URL and public keys, which are safe because Supabase has row-level security (RLS) policies that enforce per-user/per-org access control.</p>
-        <p><strong>Server-only variables</strong> (no prefix) are never sent to the browser; they are available only to route handlers and server-side functions. Examples: <code>SUPABASE_SERVICE_ROLE_KEY</code> (bypasses RLS), <code>GEMINI_API_KEY</code>, and <code>CRON_SECRET</code>. These must be set in the Vercel dashboard, never committed to git.</p>
-        <p>The Next.js build will not fail if you accidentally use a server-only variable on the client, but the <code>server-only</code> package and ESLint's <code>no-restricted-imports</code> rule catch the mistake at lint time.</p>
-        <span class="source-cite">README.md line 71</span>
-      </div>
-    </div>
+<h2>Database changes</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">What happens if you run <code>npm start</code> locally without setting <code>AUTH_TRUST_HOST</code>?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>When running a production Next.js build outside of Vercel (via <code>npm start</code>), Auth.js (NextAuth v5) checks the request's Host header against the configured <code>NEXTAUTH_URL</code>. If they don't match, it rejects the request as a potential host header injection attack.</p>
-        <p>Setting <code>AUTH_TRUST_HOST=true` disables this check and tells Auth.js to trust the Host header. This is necessary when running a production build locally or in a non-Vercel environment:</p>
-        <pre><code>AUTH_TRUST_HOST=true npm start</code></pre>
-        <p>Vercel automatically sets <code>AUTH_TRUST_HOST=true</code> at runtime, so the variable doesn't need to be configured in the Vercel dashboard. Local development with <code>npm run dev` handles it automatically as well.</p>
-        <span class="source-cite">README.md line 105</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How is a migration applied to the live database?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ol>
+      <li>Rehearse: run the migration body and every test suite inside <code>BEGIN … ROLLBACK</code> against the live database.</li>
+      <li>Back up the affected tables with <code>pg_dump --data-only</code>.</li>
+      <li><code>supabase db push</code> (the CLI is linked to the project and records applied versions).</li>
+      <li><code>NOTIFY pgrst, 'reload schema'</code> so the API sees new relationships.</li>
+      <li>Run all suites again:</li>
+    </ol>
+<pre><code>for f in supabase/tests/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done</code></pre>
+    <span class="source-cite">README.md "Database"; supabase/tests/*.sql</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">In what order are schema changes and code deployed?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Expand/contract. Additive migrations (new tables, relaxed constraints) go first — the running code ignores them. Then code that uses the new shape is deployed and confirmed live. Only then does a contract migration drop what nothing uses. Migration 012 (expand) was applied, commit <code>ffccba5</code> deployed and verified, and only then 013 (contract) was applied. A bridge trigger in 009 covered the window in which old code still wrote to <code>ticket_emails</code>.</p>
+    <span class="source-cite">supabase/migrations/012_normalize_expand.sql:1-3; 013_normalize_contract.sql:1-3; see database-design.html</span>
+  </div>
+</div>
+
+<h2>Runbook</h2>
+
+<div class="qa-item">
+  <div class="qa-question">A mailbox shows "Needs attention". What do you do?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>The card shows the last error in plain language (usually a revoked or wrong app password). Create a new Gmail app password and use <em>Reconnect</em>: the new credentials are verified before replacing the old ones. Polling resumes on the next run; nothing was lost because unread mail stays unread until stored.</p>
+    <span class="source-cite">src/server/email/mailbox.ts (describeMailboxError, recordMailboxSync); src/features/settings/components/mailbox-form.tsx</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Emails aren't becoming tickets. How do you debug it?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ol>
+      <li>GitHub → Actions → "Poll support mailboxes": did the last runs succeed? The response JSON shows <code>intake</code> and <code>drain</code> counts.</li>
+      <li>Settings → Support mailbox: connected and healthy?</li>
+      <li>Settings → AI: is a key configured and healthy? Without one, email waits in the queue.</li>
+      <li>Queue rows: <code>select processing_attempts, processing_error from emails where not processed</code>. A row at 5 attempts is parked; saving a working AI key requeues rows that gave up, otherwise reset <code>processing_attempts</code> to 0.</li>
+      <li>Spam page: was it caught by a filter? "Not spam" requeues it.</li>
+    </ol>
+    <span class="source-cite">src/server/email/intake.ts:16; src/app/api/settings/ai/route.ts (requeue); src/app/api/emails/[id]/not-spam/route.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How do you rotate secrets?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li><strong><code>CRON_SECRET</code>:</strong> change it on Vercel and in the GitHub repository secret at the same time, then redeploy.</li>
+      <li><strong><code>NEXTAUTH_SECRET</code>:</strong> changing it signs everyone out.</li>
+      <li><strong>Supabase service-role key / database password:</strong> rotate in the Supabase dashboard, update Vercel.</li>
+      <li><strong><code>MAILBOX_ENCRYPTION_KEY</code>:</strong> there is no re-encryption tool yet; a new key makes stored credentials unreadable, so every workspace must reconnect its mailbox and re-enter its AI key. (The <code>v1:</code> ciphertext prefix exists so a versioned rotation can be added.)</li>
+      <li><strong>User passwords:</strong> each user changes their own from the user menu; there is no reset email yet.</li>
+    </ul>
+    <span class="source-cite">src/server/crypto/secrets.ts:12; src/app/api/me/password/route.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How do you delete audit data or a whole workspace?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>The audit log is append-only. Deliberate maintenance must opt in within the transaction; otherwise the trigger refuses the delete (this includes the cascade from deleting an organization):</p>
+<pre><code>BEGIN;
+SET LOCAL intellidesk.audit_maintenance = 'on';
+DELETE FROM public.audit_logs WHERE created_at &lt; now() - interval '1 year';
+COMMIT;</code></pre>
+    <span class="source-cite">Usage example (not copied from a file); the rule it satisfies: supabase/migrations/012_normalize_expand.sql:102-146</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What about backups and uptime?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <div class="callout warning"><strong>Operational gaps</strong> The free Supabase plan has no automatic backups; manual <code>pg_dump</code> backups were taken before each migration. There is no uptime monitoring or error tracking service configured. Before a paying customer: Supabase Pro (daily backups), Vercel Pro (commercial use), and a free uptime monitor.</div>
+    <span class="source-cite">roadmap.html</span>
+  </div>
+</div>
 
   </main>
 </div>

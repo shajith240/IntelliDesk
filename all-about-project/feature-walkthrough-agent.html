@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent Opens & Sends Response — IntelliDesk AI Project Docs</title>
+<title>Agent Works a Ticket — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,313 +319,516 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>Agent Opens Ticket & Sends Response: End-to-End Flow</h1>
-    <p class="page-intro">Trace how an agent opens a ticket from the list, reviews the AI-generated draft reply, edits it, and sends the response to the customer. Follow the state management, validation, email sending, and the exact success and failure messages the user sees.</p>
+    <h1>Agent Works a Ticket</h1>
+    <p class="page-intro">A walk through the code an agent's browser actually exercises, end to end: login, the queue, opening a ticket, reading the conversation, drafting and sending a reply, and what happens after. Every step is traced to a real component, route, or database function.</p>
 
-    <h2>Step 1: Opening a Ticket via URL Parameter</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How does clicking a ticket open it in the workspace?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The ticket ID is stored in the URL query parameter <code>?ticket=&lt;id&gt;</code>. When an agent clicks a ticket, the <code>useTicketParam()</code> hook reads <code>searchParams.get("ticket")</code> and updates the URL via <code>router.push()</code>, triggering a re-render. The <code>TicketWorkspace</code> component conditionally opens a Sheet drawer if ticketId is present. This approach persists the open ticket across browser refresh and back/forward navigation. Closing the drawer removes the ticket param from the URL.</p>
-        <pre><code>// src/hooks/use-ticket-param.ts
-export function useTicketParam() {
-	const router = useRouter();
-	const pathname = usePathname();
-	const searchParams = useSearchParams();
-	const ticketId = searchParams.get("ticket");
-
-	const setTicket = useCallback(
-		(id: string | null) => {
-			const params = new URLSearchParams(searchParams.toString());
-			if (id) params.set("ticket", id);
-			else params.delete("ticket");
-			const qs = params.toString();
-			const href = qs ? `${pathname}?${qs}` : pathname;
-			if (id) router.push(href, { scroll: false });
-			else router.replace(href, { scroll: false });
-		},
-		[pathname, router, searchParams],
-	);
-
-	return { ticketId, openTicket: (id) => setTicket(id), closeTicket: () => setTicket(null) };
-}</code></pre>
-        <span class="source-cite">src/hooks/use-ticket-param.ts:7-30</span>
-      </div>
-    </div>
+    <h2>1. Signing in and landing on My Work</h2>
 
     <div class="qa-item">
-      <div class="qa-question">What happens while the ticket details are loading?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">Where does an agent land right after login, and why not the Command Center?<span class="qa-difficulty basic">Basic</span></div>
       <div class="qa-answer">
-        <p>The <code>TicketWorkspace</code> component uses <code>useTicket(ticketId)</code> (an SWR hook) to fetch <code>GET /api/tickets/[id]</code>. While loading (<code>isLoading=true</code>), a WorkspaceSkeleton is rendered with placeholder lines. If an error occurs, an ErrorState component is shown with an optional "Retry" button. The drawer remains open during loading; only once the ticket data arrives is the WorkspaceView rendered.</p>
-        <pre><code>// src/features/ticket-workspace/components/ticket-workspace.tsx:16-80
-const { data, error, isLoading, mutate } = useTicket(ticketId);
-return (
-	&lt;Sheet open={!!ticketId} onOpenChange={handleOpenChange}&gt;
-		&lt;SheetContent side="right" className="w-full p-0"&gt;
-			{!data && isLoading && &lt;WorkspaceSkeleton /&gt;}
-			{!data && !isLoading && error && &lt;ErrorState ... /&gt;}
-			{data && &lt;WorkspaceView detail={data} ... /&gt;}
-		&lt;/SheetContent&gt;
-	&lt;/Sheet&gt;
-);</code></pre>
-        <span class="source-cite">src/features/ticket-workspace/components/ticket-workspace.tsx:16-80</span>
-      </div>
-    </div>
-
-    <h2>Step 2: Finding and Displaying the AI Draft</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the system identify which AI draft to show the agent?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The ticket's <code>auto_responses</code> array contains all pending and sent responses. The <code>useReplyDraft()</code> hook filters for unsent responses (sent=false), sorts by created_at descending, and returns the latest one as <code>pending</code>. If no unsent response exists, <code>pending</code> is null. This pattern ensures the UI always shows the most recent AI-generated draft, and prevents stale drafts from being displayed if a new one was regenerated server-side.</p>
-        <pre><code>// src/features/ticket-workspace/hooks/use-reply-draft.ts:13-46
-function latestByCreatedAt(rows: AutoResponseRow[]): AutoResponseRow | null {
-	if (rows.length === 0) return null;
-	return rows.reduce((latest, row) =>
-		new Date(row.created_at).getTime() > new Date(latest.created_at).getTime() ? row : latest,
-	);
+        <p>The root dashboard page (<code>/dashboard</code>) is the Command Center, but it's gated to <code>admin</code> and <code>viewer</code> only. <code>requirePageRole</code> reads the session, and if the signed-in role isn't in the allowed list it redirects to that role's "home" instead of showing a 403 page. For an agent, <code>homeFor()</code> returns <code>/dashboard/my-work</code>, so an agent who opens <code>/dashboard</code> (or clicks a stale bookmark) is bounced straight to My Work without ever seeing the Command Center.</p>
+        <pre><code>function homeFor(role: UserRole): string {
+	return role === "agent" ? "/dashboard/my-work" : "/dashboard";
 }
 
-export function useReplyDraft(detail: TicketDetailResponse) {
-	const ticket = detail.ticket;
-	const pending = latestByCreatedAt(ticket.auto_responses.filter((r) => !r.sent));
-	const lastSent = latestByCreatedAt(ticket.auto_responses.filter((r) => r.sent));
-	const recipient = findRecipient(ticket);
+export async function requirePageRole(...roles: UserRole[]) {
+	const session = await auth();
+	if (!session) redirect("/login");
 
-	const storageKey = pending ? `intellidesk.draft.${ticket.id}.${pending.id}` : null;</code></pre>
-        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:13-46</span>
+	const role = session.user.role;
+	if (!roles.includes(role)) redirect(homeFor(role));
+
+	return session;
+}</code></pre>
+        <span class="source-cite">src/server/auth/page-guard.ts:6-23</span>
+        <pre><code>export default async function DashboardPage() {
+	await requirePageRole("admin", "viewer");
+	...</code></pre>
+        <span class="source-cite">src/app/dashboard/page.tsx:9-10</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">How is the draft text stored and recovered across page refreshes?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">What does the My Work page show, and how is it scoped to the signed-in agent?<span class="qa-difficulty basic">Basic</span></div>
       <div class="qa-answer">
-        <p>Text edits are saved to browser localStorage under a key like <code>intellidesk.draft.&lt;ticket_id&gt;.&lt;response_id&gt;</code>. On initial load, if localStorage has a value for that key, it's used; otherwise the AI's <code>response_text</code> is used. If the user edits the text (making it differ from the AI's original), the edited version is persisted to localStorage. Closing and reopening the ticket (or switching between tickets) recovers the locally-stored draft. If localStorage is unavailable (private mode, quota exceeded), edits still work in memory for the current session but don't persist. A "Restore AI Draft" button lets the agent revert to the original AI text.</p>
-        <pre><code>// src/features/ticket-workspace/hooks/use-reply-draft.ts:20-82
-const storageKey = pending ? `intellidesk.draft.${ticket.id}.${pending.id}` : null;
+        <p>My Work renders the shared <code>WorkQueue</code> component with <code>scope="mine"</code>. Inside <code>useQueueState</code>, that scope sets <code>assigned: "me"</code> on the list query, so the API request only ever returns tickets assigned to the caller — there's no separate "agent" API, the same <code>GET /api/tickets</code> route just narrows by session identity.</p>
+        <pre><code>export default async function MyWorkPage() {
+	await requirePageRole("admin", "agent");
+	return (
+		...
+		<WorkQueue scope="mine" />
+		...
+	);
+}</code></pre>
+        <span class="source-cite">src/app/dashboard/my-work/page.tsx:10-22</span>
+        <pre><code>assigned: scope === "mine" ? "me" : undefined,</code></pre>
+        <span class="source-cite">src/features/queue/hooks/use-queue-state.ts:213</span>
+      </div>
+    </div>
 
-const [tracked, setTracked] = useState<{ key: string | null; text: string }>(() => ({
-	key: storageKey,
-	text: storageKey && pending ? (readStored(storageKey) ?? pending.response_text) : "",
-}));
+    <div class="qa-item">
+      <div class="qa-question">Which statuses show up by default in "My Work"?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>For the <code>mine</code> (and <code>open</code>) scope, <code>scopeDefaultStatuses()</code> defaults the status filter to <code>OPEN_STATUSES</code>: New, In Progress, Pending. Resolved and Closed tickets are filtered out until the agent explicitly asks for "all" statuses via the filter UI.</p>
+        <pre><code>export const OPEN_STATUSES: TicketStatus[] = ["New", "In Progress", "Pending"];</code></pre>
+        <span class="source-cite">src/lib/ticket-meta.ts:16</span>
+        <pre><code>function scopeDefaultStatuses(scope: QueueScope): TicketStatus[] {
+	if (scope === "incoming") return ["New"];
+	if (scope === "open" || scope === "mine") return [...OPEN_STATUSES];
+	return [];
+}</code></pre>
+        <span class="source-cite">src/features/queue/hooks/use-queue-state.ts:43-48</span>
+      </div>
+    </div>
 
-const setText = useCallback((next: string) => {
-	setTracked({ key: storageKey, text: next });
-	if (!storageKey) return;
+    <div class="qa-item">
+      <div class="qa-question">Can an agent see the Incoming Queue or Needs Review pages?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>No. Both <code>/dashboard/queue</code> (Incoming Queue, all New tickets) and <code>/dashboard/review</code> (Needs Review, unassigned AI-flagged tickets) call <code>requirePageRole("admin", "viewer")</code> — agent is not in the list, so an agent hitting either URL is redirected back to My Work. Assignment is exclusively an admin action (see <a href="admin-operations.html">Admin Operations</a>), so there's nothing for an agent to do on either page anyway.</p>
+        <pre><code>export default async function QueuePage() {
+	await requirePageRole("admin", "viewer");</code></pre>
+        <span class="source-cite">src/app/dashboard/queue/page.tsx:10-11</span>
+        <pre><code>export default async function ReviewPage() {
+	await requirePageRole("admin", "viewer");</code></pre>
+        <span class="source-cite">src/app/dashboard/review/page.tsx:10-11</span>
+      </div>
+    </div>
+
+    <h2>2. Opening a ticket</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does opening a ticket work — is there a dedicated ticket page?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>There's no <code>/dashboard/tickets/[id]</code> route. The open ticket lives in the <code>?ticket=&lt;id&gt;</code> query param of whatever queue page the agent is on, managed by <code>useTicketParam</code>. Opening a row pushes the id into the URL (so back/forward and refresh work); the ticket then renders in a right-side <code>Sheet</code> drawer (<code>TicketWorkspace</code>) layered over the queue, fetched with <code>useTicket(ticketId)</code>.</p>
+        <pre><code>export function useTicketParam() {
+	...
+	const ticketId = searchParams.get("ticket");
+	const setTicket = useCallback((id: string | null) => {
+		const params = new URLSearchParams(searchParams.toString());
+		if (id) params.set("ticket", id);
+		else params.delete("ticket");
+		...
+		if (id) router.push(href, { scroll: false });
+		else router.replace(href, { scroll: false });
+	}, [pathname, router, searchParams]);
+	...
+}</code></pre>
+        <span class="source-cite">src/hooks/use-ticket-param.ts:7-24</span>
+        <pre><code>const { ticketId, closeTicket, openTicket } = useTicketParam();
+const { data, error, isLoading, mutate } = useTicket(ticketId);
+...
+<Sheet open={!!ticketId} onOpenChange={handleOpenChange}></code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/ticket-workspace.tsx:17-34</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does <code>GET /api/tickets/[id]</code> return, in one call?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>One query joins the ticket to its contact, account, team, every <code>ticket_messages</code> row (with the sending user's name and the linked email's headers), and any <code>auto_responses</code>. Alongside it the route fetches the ticket's SLA reading, the set of statuses the workflow currently allows, the parent ticket if this is a follow-up, and up to five "similar" tickets in the same category (scoped to the agent's own tickets unless they can view all).</p>
+        <pre><code>const [slaStatus, nextStatuses, parent] = await Promise.all([
+	getTicketSLAStatus(id),
+	allowedNextStatuses(ticket.status as TicketStatus),
+	ticket.follow_up_of ? ... : Promise.resolve(null),
+]);
+...
+return NextResponse.json({
+	ticket: { ...ticket, follow_up_parent: parent },
+	sla: slaStatus,
+	allowed_statuses: nextStatuses,
+	similar_tickets: relatedTickets || [],
+});</code></pre>
+        <span class="source-cite">src/app/api/tickets/[id]/route.ts:41-95</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What happens if an agent tries to open a ticket assigned to someone else?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>They get the same 404 as a ticket that doesn't exist at all. <code>can.viewTicket</code> only lets an agent see a ticket if <code>ticket.assigned_agent === session.user.id</code> (admins and viewers see everything); the route deliberately returns "Ticket not found" rather than 403 so the UI can't be used to enumerate which ticket ids exist in the workspace.</p>
+        <pre><code>if (!ticket || !can.viewTicket(session, ticket)) return notFound("Ticket not found");</code></pre>
+        <span class="source-cite">src/app/api/tickets/[id]/route.ts:61</span>
+        <pre><code>viewTicket(s: Actor, ticket: AssignableTicket) {
+	return isAdmin(s) || isViewer(s) || (isAgent(s) && ticket.assigned_agent === s.user.id);
+},</code></pre>
+        <span class="source-cite">src/server/auth/policy.ts:31-33</span>
+      </div>
+    </div>
+
+    <h2>3. Reading the conversation</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What are the three kinds of message in a ticket's conversation, and how does the UI tell them apart?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p><code>ConversationColumn</code> sorts <code>ticket.ticket_messages</code> by <code>created_at</code> and renders one of three cards per row based on <code>kind</code>: <code>customer</code> (an inbound email), <code>reply</code> (a public outbound email — agent or AI), or <code>note</code> (internal, never emailed). Notes get a warning-tinted border and a lock icon with an "Internal note" lozenge; customer and reply cards share a neutral style, with the reply card adding a "Reply" or (for AI) an "AI · Sent automatically" label.</p>
+        <pre><code>if (row.kind === "note") {
+	...
+	<Lock className="h-3.5 w-3.5 shrink-0 text-warning-text" aria-hidden="true" />
+	<Lozenge appearance="moved">Internal note</Lozenge>
+	...
+}
+if (row.kind === "reply") {
+	const isAi = row.author_type === "ai";
+	const author = isAi ? "IntelliDesk AI" : (row.users?.name ?? "Former member");
+	...
+	{isAi ? <AiLabel>Sent automatically</AiLabel> : <Lozenge>Reply</Lozenge>}</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/conversation-column.tsx:101-165</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the agent see whether a reply actually went out?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Every <code>reply</code> row carries <code>delivery_status</code>: <code>sending</code>, <code>sent</code>, or <code>failed</code>. Only <code>sending</code> and <code>failed</code> show a lozenge ("Sending…" / "Not delivered") — a normal delivered reply shows no badge at all. When a reply failed, <code>delivery_error</code> is shown both in the collapsed preview and again in the expanded body, so the agent doesn't have to open the card to know something went wrong.</p>
+        <pre><code>{row.delivery_status === "sending" && <Lozenge appearance="inprogress">Sending…</Lozenge>}
+{row.delivery_status === "failed" && <Lozenge appearance="removed">Not delivered</Lozenge>}
+...
+{row.delivery_status === "failed" && row.delivery_error && (
+	<p className="mt-1 text-xs text-danger-text group-open:hidden">{row.delivery_error}</p>
+)}</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/conversation-column.tsx:141-154</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Why are customer and reply bodies always rendered as plain text?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The component's own header comment states the rule directly: message bodies are untrusted (customer-authored) or at minimum user-authored, so they're always rendered as plain text rather than interpreted as HTML — <code>{body}</code> inside a <code>&lt;p&gt;</code>, never <code>dangerouslySetInnerHTML</code>. This closes off stored-XSS from a hostile "customer" email becoming script that runs in an agent's or admin's browser.</p>
+        <pre><code>// Ticket title and conversation: customer emails, team replies, and internal notes.
+// Customer/reply bodies are untrusted or user-authored, so they always render as plain text.</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/conversation-column.tsx:3-4</span>
+      </div>
+    </div>
+
+    <h2>4. Writing a reply</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the agent switch between "Reply" and "Internal note"?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The composer has one shared draft object (<code>useReplyDraft</code>) with a <code>mode</code> field, toggled by a two-button group. Each mode keeps its own text in the same session object (<code>replyText</code> / <code>noteText</code>), each persisted to its own <code>localStorage</code> key, so switching modes and back doesn't lose either draft.</p>
+        <pre><code>const mode = session.mode;
+const text = mode === "reply" ? session.replyText : session.noteText;
+
+const setMode = useCallback((next: ComposerMode) => {
+	setSession((prev) => (prev.mode === next ? prev : { ...prev, mode: next }));
+}, []);</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:109-114</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Where does the AI draft in the composer come from, and what does "Restore AI draft" do?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The "pending" draft is the newest row in <code>ticket.auto_responses</code> whose <code>sent_message_id</code> is still null. If one exists, the reply textarea starts pre-filled with its <code>response_text</code> (unless the agent already has unsaved text in <code>localStorage</code> for this ticket, which wins). Editing the text sets <code>isDirty</code>/<code>fromAiDraft</code> to false and shows "Restore AI draft", which simply overwrites the draft back to the AI's original text — it does not re-run the AI.</p>
+        <pre><code>const pending = latestByCreatedAt(ticket.auto_responses.filter((r) => r.sent_message_id === null));
+...
+replyText: readStored(replyStorageKey) ?? pending?.response_text ?? "",
+...
+const restoreAiDraft = useCallback(() => {
+	if (!pending) return;
+	setSession((prev) => {
+		writeStored(replyStorageKey, pending.response_text, pending.response_text);
+		return { ...prev, replyText: pending.response_text };
+	});
+}, [pending, replyStorageKey]);</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:67-140</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What is the "Then set" control, and which statuses can appear in it?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>It lets the agent choose the ticket's status as part of sending the reply, instead of a separate step. The candidate list is fixed to In Progress / Pending / Resolved, then filtered down to whichever of those the workflow actually allows from the ticket's current status (plus the current status itself, so the select never shows an empty list). It defaults to Pending when that's a legal move — the common "I answered, now I'm waiting on the customer" case.</p>
+        <pre><code>const REPLY_STATUS_OPTIONS: ReplyStatusAfter[] = ["In Progress", "Pending", "Resolved"];
+...
+const statusOptions: ReplyStatusAfter[] = REPLY_STATUS_OPTIONS.filter(
+	(s) => s === ticket.status || detail.allowed_statuses.includes(s),
+);
+function defaultStatusAfter(): ReplyStatusAfter {
+	if (statusOptions.includes("Pending")) return "Pending";
+	return statusOptions[0] ?? "In Progress";
+}</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:14,75-82</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Where is the in-progress draft actually stored, and does it survive a page refresh?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>In <code>window.localStorage</code>, one key per ticket per mode (<code>intellidesk.draft.&lt;ticketId&gt;</code> for replies, <code>intellidesk.note.&lt;ticketId&gt;</code> for notes). Every keystroke writes through; if the text is edited back to the "blank" value (empty note, or the untouched AI draft) the key is removed instead of storing a no-op value. Reads and writes are wrapped in try/catch so private-mode or quota failures degrade to in-memory-only editing rather than crashing the composer. This is why closing the ticket sheet with unsent text only warns about losing focus, not the text itself — "Your reply edits stay saved on this device."</p>
+        <pre><code>function writeStored(key: string, value: string, blank: string) {
 	try {
-		if (pending && next === pending.response_text) {
-			window.localStorage.removeItem(storageKey);
-		} else {
-			window.localStorage.setItem(storageKey, next);
-		}
+		if (value === blank) window.localStorage.removeItem(key);
+		else window.localStorage.setItem(key, value);
 	} catch {
 		// Best effort only — edits still work in memory for this session.
 	}
-}, [storageKey, pending]);</code></pre>
-        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:42-82</span>
-      </div>
-    </div>
-
-    <h2>Step 3: Sending the Response</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">What validation happens before sending a response?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Client-side validation in <code>useReplyDraft.send()</code>: text must not be empty after trimming, and must be ≤ 20,000 characters. Server-side validation in <code>POST /api/respond</code>: the response_id (or ticket_id if response_id not provided) must resolve to an unsent auto_response row owned by the caller's organization; response_text must not be empty and must be ≤ 20,000 characters. If any validation fails, a 400 error is returned with a descriptive message shown to the user.</p>
-        <pre><code>// Client-side (src/features/ticket-workspace/hooks/use-reply-draft.ts:95-107)
-const send = useCallback(async (): Promise<boolean> => {
-	if (!pending || sendingRef.current || status === "sending") return false;
-	const trimmed = text.trim();
-	if (!trimmed) {
-		setStatus("error");
-		setErrorMessage("Response text cannot be empty.");
-		return false;
-	}
-	if (trimmed.length > MAX_LENGTH) {
-		setStatus("error");
-		setErrorMessage("Response text is too long (max 20,000 characters).");
-		return false;
-	}
-
-// Server-side (src/app/api/respond/route.ts:15-38)
-const responseText = typeof body.response_text === "string" ? body.response_text.trim() : "";
-if (!body.response_id && !body.ticket_id) {
-	return NextResponse.json({ error: "Missing response_id or ticket_id" }, { status: 400 });
-}
-if (!responseText) {
-	return NextResponse.json({ error: "Response text cannot be empty" }, { status: 400 });
-}
-if (responseText.length > 20000) {
-	return NextResponse.json({ error: "Response text is too long" }, { status: 400 });
 }</code></pre>
-        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:95-107; src/app/api/respond/route.ts:14-38</span>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:33-40</span>
+        <pre><code>if (dirty && !window.confirm("Close this ticket? Your reply edits stay saved on this device.")) {</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/ticket-workspace.tsx:25</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What exactly happens when the response is sent via the API?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-question">What happens if the agent tries to reply on a Closed ticket?<span class="qa-difficulty intermediate">Intermediate</span></div>
       <div class="qa-answer">
-        <p>The flow is: (1) Validate session and get organization_id, (2) Find the auto_response row by response_id or ticket_id (must be unsent and in the caller's org), (3) Fetch the email row to get the customer's from_address, (4) Fetch the organization's SMTP config, (5) Call sendEmail() to email the customer with the response text (wrapped in HTML, in-reply-to the original email), (6) Update auto_responses row: set sent=true, sent_at=now, response_text=trimmed_user_text, (7) Update tickets row: set status="Resolved", sla_resolved_at=now, and if sla_first_response_at is null, set it to now (marking the first response time), (8) Insert audit_logs entry with action="response_sent" and response details, (9) Return 200 success. If email sending fails (SMTP error), return 502. If any database update fails, return 500.</p>
-        <pre><code>// src/app/api/respond/route.ts:40-127
-const { data: responses } = await responseQuery;
-const autoResponse = responses?.[0];
-if (error || !autoResponse) {
-	return NextResponse.json({ error: "No unsent response found for this ticket" }, { status: 404 });
-}
-
-const ticket = autoResponse.tickets as { id: string; ticket_number: string; subject: string };
-const email = autoResponse.emails as { from_address: string; message_id: string | null; subject: string };
-
-const { data: orgData } = await supabaseAdmin.from("organizations")
-	.select("email_config").eq("id", orgId).single();
-
-const sent = await sendEmail({
-	to: email.from_address,
-	subject: `Re: ${email.subject} [${ticket.ticket_number}]`,
-	html: `<div style="font-family: Arial, sans-serif;...">
-	text: responseText,
-	inReplyTo: email.message_id || undefined,
-	smtpConfig: orgData?.email_config?.smtp || undefined,
-});
-if (!sent) {
-	return NextResponse.json(
-		{ error: "Email could not be sent. Check the organization's SMTP configuration." },
-		{ status: 502 },
-	);
-}
-
-const sentAt = new Date().toISOString();
-await supabaseAdmin.from("auto_responses")
-	.update({ sent: true, sent_at: sentAt, response_text: responseText })
-	.eq("id", autoResponse.id);
-
-const { data: ticketData } = await supabaseAdmin.from("tickets")
-	.select("sla_first_response_at").eq("id", ticket.id).single();
-
-const ticketUpdate: Record<string, string> = {
-	status: "Resolved",
-	sla_resolved_at: sentAt,
-};
-if (!ticketData.sla_first_response_at) {
-	ticketUpdate.sla_first_response_at = sentAt;
-}
-await supabaseAdmin.from("tickets").update(ticketUpdate).eq("id", ticket.id);
-
-await supabaseAdmin.from("audit_logs").insert({
-	organization_id: orgId,
-	ticket_id: ticket.id,
-	action: "response_sent",
-	details: { response_id: autoResponse.id, to: email.from_address, edited: true },
-});</code></pre>
-        <span class="source-cite">src/app/api/respond/route.ts:40-139</span>
-      </div>
-    </div>
-
-    <h2>Step 4: Success and Error Handling</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">What user-facing messages does the agent see on success and on each failure?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>On success: a green success toast appears with the title "Response sent to {recipient}" and the description "The ticket is now Resolved." The draft is cleared from localStorage, the status moves to "sent", and all unrelated data is refreshed via refreshAll(). On specific errors: (1) 400 validation error: the exact error message from the server is shown in both toast and the dialog, e.g., "Response text cannot be empty", (2) 404 "not found": "This draft was already sent or no longer exists. Refresh the ticket to see its current state.", (3) 502 SMTP error: "The email server rejected the message. Check the mailbox settings (SMTP) and try again.", (4) 0 (network offline): "You're offline. Your reply is kept here — try again when you're back online.", (5) 500 or unknown: "Sending failed. Your reply is kept here — try again." All error messages keep the draft text in the composer so the user's edits aren't lost.</p>
-        <pre><code>// src/features/ticket-workspace/hooks/use-reply-draft.ts:125-152
-} catch (error) {
-	let message = "Sending failed. Your reply is kept here — try again.";
-	if (error instanceof ApiRequestError) {
-		if (error.status === 400) message = error.message;
-		else if (error.status === 404)
-			message = "This draft was already sent or no longer exists. Refresh the ticket to see its current state.";
-		else if (error.status === 502)
-			message = "The email server rejected the message. Check the mailbox settings (SMTP) and try again.";
-		else if (error.status === 0)
-			message = "You're offline. Your reply is kept here — try again when you're back online.";
-	}
+        <p>The composer blocks it before any network call. <code>canReply</code> is simply <code>ticket.status !== "Closed"</code>; when it's false the reply textarea and send button are replaced with explanatory text, and internal notes remain available. As defense in depth, <code>useReplyDraft.send()</code> also refuses client-side ("Closed tickets can't be replied to.") and the server checks it again independently in <code>sendTicketReply</code> — so even a stale UI or a direct API call can't email a closed ticket.</p>
+        <pre><code>{replyBlocked ? (
+	<p ...>
+		This ticket is closed, so it can&apos;t be replied to. If the customer writes again, their email opens a
+		follow-up ticket. You can still add an internal note.
+	</p>
+) : ( ... )}</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/reply-composer.tsx:79-84</span>
+        <pre><code>if (mode === "reply" && !canReply) {
 	setStatus("error");
-	setErrorMessage(message);
-	toast({ tone: "error", title: "Send failed", description: message });
+	setErrorMessage("Closed tickets can't be replied to.");
 	return false;
 }</code></pre>
-        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:133-149</span>
+        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:170-174</span>
+      </div>
+    </div>
+
+    <h2>5. Confirm and send</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the "Review &amp; send" confirmation dialog show, and why does it exist?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Clicking "Review &amp; send" (reply mode only — notes send immediately) opens <code>SendConfirmDialog</code> rather than sending straight away, since a reply emails the customer and can't be recalled. It shows the recipient, the computed subject (<code>Re: {subject} [{ticket_number}]</code>), the character count, the full body text, and states plainly what status the ticket will move to. The dialog can't be dismissed by Escape or an outside click while sending is in flight.</p>
+        <pre><code><DialogContent
+	title="Send this reply?"
+	description={`This emails the customer and sets the ticket to ${draft.statusAfter}. It can't be undone.`}
+	...
+></code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/send-confirm-dialog.tsx:35-44</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What happens if the agent closes the ticket without sending?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">What does <code>POST /api/tickets/[id]/messages</code> validate before doing anything?<span class="qa-difficulty intermediate">Intermediate</span></div>
       <div class="qa-answer">
-        <p>If the agent has unsaved edits (isDirty=true, meaning the text differs from the AI's original), a confirmation dialog appears: "Close this ticket? Your reply edits stay saved on this device." If the agent chooses "Close", the ticket drawer closes but the localStorage draft persists. On reopening the ticket, the locally-stored text is recovered. If there are no unsaved edits, the drawer closes immediately without prompting.</p>
-        <span class="source-cite">src/features/ticket-workspace/components/ticket-workspace.tsx:18-29</span>
+        <p>A Zod discriminated union on <code>kind</code>: a <code>reply</code> needs non-empty text (max 20,000 chars), an optional <code>status_after</code> restricted to the enum <code>In Progress | Pending | Resolved</code>, and an optional <code>draft_id</code>; a <code>note</code> needs only the text. After parsing, the route re-loads the ticket, applies the same <code>can.viewTicket</code> 404-masking as the GET route, then <code>can.workTicket</code> — which for an agent additionally requires <code>ticket.assigned_agent === session.user.id</code> — before calling <code>addInternalNote</code> or <code>sendTicketReply</code>.</p>
+        <pre><code>const bodySchema = z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("reply"), body: text, status_after: z.enum([...]).optional(), draft_id: z.string().uuid().optional() }).strict(),
+	z.object({ kind: z.literal("note"), body: text }).strict(),
+]);
+...
+if (!can.workTicket(session, ticket)) {
+	return forbidden("Only the assigned agent or an admin can write on this ticket");
+}</code></pre>
+        <span class="source-cite">src/app/api/tickets/[id]/messages/route.ts:17-27,60-62</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What is shown in the send confirmation dialog before the email is sent?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">Walk through the three-step protocol <code>sendTicketReply</code> uses to actually send the email.<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>The SendConfirmDialog displays: (1) To: the customer's email address, (2) Subject: "Re: {original_subject} [{ticket_number}]", (3) Ticket: the ticket number, (4) Length: character count of the response, (5) A scrollable preview of the full response text, (6) If there was a send error, an error message in red, (7) Cancel and Send Response buttons. While sending (draft.status="sending"), the buttons are disabled and the Send button shows a loading spinner. Pressing Escape or clicking outside does not close the dialog while sending.</p>
-        <pre><code>// src/features/ticket-workspace/components/send-confirm-dialog.tsx:18-82
-export function SendConfirmDialog({
-	open, onOpenChange, draft, recipient, subject, ticketNumber,
-}: SendConfirmDialogProps) {
-	const sending = draft.status === "sending";
+        <p>SMTP can't participate in a Postgres transaction, so a reply is sent in three separate, explicitly-ordered steps: (1) insert a <code>ticket_messages</code> row with <code>delivery_status: 'sending'</code> — this records intent so a crash between steps 2 and 3 is visible as a stuck "sending" row instead of a silently lost or silently duplicated send; (2) call <code>sendEmail</code> with the workspace's own generated <code>Message-ID</code> and, when this is a threaded reply, <code>In-Reply-To</code>/<code>References</code> pointing at the most recent email in the conversation; (3) once SMTP accepts it, call the <code>complete_ticket_reply</code> RPC, which atomically records the outbound <code>emails</code> row, flips <code>delivery_status</code> to <code>sent</code>, sets first-response time, applies the requested status change (if the workflow still allows it), links the AI draft if this reply came from one, and writes the audit row.</p>
+        <pre><code>// 1. Record the intent.
+const { data: message, error: insertError } = await supabaseAdmin
+	.from("ticket_messages")
+	.insert({ ..., kind: "reply", body_text: body, delivery_status: "sending" })
+	.select("id").single();
+...
+// 2. Send.
+const smtpMessageId = newMessageId(mailbox.settings.email, message.id);
+const sent = await sendEmail({
+	to, subject, text: body, html, messageId: smtpMessageId,
+	inReplyTo: parent?.message_id ?? undefined, references, smtpConfig: mailbox.smtp,
+	fromName: input.fromName, automatic: author.type === "ai",
+});
+...
+// 3. Record the outcome atomically.
+const { data: updated, error: completeError } = await supabaseAdmin.rpc("complete_ticket_reply", { ... });</code></pre>
+        <span class="source-cite">src/server/tickets/replies.ts:148-205</span>
+        <p>The header comment on the module states the reasoning directly:</p>
+        <pre><code>// Every message the team sends goes through here, whether an agent typed it or
+// the AI answered automatically, so they all follow one protocol:
+//
+//   1. record the intent: a ticket_messages row with delivery_status 'sending'
+//   2. hand the email to SMTP, with our own Message-ID so replies thread back
+//   3. complete_ticket_reply(): outbound email row, 'sent', first-response time,
+//      status change, AI-draft link and audit row, in one transaction
+//
+// SMTP can't take part in a database transaction, so step 1 exists to make a
+// crash between 2 and 3 visible (a reply stuck in 'sending') instead of silent.</code></pre>
+        <span class="source-cite">src/server/tickets/replies.ts:7-16</span>
+        <p>The RPC itself does the multi-table write in one transaction, skipping (never raising on) a status move the workflow no longer allows, because the email has already gone out and recording it must not fail:</p>
+        <pre><code>UPDATE public.tickets
+SET sla_first_response_at = COALESCE(sla_first_response_at, v_message.created_at),
+    status = CASE
+      WHEN p_status_after IS NOT NULL AND p_status_after <> v_ticket.status AND EXISTS (
+        SELECT 1 FROM public.ticket_status_transitions
+        WHERE from_status = v_ticket.status AND to_status = p_status_after
+      ) THEN p_status_after
+      ELSE status
+    END
+WHERE id = v_ticket.id
+RETURNING * INTO v_ticket;</code></pre>
+        <span class="source-cite">supabase/migrations/009_conversation_model.sql:305-315</span>
+      </div>
+    </div>
 
+    <div class="qa-item">
+      <div class="qa-question">What happens to the message row if the SMTP send itself fails?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The already-inserted <code>ticket_messages</code> row is updated to <code>delivery_status: 'failed'</code> with the trimmed provider error, the mailbox's sync-health record is updated, and a <code>ReplyError</code> with HTTP 502 is thrown so the composer surfaces "The email server rejected the message." The failed row still shows up in the conversation (as the "Not delivered" card covered above) — nothing is silently dropped, and the agent's typed text is never lost since the client only clears its local draft on success.</p>
+        <pre><code>if (!sent.ok) {
+	await supabaseAdmin
+		.from("ticket_messages")
+		.update({ delivery_status: "failed", delivery_error: sent.error.slice(0, 1000) })
+		.eq("id", message.id);
+	await recordMailboxSync(orgId, new Error(sent.error));
+	throw new ReplyError("The email server rejected the message. Check the mailbox connection in Settings.", 502);
+}</code></pre>
+        <span class="source-cite">src/server/tickets/replies.ts:183-190</span>
+      </div>
+    </div>
+
+    <table class="data-table">
+      <thead>
+        <tr><th>Situation</th><th>Where it's raised</th><th>Status</th><th>What the agent sees</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Empty reply/note text, or over 20,000 characters</td><td><code>use-reply-draft.ts</code> (client) and the Zod schema (server, belt-and-braces)</td><td>— / 400</td><td>"Write a reply first." / "Keep it under 20,000 characters."</td></tr>
+        <tr><td>Ticket is Closed</td><td><code>reply-composer.tsx</code> blocks the form; <code>sendTicketReply</code> also checks</td><td>409</td><td>"This ticket is closed. A new message from the customer opens a follow-up ticket."</td></tr>
+        <tr><td>Requested <code>status_after</code> isn't a legal transition from the current status</td><td><code>sendTicketReply</code>, via <code>isAllowedTransition</code></td><td>400</td><td>"A &lt;Status&gt; ticket can't be set to &lt;Status&gt;"</td></tr>
+        <tr><td>Ticket has no known customer email address</td><td><code>sendTicketReply</code></td><td>409</td><td>"This ticket has no customer email address to reply to"</td></tr>
+        <tr><td>No mailbox connected (or it failed the last check)</td><td><code>sendTicketReply</code>, via <code>getMailbox</code></td><td>409</td><td>"No working support mailbox is connected. An admin can connect one in Settings."</td></tr>
+        <tr><td>SMTP server rejects the send</td><td><code>sendTicketReply</code></td><td>502</td><td>"The email server rejected the message. Check the mailbox connection in Settings."</td></tr>
+        <tr><td>Ticket not assigned to this agent, or doesn't exist</td><td><code>GET</code>/<code>POST</code> on <code>/api/tickets/[id]</code></td><td>404</td><td>"Ticket not found" (agents get the same message for both cases)</td></tr>
+        <tr><td>Agent is not the assignee (but the ticket does exist)</td><td><code>can.workTicket</code></td><td>403</td><td>"Only the assigned agent or an admin can write on this ticket"</td></tr>
+        <tr><td>Status change via header dropdown breaks the workflow</td><td><code>enforce_ticket_status</code> trigger, surfaced by <code>PATCH /api/tickets/[id]</code></td><td>400</td><td>"A &lt;Status&gt; ticket can't be set to &lt;Status&gt;"</td></tr>
+        <tr><td>Offline / network failure</td><td><code>use-reply-draft.ts</code>, <code>ApiRequestError.status === 0</code></td><td>0 (client)</td><td>"You're offline. Your text is kept here — try again when you're back online."</td></tr>
+      </tbody>
+    </table>
+
+    <h2>6. After sending: threading, status, availability, SLA</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">If the customer writes back, how does their reply attach to the same ticket?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>The intake pipeline runs <code>detectThread()</code> against the new inbound email (matching <code>In-Reply-To</code> to a known Message-ID first, then a ticket-number reference, then subject+sender), and hands the result to the <code>record_inbound_message</code> RPC as <code>p_thread_ticket_id</code>. That function decides the outcome: if the matched ticket is New or In Progress, the email is just appended; if it's Pending or Resolved, it's appended <em>and</em> the ticket is reopened to In Progress (with an audit row); if it's Closed, a brand-new ticket is created with <code>follow_up_of</code> pointing at the old one instead of reopening it. A more urgent reply also raises the ticket's severity — it's never lowered by a later, calmer reply.</p>
+        <pre><code>IF v_ticket.id IS NOT NULL AND v_ticket.status <> 'Closed' THEN
+  INSERT INTO public.ticket_messages (organization_id, ticket_id, kind, author_type, email_id, body_text)
+  VALUES (p_org_id, v_ticket.id, 'customer', 'customer', p_email_id, left(p_body, 100000));
+
+  v_reopened := v_ticket.status IN ('Pending', 'Resolved');
+  UPDATE public.tickets
+  SET status   = CASE WHEN v_reopened THEN 'In Progress' ELSE status END,
+      severity = CASE WHEN v_severity IS NOT NULL AND v_severity < severity THEN v_severity ELSE severity END
+  WHERE id = v_ticket.id;</code></pre>
+        <span class="source-cite">supabase/migrations/010_record_inbound_message.sql:55-64</span>
+        <p>See <a href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a> for the rest of the intake flow (classification, spam, dedup) that runs before this point.</p>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How are status changes in the header dropdown restricted to legal transitions?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The dropdown's option list is the current status plus whatever <code>allowed_statuses</code> the ticket GET response computed (via <code>allowedNextStatuses</code>, which just reads rows from <code>ticket_status_transitions</code>). If there's nothing to move to (Closed has zero allowed next statuses) or the signed-in user can't work the ticket, the dropdown becomes a plain read-only status lozenge instead of a menu. Selecting a status calls <code>PATCH /api/tickets/[id]</code>, which re-validates the value is one of the five known statuses; the actual transition legality is enforced a second time by the <code>enforce_ticket_status</code> trigger, and a rejected transition surfaces as HTTP 400 with the Postgres check-violation hint <code>invalid_status_transition</code>.</p>
+        <pre><code>const options = STATUSES.filter((status) => status === ticket.status || allowedStatuses.includes(status));
+
+if (!canWork || options.length <= 1) {
 	return (
-		<Dialog open={open} onOpenChange={(next) => sending ? null : onOpenChange(next)}>
-			<DialogContent title="Send this response?" description="This emails the customer and marks the ticket Resolved. It can't be undone." size="md">
-				<dl className="grid grid-cols-[80px_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-					<dt>To</dt>
-					<dd>{recipient ?? "unknown"}</dd>
-					<dt>Subject</dt>
-					<dd>Re: {subject} [{ticketNumber}]</dd>
-					<dt>Ticket</dt>
-					<dd>{ticketNumber}</dd>
-					<dt>Length</dt>
-					<dd>{draft.text.length.toLocaleString()} characters</dd>
-				</dl>
-				<div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border bg-sunken p-3">
-					{draft.text}
-				</div>
-				{draft.status === "error" && draft.errorMessage && (
-					<SectionMessage appearance="error">{draft.errorMessage}</SectionMessage>
-				)}
-				<DialogFooter>
-					<Button variant="subtle" disabled={sending}>Cancel</Button>
-					<Button variant="primary" loading={sending} onClick={async () => {
-						if (await draft.send()) onOpenChange(false);
-					}}>Send response</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+		<span ...><StatusLozenge status={ticket.status} /></span>
 	);
 }</code></pre>
-        <span class="source-cite">src/features/ticket-workspace/components/send-confirm-dialog.tsx:18-82</span>
+        <span class="source-cite">src/features/ticket-workspace/components/workspace-header.tsx:86-94</span>
+        <pre><code>if (error.code === "23514" && error.hint === "invalid_status_transition") {
+	return NextResponse.json({ error: `A ${current.status} ticket can't be set to ${updates.status}` }, { status: 400 });
+}</code></pre>
+        <span class="source-cite">src/app/api/tickets/[id]/route.ts:190-191</span>
+        <table class="data-table">
+          <thead><tr><th>From</th><th>Allowed to</th></tr></thead>
+          <tbody>
+            <tr><td>New</td><td>In Progress, Pending, Resolved, Closed</td></tr>
+            <tr><td>In Progress</td><td>Pending, Resolved, Closed</td></tr>
+            <tr><td>Pending</td><td>In Progress, Resolved, Closed</td></tr>
+            <tr><td>Resolved</td><td>In Progress, Closed</td></tr>
+            <tr><td>Closed</td><td><em>none — terminal</em></td></tr>
+          </tbody>
+        </table>
+        <span class="source-cite">supabase/migrations/009_conversation_model.sql:46-50</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What database state changes occur after a successful send?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-question">How does the availability toggle work, and what does it affect?<span class="qa-difficulty basic">Basic</span></div>
       <div class="qa-answer">
-        <p>Three tables are updated atomically in order: (1) <code>auto_responses</code>: the response row is updated with sent=true, sent_at={current_timestamp}, and response_text={agent's_edited_text} (so the exact text the agent sent is preserved, not the original AI text), (2) <code>tickets</code>: status="Resolved" and sla_resolved_at={current_timestamp}. If sla_first_response_at is null (first response), it's also set to now, (3) <code>audit_logs</code>: a new entry is created with action="response_sent", ticket_id, and details including response_id, recipient email, and edited=true flag. None of these updates cascade or affect other tickets or emails.</p>
-        <span class="source-cite">src/app/api/respond/route.ts:99-139</span>
+        <p>Admins and agents get an "Available for new tickets" checkbox in the user menu, backed by <code>PATCH /api/me</code> with <code>{ is_available: boolean }</code>. It only changes one column (<code>users.is_available</code>) and is entirely self-service — <code>can.setOwnAvailability</code> just checks the caller's own role, there's no target-user id. The only consumer of the flag is the admin's assignment candidate list (<code>GET /api/team/workload</code>), which sorts available people first; it does not stop new tickets from being assigned to an unavailable agent, it's advisory ranking only.</p>
+        <pre><code>const handleAvailabilityChange = async (next: boolean) => {
+	...
+	const result = await apiSend<MeResponse>("/api/me", "PATCH", { is_available: next });</code></pre>
+        <span class="source-cite">src/components/layout/user-menu.tsx:46-49</span>
+        <pre><code>setOwnAvailability: (s: Actor) => isAdmin(s) || isAgent(s),</code></pre>
+        <span class="source-cite">src/server/auth/policy.ts:29</span>
       </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is SLA time shown to the agent, and where does the "critical"/"warning" coloring come from?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The sidebar's SLA section shows First response and Resolution targets, each read via <code>readSla()</code>: no due date means "No SLA"; a completed target compares completion time to the due time ("Met" or "Missed by &lt;duration&gt;"); an incomplete target counts down and buckets into <code>critical</code> (under 60 minutes left), <code>warning</code> (under 25% of the target window, or 4 hours if the window is unknown), or <code>ok</code>. The due dates themselves come from <code>getTicketSLAStatus()</code>, which maps the ticket's severity to a workspace-specific (or global default) <code>sla_policies</code> row.</p>
+        <pre><code>const warnAt = windowMinutes ? windowMinutes * 0.25 : 240;
+const tone: SlaTone = remaining < 60 ? "critical" : remaining < warnAt ? "warning" : "ok";
+return { tone, label: `${formatDuration(remaining)} left`, minutesRemaining: remaining };</code></pre>
+        <span class="source-cite">src/lib/ticket-meta.ts:117-119</span>
+        <span class="source-cite">src/server/pipeline/sla-tracker.ts:1-16</span>
+      </div>
+    </div>
+
+    <h2>Sequence: an agent sends a reply</h2>
+    <p>The full round trip from clicking "Review &amp; send" to the customer's next reply landing back on the same ticket.</p>
+    <pre>Agent (browser)         POST /messages route        sendTicketReply()            Postgres / SMTP
+      |                          |                            |                            |
+      |--- confirm send -------->|                            |                            |
+      |                          |--- zod validate, can.workTicket ------------------------->|
+      |                          |--- sendTicketReply() ----->|                            |
+      |                          |                            |--- INSERT ticket_messages ->| delivery_status='sending'
+      |                          |                            |<-- message.id -------------|
+      |                          |                            |--- sendEmail() ------------------------------------> SMTP
+      |                          |                            |                            |   (Message-ID, In-Reply-To,
+      |                          |                            |                            |    References set here)
+      |                          |                            |<--------------------------- accepted / rejected -----|
+      |                          |                            |--- rpc complete_ticket_reply() ------------------->|
+      |                          |                            |                            | outbound emails row,
+      |                          |                            |                            | delivery_status='sent',
+      |                          |                            |                            | sla_first_response_at,
+      |                          |                            |                            | status change, audit row
+      |                          |<-- { message_id, status, to } -----------------------------|
+      |<-- 201 toast, dialog closes, draft cleared ------------|                            |
+      |                          |                            |                            |
+      |                                              (later) customer replies -------------> IMAP poll
+      |                                                                                       |--- detectThread()
+      |                                                                                       |--- record_inbound_message()
+      |                                                                                       |    appends + reopens, or
+      |                                                                                       |    opens a follow-up if Closed</pre>
+
+    <div class="callout">
+      <strong>Related pages</strong>
+      See <a href="admin-operations.html">Admin Operations</a> for how tickets get assigned to an agent in the first place, <a href="ai-safety.html">AI Design &amp; Safety</a> for how the AI draft an agent restores or edits was generated, and <a href="api-routes.html">API &amp; Backend Routes</a> for the full route list.
     </div>
 
   </main>
-</div>
 </div>
 
 <script>

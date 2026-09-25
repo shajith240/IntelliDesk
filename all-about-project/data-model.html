@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Data Model &amp; Database Schema — IntelliDesk AI Project Docs</title>
+<title>Data Model &amp; Schema — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,154 +319,627 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>Data Model &amp; Database Schema</h1>
-    <p class="page-intro">PostgreSQL via Supabase. Twelve tables connected by organization-scoped foreign keys, with row-level security as a defense-in-depth layer, and a single service-role connection from the app to the database. Migrations are numbered, stable, and applied in order.</p>
+    <h1>Data Model &amp; Schema</h1>
+    <p class="page-intro">The live schema in <code>public</code>, as it exists after all 13 migrations
+    (<code>supabase/migrations/001…013</code>). It is the composition of an "expand" migration and a later
+    "contract" migration for the assignment model (007→013), the conversation model (009→013), and the
+    normalization pass (012→013) — a column documented here may have been added by one migration and
+    reshaped or dropped by a later one; each table section says which. For the reasoning behind the
+    normalization itself, see <a href="database-design.html">Database Design &amp; Migrations</a>.</p>
 
-    <h2>Table structure & relationships</h2>
+    <h2>How the schema hangs together</h2>
 
     <div class="qa-item">
-      <div class="qa-question">What are the 12 tables and how are they related?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">What does the schema look like at a glance?<span class="qa-difficulty basic">Basic</span></div>
       <div class="qa-answer">
-        <p>The database is organized around organizations and their membership:</p>
-        <ul>
-          <li><code>organizations</code> — top-level tenant. Each org has a <code>name</code>, <code>slug</code> (unique URL-safe id), <code>domain</code>, <code>plan</code>, and <code>max_agents</code>.</li>
-          <li><code>users</code> — belong to one organization. Schema: id, organization_id (FK), email, name, password_hash, role (admin/agent/viewer), is_active, created_at, updated_at.</li>
-          <li><code>accounts</code> — customer companies. Scoped to org. Schema: id, domain, company_name, tier (Gold/Silver/Bronze), csm_name/email, plan, location.</li>
-          <li><code>contacts</code> — individual customers tied to accounts. Schema: id, account_id (FK), email, name, role, department, phone, is_lead, lead_status.</li>
-          <li><code>teams</code> — support teams within an org. Schema: id, organization_id (FK), name, description, category_routing (array of categories).</li>
-          <li><code>tickets</code> — the main entity. Belong to org, account, and contact. Schema includes status, category, severity (P1-P4), ai_confidence, summary, assigned_agent, assigned_team, SLA timestamps.</li>
-          <li><code>emails</code> — individual messages. Scoped to org. Schema: message_id, from_address, to_address, subject, body_text, body_html, received_at, processed, is_spam, language, embedding_id.</li>
-          <li><code>ticket_emails</code> — join table linking tickets to emails. Schema: ticket_id (FK), email_id (FK), relationship (original/reply/forward/duplicate).</li>
-          <li><code>sla_policies</code> — global defaults, not org-scoped. Four rows: one per severity (P1-P4), each with first_response_minutes and resolution_minutes.</li>
-          <li><code>faqs</code> — knowledge base articles, scoped to org. Schema: question, answer, category, solution_steps (array), video_url, success_rate, times_used, embedding_id.</li>
-          <li><code>auto_responses</code> — candidate replies generated by the pipeline, scoped to org. Schema: ticket_id (FK), email_id (FK), response_text, match_type (perfect/partial/none), match_score, cited_faq_ids, sent, sent_at.</li>
-          <li><code>audit_logs</code> — append-only history, scoped to org. Schema: ticket_id (FK), action, details (JSONB), performed_by, created_at.</li>
-        </ul>
-        <span class="source-cite">supabase/migrations/001_initial_schema.sql defines the first 10 tables; 002_auth.sql adds organizations and users, then ALTERs the first 10 to add organization_id columns; PLAN.txt lists all 12 in "DB tables"</span>
+        <p>Every tenant-owned table hangs off <code>organizations</code> through an <code>organization_id</code>
+        column (added table-by-table in migration 002, made <code>NOT NULL</code> for the core tables in 007).
+        The two entities with their own multi-row histories are <strong>tickets</strong> (customer-facing work
+        items) and <strong>emails</strong> (the raw transport log, both directions since 009). A ticket's
+        conversation — customer messages, agent/AI replies, and internal notes — lives in
+        <code>ticket_messages</code>, one row per turn, each optionally pointing at the raw <code>emails</code>
+        row it was sent or received as.</p>
+        <pre><code>organizations (root)
+  |
+  +-- users --------------------------------------+
+  +-- accounts --- contacts                       |
+  +-- teams                                       |
+  +-- faqs --- auto_response_citations             |
+  +-- sla_policies (nullable org_id = global)      |
+  +-- mailbox_connections (1:1)                    |
+  +-- ai_credentials (1:1)                         |
+  +-- ticket_counters (1:1 counter row)            |
+  |                                                |
+  +-- tickets <--- assigned_agent ----------------+
+       |    \
+       |     \-- follow_up_of --> tickets (self, 0..1)
+       |     \-- assigned_team_id --> teams
+       |     \-- status --> ticket_statuses --> ticket_status_transitions
+       |
+       +-- ticket_messages --- email_id (0..1) --> emails
+       +-- auto_responses --- sent_message_id (0..1) --> ticket_messages
+       |        \-- auto_response_citations --> faqs
+       +-- ticket_assignments (history)
+       +-- audit_logs (ticket_id, SET NULL on delete)
+
+auth_login_attempts -- global, no organization_id (throttling by email/IP)
+archive.tickets_old, archive.customers_old -- moved out of public by 006, unused</code></pre>
+        <span class="source-cite">supabase/migrations/002_auth.sql:36-64, supabase/migrations/007_integrity_and_assignment.sql:1-411, supabase/migrations/009_conversation_model.sql:1-356</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">Show me a real CREATE TABLE excerpt from the schema.<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">Why do so many foreign keys reference a composite <code>(id, organization_id)</code> instead of just <code>id</code>?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>Here's the tickets table from migration 001, before organization_id was added:</p>
-        <pre><code>CREATE TABLE tickets (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  ticket_number TEXT NOT NULL UNIQUE,
-  status TEXT NOT NULL DEFAULT 'New' CHECK (status IN ('New', 'In Progress', 'Resolved', 'Closed')),
-  category TEXT,
-  subcategory TEXT,
-  severity TEXT NOT NULL DEFAULT 'P3' CHECK (severity IN ('P1', 'P2', 'P3', 'P4')),
-  ai_confidence REAL,
-  subject TEXT NOT NULL DEFAULT '',
-  summary TEXT,
-  account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
-  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
-  assigned_team TEXT,
-  assigned_agent TEXT,
-  sla_first_response_due TIMESTAMPTZ,
-  sla_resolution_due TIMESTAMPTZ,
-  sla_first_response_at TIMESTAMPTZ,
-  sla_resolved_at TIMESTAMPTZ,
-  sla_breach BOOLEAN DEFAULT FALSE,
-  escalation_count INT DEFAULT 0,
-  auto_response_sent BOOLEAN DEFAULT FALSE,
-  auto_response_type TEXT CHECK (auto_response_type IN ('perfect', 'partial', 'none')),
-  is_flagged_for_review BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);</code></pre>
-        <span class="source-cite">supabase/migrations/001_initial_schema.sql lines 80-106; supabase/migrations/002_auth.sql line 43 adds the organization_id column later</span>
-      </div>
-    </div>
-
-    <h2>Multi-tenancy & access control</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the app prevent one organization's data from leaking to another?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The primary control is in application code: every query that touches organization data calls <code>requireAuth()</code> to verify the session, then <code>getOrgId(session)</code> to extract the user's org, then filters with <code>.eq("organization_id", orgId)</code>. This pattern is enforced across all routes; there is no unscoped read path.</p>
-        <p>Row-level security provides a second layer but is not the primary control. The app uses the Supabase service-role key, which bypasses RLS entirely. RLS policies exist to defend against accidents: if a developer forgets the org-scoping filter, the database itself stops the leak. The policies are defined so that even if an anon or user key were used (unlikely with the current auth model), RLS would enforce org membership.</p>
-        <span class="source-cite">src/app/api/tickets/route.ts lines 15-72 show the requireAuth() → getOrgId() → .eq("organization_id", orgId) pattern; supabase/migrations/003_rls.sql lines 19-21 state: "The application uses supabase service_role key which BYPASSES RLS. These policies are defense-in-depth for any future use of anon/user keys."; README.md "Security notes" confirms this architecture</span>
+        <p>A plain <code>ticket_id UUID REFERENCES tickets(id)</code> only guarantees the ticket exists — nothing
+        stops a row from pointing at a ticket in a <em>different</em> organization. Migration 007 adds
+        <code>UNIQUE (id, organization_id)</code> on the parent tables (<code>users</code>, <code>teams</code>,
+        <code>tickets</code>, <code>accounts</code>, <code>emails</code>) and then has every child's foreign key
+        reference that composite: <code>FOREIGN KEY (ticket_id, organization_id) REFERENCES tickets (id,
+        organization_id)</code>. If the child row's <code>organization_id</code> doesn't match the parent's,
+        Postgres rejects the insert — cross-tenant links become physically impossible instead of relying on
+        every query remembering to filter by org.</p>
+        <pre><code>ALTER TABLE public.users    ADD CONSTRAINT users_id_org_key    UNIQUE (id, organization_id);
+...
+ALTER TABLE public.tickets
+  ADD CONSTRAINT tickets_assigned_agent_fkey
+  FOREIGN KEY (assigned_agent, organization_id)
+  REFERENCES public.users (id, organization_id)
+  ON DELETE SET NULL (assigned_agent);</code></pre>
+        <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:24-32,43-50</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">Where are the IMAP/SMTP mailbox credentials stored, and how are they accessed?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">What does <code>ON DELETE SET NULL (column)</code> mean — isn't <code>SET NULL</code> a plain clause?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>Each organization can configure up to one IMAP/SMTP mailbox from the Settings page. The credentials are stored in a JSONB column <code>email_config</code> on the <code>organizations</code> table with the structure: <code>{ "imap": { "host": "...", "port": 993, "user": "...", "pass": "..." }, "smtp": { "host": "...", "port": 587, "user": "...", "pass": "..." } }</code>. These are server-only secrets — they're fetched by the email pipeline (on cron) and the settings page (for admin viewing), both of which run only server-side. There's no equivalent to this data in the browser.</p>
-        <span class="source-cite">supabase/migrations/004_email_config.sql defines the email_config JSONB column on organizations with the exact structure documented; README.md lines 107-108 document that "Mailbox credentials (IMAP/SMTP) are configured per organization from the app's Settings page, not from environment variables; they are stored in Supabase."</span>
+        <p>For a composite foreign key, Postgres 15+ lets <code>ON DELETE SET NULL</code> take a column list so
+        only the referencing column is nulled, not every column in the key. Without the column list,
+        <code>ON DELETE SET NULL</code> on <code>(assigned_agent, organization_id)</code> would null out
+        <code>organization_id</code> too when the user is deleted — which would break every other constraint on
+        that row. <code>ON DELETE SET NULL (assigned_agent)</code> nulls only <code>assigned_agent</code> and
+        leaves <code>organization_id</code> intact.</p>
+        <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:46-50</span>
       </div>
     </div>
 
-    <h2>Indexes, triggers, and constraints</h2>
+    <h2>Tenancy &amp; identity: organizations, users</h2>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK, default <code>uuid_generate_v4()</code></td><td>Workspace id</td></tr>
+      <tr><td>name</td><td>text</td><td>NOT NULL</td><td>Workspace display name</td></tr>
+      <tr><td>slug</td><td>text</td><td>NOT NULL, UNIQUE</td><td>URL-safe identifier</td></tr>
+      <tr><td>domain</td><td>text</td><td>nullable</td><td>Company email domain</td></tr>
+      <tr><td>plan</td><td>text</td><td>NOT NULL, default 'free'</td><td>Billing plan (no billing logic exists — see callout below)</td></tr>
+      <tr><td>max_agents</td><td>int</td><td>NOT NULL, default 1</td><td>Seat cap (not enforced anywhere in the API routes read for this page)</td></tr>
+      <tr><td>ai_auto_send</td><td>boolean</td><td>NOT NULL, default false</td><td>Whether a confident AI draft may be emailed without a person approving it (011)</td></tr>
+      <tr><td>timezone</td><td>text</td><td>NOT NULL, default 'UTC', CHECK <code>now() AT TIME ZONE timezone IS NOT NULL</code></td><td>Where "today" starts for dashboard metrics (012)</td></tr>
+      <tr><td>created_at / updated_at</td><td>timestamptz</td><td>default now()</td><td>Bookkeeping; updated_at kept current by trigger</td></tr>
+    </table>
+    <p><strong>Dropped:</strong> <code>email_config jsonb</code> (added 004 as the original IMAP/SMTP config blob, replaced by the typed <code>mailbox_connections</code> table in 007, column dropped in 013).</p>
+    <p><strong>Indexes:</strong> <code>idx_organizations_slug</code>, <code>idx_organizations_domain</code>. <strong>Trigger:</strong> <code>set_organizations_updated_at</code> (BEFORE UPDATE, calls <code>update_updated_at()</code>).</p>
+    <span class="source-cite">supabase/migrations/002_auth.sql:6-17,72-75; 004_email_config.sql:7; 011_ai_settings_and_spam_review.sql:15-16; 012_normalize_expand.sql:98-100; 013_normalize_contract.sql:292</span>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK</td><td>User id</td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL, FK &rarr; organizations(id) ON DELETE CASCADE</td><td>Tenant</td></tr>
+      <tr><td>email</td><td>text</td><td>NOT NULL; case-insensitive UNIQUE INDEX <code>users_email_lower_key</code> on <code>lower(email)</code> (007); the original case-sensitive <code>UNIQUE</code> was dropped as redundant (012)</td><td>Login identity</td></tr>
+      <tr><td>name</td><td>text</td><td>NOT NULL</td><td>Display name</td></tr>
+      <tr><td>password_hash</td><td>text</td><td>NOT NULL</td><td>bcrypt hash, cost 12</td></tr>
+      <tr><td>role</td><td>text</td><td>NOT NULL, default 'agent', CHECK IN ('admin','agent','viewer')</td><td>Permission tier — see <a href="roles-permissions.html">Roles &amp; Permissions</a></td></tr>
+      <tr><td>avatar_url</td><td>text</td><td>nullable</td><td>Profile image</td></tr>
+      <tr><td>is_active</td><td>boolean</td><td>NOT NULL (made non-null in 007), default true</td><td>Account enabled; deactivated users can't sign in and are released from tickets</td></tr>
+      <tr><td>is_available</td><td>boolean</td><td>NOT NULL, default true (007)</td><td>Distinct from <code>is_active</code>: "not currently taking new tickets"</td></tr>
+      <tr><td>last_login</td><td>timestamptz</td><td>nullable</td><td>Set on successful sign-in</td></tr>
+      <tr><td>created_at / updated_at</td><td>timestamptz</td><td>default now()</td><td>Bookkeeping</td></tr>
+    </table>
+    <p><strong>Unique:</strong> <code>users_id_org_key (id, organization_id)</code> — the composite target other tables' foreign keys point at. <strong>Indexes:</strong> <code>idx_users_email</code>, <code>idx_users_org</code>. <strong>Trigger:</strong> <code>set_users_updated_at</code>.</p>
+    <span class="source-cite">supabase/migrations/002_auth.sql:20-34,78-81; 007_integrity_and_assignment.sql:28,37,135-137; 012_normalize_expand.sql:91</span>
 
     <div class="qa-item">
-      <div class="qa-question">How is the ticket_number generated, and what ensures it's always unique?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">Why keep both <code>is_active</code> and <code>is_available</code> on <code>users</code>?<span class="qa-difficulty intermediate">Intermediate</span></div>
       <div class="qa-answer">
-        <p>Ticket numbers are auto-generated before insert by a PostgreSQL trigger. The sequence <code>ticket_number_seq</code> starts at 1 and increments on each new ticket. A trigger function formats it as <code>'TKT-' || LPAD(nextval('ticket_number_seq')::TEXT, 5, '0')</code>, producing TKT-00001, TKT-00002, etc. The <code>ticket_number</code> column has a UNIQUE constraint, so if two tickets somehow tried to insert the same number, the database would reject the second. A second trigger updates the <code>updated_at</code> timestamp on every write.</p>
-        <span class="source-cite">supabase/migrations/001_initial_schema.sql lines 165-180 define the ticket_number_seq sequence and the generate_ticket_number() trigger; lines 191-194 define the set_updated_at trigger</span>
+        <p>They answer different questions. <code>is_active</code> is an admin decision: can this person sign in
+        and hold tickets at all (a deactivated account also has its open tickets released, see
+        <code>PATCH /api/team/[id]</code>). <code>is_available</code> is a self-service toggle an agent flips
+        (<code>PATCH /api/me</code>) to say "don't route new work to me right now" without losing account access
+        or existing tickets. <code>enforce_ticket_assignee()</code> only checks <code>is_active</code> and role
+        when assigning — availability just changes sort order in the assignee-candidate list.</p>
+        <pre><code>IF NOT EXISTS (
+  SELECT 1 FROM public.users u
+  WHERE u.id = NEW.assigned_agent
+    AND u.organization_id = NEW.organization_id
+    AND u.is_active
+    AND u.role IN ('admin', 'agent')
+) THEN
+  RAISE EXCEPTION 'Assignee % is not an active admin or agent of this organization', NEW.assigned_agent</code></pre>
+        <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:53-74,135; src/app/api/team/workload/route.ts:40-47</span>
+      </div>
+    </div>
+
+    <h2>Customers: accounts, contacts</h2>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK</td><td>Account id</td></tr>
+      <tr><td>domain</td><td>text</td><td>NOT NULL</td><td>Company domain, lowercased by 013's backfill</td></tr>
+      <tr><td>company_name</td><td>text</td><td>NOT NULL</td><td></td></tr>
+      <tr><td>tier</td><td>text</td><td>NOT NULL, CHECK IN ('Gold','Silver','Bronze')</td><td>Account tier</td></tr>
+      <tr><td>csm_name / csm_email / plan / location</td><td>text</td><td>nullable</td><td>CRM-style descriptive fields</td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL, FK &rarr; organizations(id) CASCADE</td><td>Tenant (added 002, required 007)</td></tr>
+      <tr><td>created_at</td><td>timestamptz</td><td>default now()</td><td></td></tr>
+    </table>
+    <p><strong>Unique:</strong> <code>accounts_id_org_key (id, organization_id)</code> (007); <code>accounts_org_domain_key</code> UNIQUE INDEX on <code>(organization_id, lower(domain))</code> — one account per domain per workspace (012). <strong>Indexes:</strong> <code>idx_accounts_domain</code>, <code>idx_accounts_org</code>.</p>
+    <span class="source-cite">supabase/migrations/001_initial_schema.sql:8-19; 007_integrity_and_assignment.sql:19,31; 012_normalize_expand.sql:81; 013_normalize_contract.sql:24</span>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK</td><td>Contact id</td></tr>
+      <tr><td>account_id</td><td>uuid</td><td>FK &rarr; accounts(id) ON DELETE SET NULL</td><td>Company this person belongs to (optional)</td></tr>
+      <tr><td>email</td><td>text</td><td>NOT NULL; scoped UNIQUE INDEX <code>contacts_org_email_key</code> on <code>(organization_id, lower(email))</code></td><td>Matched case-insensitively per workspace since 013's backfill</td></tr>
+      <tr><td>name / role / department / phone</td><td>text</td><td>nullable</td><td>Contact details</td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL (007 added it derived from account, made required 012), FK &rarr; organizations CASCADE</td><td>Tenant — contacts are reachable directly, not only through an account</td></tr>
+      <tr><td>created_at</td><td>timestamptz</td><td>default now()</td><td></td></tr>
+    </table>
+    <p><strong>Dropped by 013:</strong> <code>subscribed_modules text[]</code>, <code>is_lead boolean</code>, <code>lead_status text</code>, <code>last_login timestamptz</code> — unused CRM leftovers from the original schema. <strong>Trigger:</strong> <code>fill_contact_org</code> (BEFORE INSERT/UPDATE OF account_id, organization_id) fills <code>organization_id</code> from the linked account when old code inserts without it.</p>
+    <span class="source-cite">supabase/migrations/001_initial_schema.sql:22-37; 007_integrity_and_assignment.sql:143-174; 012_normalize_expand.sql:86-87; 013_normalize_contract.sql:286-290</span>
+
+    <div class="qa-item">
+      <div class="qa-question">Why did the global <code>contacts.email UNIQUE</code> and <code>users.email UNIQUE</code> constraints need to change?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>A single global <code>UNIQUE</code> on <code>contacts.email</code> meant one person's address could
+        only ever be a contact for <em>one</em> workspace across the whole deployment — impossible once
+        multiple tenants can share this product. Migration 012 drops
+        <code>contacts_email_key</code> in favor of the per-organization index from 007
+        (<code>contacts_org_email_key</code> on <code>(organization_id, lower(email))</code>). For
+        <code>users</code>, the case-sensitive global unique was simply redundant once the case-insensitive
+        <code>users_email_lower_key</code> existed (007), so 012 drops the older one — login is still one
+        account per email across the whole deployment, which is correct because a user account (unlike a
+        contact) belongs to exactly one workspace.</p>
+        <span class="source-cite">supabase/migrations/012_normalize_expand.sql:86-91</span>
+      </div>
+    </div>
+
+    <h2>Tickets &amp; the status workflow</h2>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK</td><td></td></tr>
+      <tr><td>ticket_number</td><td>text</td><td>NOT NULL; UNIQUE <code>tickets_org_number_key (organization_id, ticket_number)</code> (per-org since 012, was globally unique before)</td><td>e.g. <code>TKT-00031</code></td></tr>
+      <tr><td>status</td><td>text</td><td>NOT NULL, default 'New', FK &rarr; ticket_statuses(status) ON UPDATE CASCADE</td><td>Was a CHECK list until 009 replaced it with a lookup-table FK</td></tr>
+      <tr><td>category / subcategory</td><td>text</td><td>nullable</td><td>AI-assigned or edited classification</td></tr>
+      <tr><td>severity</td><td>text</td><td>NOT NULL, default 'P3', CHECK IN ('P1'..'P4')</td><td>Drives SLA due dates</td></tr>
+      <tr><td>subject</td><td>text</td><td>NOT NULL, default ''</td><td></td></tr>
+      <tr><td>summary</td><td>text</td><td>nullable</td><td>AI-generated summary</td></tr>
+      <tr><td>ai_classification</td><td>jsonb</td><td>nullable (002)</td><td>Full AI verdict object: category, severity, confidence, sentiment, etc. — see <code>AIClassification</code> in <code>src/types/api.ts</code></td></tr>
+      <tr><td>ai_confidence</td><td>real</td><td><strong>GENERATED ALWAYS AS</strong> <code>((ai_classification-&gt;&gt;'confidence')::real) STORED</code> (013)</td><td>Derived from <code>ai_classification</code>, not a separately-writable column — see Q&amp;A below</td></tr>
+      <tr><td>account_id</td><td>uuid</td><td>FK &rarr; accounts(id) ON DELETE SET NULL</td><td></td></tr>
+      <tr><td>contact_id</td><td>uuid</td><td>FK &rarr; contacts(id) ON DELETE SET NULL</td><td></td></tr>
+      <tr><td>assigned_agent</td><td>uuid</td><td>FK (assigned_agent, org) &rarr; users(id, org) ON DELETE SET NULL; type changed TEXT&rarr;UUID in 007</td><td>Only settable via the <code>assign_ticket()</code> RPC / trigger-checked direct write</td></tr>
+      <tr><td>assigned_team_id</td><td>uuid</td><td>FK (assigned_team_id, org) &rarr; teams(id, org) ON DELETE SET NULL (007)</td><td>Replaced the old <code>assigned_team text</code> column</td></tr>
+      <tr><td>sla_first_response_due / sla_resolution_due</td><td>timestamptz</td><td>nullable</td><td>Filled by the API from <code>sla_policies</code> if null, not stored by the pipeline</td></tr>
+      <tr><td>sla_first_response_at</td><td>timestamptz</td><td>nullable</td><td>Set once, by <code>complete_ticket_reply()</code></td></tr>
+      <tr><td>sla_resolved_at</td><td>timestamptz</td><td>nullable</td><td>Owned entirely by the <code>enforce_ticket_status</code> trigger (009): set when the ticket leaves an open status, cleared on reopen</td></tr>
+      <tr><td>is_flagged_for_review</td><td>boolean</td><td>default false</td><td>Set by the AI pipeline for low-confidence classifications; drives the review queue</td></tr>
+      <tr><td>follow_up_of</td><td>uuid</td><td>FK (follow_up_of, org) &rarr; tickets(id, org) ON DELETE SET NULL; CHECK <code>follow_up_of &lt;&gt; id</code> (009)</td><td>Set when a customer replies to a Closed ticket — points at the ticket this one continues</td></tr>
+      <tr><td>created_at / updated_at</td><td>timestamptz</td><td>default now()</td><td></td></tr>
+    </table>
+    <p><strong>Dropped by 013:</strong> <code>assigned_team text</code> (replaced by <code>assigned_team_id</code>), <code>sla_breach boolean</code> (now computed live by the SLA tracker), <code>auto_response_sent boolean</code> / <code>auto_response_type text</code> (derivable from <code>ticket_messages.author_type='ai'</code> / <code>auto_responses</code>), <code>escalation_count int</code> (unused). The old <em>stored</em> <code>ai_confidence real</code> column was also dropped and immediately re-added as a generated column in the same migration.</p>
+    <p><strong>Unique:</strong> <code>tickets_id_org_key (id, organization_id)</code>. <strong>CHECK:</strong> <code>severity IN ('P1'..'P4')</code>, <code>tickets_follow_up_not_self</code>. <strong>Indexes:</strong> <code>idx_tickets_number/status/severity</code> (001), <code>idx_tickets_org</code> (002), <code>tickets_account_idx</code>/<code>tickets_contact_idx</code>/<code>tickets_team_idx</code>/<code>tickets_org_updated_idx</code>/<code>tickets_org_status_idx</code> (007), <code>tickets_org_assignee_idx</code> — partial, <code>WHERE assigned_agent IS NOT NULL</code>, <code>tickets_review_queue_idx</code> — partial+expression, <code>(organization_id, created_at) WHERE assigned_agent IS NULL AND is_flagged_for_review AND status IN ('New','In Progress')</code>, <code>tickets_follow_up_of_idx</code> — partial, <code>WHERE follow_up_of IS NOT NULL</code> (009).</p>
+    <p><strong>Triggers:</strong> <code>set_ticket_number</code> (BEFORE INSERT, per-org counter since 012 — see Functions below), <code>set_updated_at</code>, <code>enforce_ticket_assignee</code> (BEFORE INSERT/UPDATE OF assigned_agent), <code>enforce_ticket_status</code> (BEFORE INSERT/UPDATE OF status, 009). A fourth trigger, <code>sync_ticket_team</code>, existed from 007 to keep the old text column and the new id column consistent during the expand phase; it and its function were dropped in 013 once <code>assigned_team</code> itself was dropped.</p>
+    <span class="source-cite">supabase/migrations/001_initial_schema.sql:81-110; 002_auth.sql:43-44,67; 007_integrity_and_assignment.sql:43-50,84-130,375-382; 009_conversation_model.sql:53-58,96-107; 013_normalize_contract.sql:255-266</span>
+
+    <div class="qa-item">
+      <div class="qa-question">Why is <code>ai_confidence</code> a generated column instead of a plain one the pipeline writes?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Before 013, the pipeline wrote confidence twice: once inside <code>ai_classification</code>
+        (the full verdict object) and once flattened into its own <code>ai_confidence</code> column so it could
+        be indexed/averaged cheaply. Two copies of the same fact can drift if one write path forgets the other.
+        013 drops the stored column and replaces it with <code>GENERATED ALWAYS AS ((ai_classification-&gt;&gt;'confidence')::real)
+        STORED</code>: Postgres computes and stores it automatically from <code>ai_classification</code> on every
+        write, so it's still an indexable/averageable real column (used by <code>/api/dashboard</code>'s
+        <code>avg_ai_confidence</code>), but it is now physically impossible for it to disagree with the JSON it's
+        derived from — you cannot <code>UPDATE tickets SET ai_confidence = ...</code> directly; Postgres rejects
+        writes to a generated column.</p>
+        <pre><code>ALTER TABLE public.tickets
+  DROP COLUMN assigned_team,
+  DROP COLUMN sla_breach,
+  DROP COLUMN auto_response_sent,
+  DROP COLUMN auto_response_type,
+  DROP COLUMN escalation_count,
+  DROP COLUMN ai_confidence;
+ALTER TABLE public.tickets
+  ADD COLUMN ai_confidence real
+    GENERATED ALWAYS AS ((ai_classification ->> 'confidence')::real) STORED;</code></pre>
+        <span class="source-cite">supabase/migrations/013_normalize_contract.sql:257-266</span>
+      </div>
+    </div>
+
+    <table class="data-table">
+      <tr><th>Table</th><th>Columns</th><th>Meaning</th></tr>
+      <tr><td>ticket_statuses</td><td><code>status</code> (PK text), <code>is_open</code> (bool NOT NULL), <code>sort_order</code> (smallint, UNIQUE)</td><td>The workflow as data, not an enum — 5 seed rows</td></tr>
+      <tr><td>ticket_status_transitions</td><td><code>from_status</code>, <code>to_status</code> (composite PK, both FK &rarr; ticket_statuses ON UPDATE CASCADE); CHECK <code>from_status &lt;&gt; to_status</code></td><td>The allowed edges of the workflow graph — 12 seed rows</td></tr>
+    </table>
+    <table class="data-table">
+      <tr><th>status</th><th>is_open</th><th>sort_order</th></tr>
+      <tr><td>New</td><td>true</td><td>1</td></tr>
+      <tr><td>In Progress</td><td>true</td><td>2</td></tr>
+      <tr><td>Pending (waiting on customer)</td><td>true</td><td>3</td></tr>
+      <tr><td>Resolved</td><td>false</td><td>4</td></tr>
+      <tr><td>Closed (terminal)</td><td>false</td><td>5</td></tr>
+    </table>
+    <table class="data-table">
+      <tr><th>From</th><th>Allowed to</th></tr>
+      <tr><td>New</td><td>In Progress, Pending, Resolved, Closed</td></tr>
+      <tr><td>In Progress</td><td>Pending, Resolved, Closed</td></tr>
+      <tr><td>Pending</td><td>In Progress, Resolved, Closed</td></tr>
+      <tr><td>Resolved</td><td>In Progress, Closed</td></tr>
+      <tr><td>Closed</td><td><em>(none — terminal; a customer reply creates a follow-up ticket instead)</em></td></tr>
+    </table>
+    <span class="source-cite">supabase/migrations/009_conversation_model.sql:26-50</span>
+
+    <div class="qa-item">
+      <div class="qa-question">What enforces that a ticket can't skip straight from New to some invalid status?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>enforce_ticket_status()</code> trigger function, <code>BEFORE INSERT OR UPDATE OF status</code>
+        on <code>tickets</code>. On an update where the status actually changes, it checks the pair exists in
+        <code>ticket_status_transitions</code> and raises <code>check_violation</code> with hint
+        <code>invalid_status_transition</code> if not — which <code>PATCH /api/tickets/[id]</code> catches by
+        Postgres error code and turns into a 400. The same function also owns
+        <code>sla_resolved_at</code>: clears it when the new status is open, sets it (or preserves it on
+        Resolved&rarr;Closed) when the new status is closed.</p>
+        <pre><code>IF TG_OP = 'UPDATE' AND NOT EXISTS (
+  SELECT 1 FROM public.ticket_status_transitions
+  WHERE from_status = OLD.status AND to_status = NEW.status
+) THEN
+  RAISE EXCEPTION 'Ticket % cannot move from % to %', OLD.ticket_number, OLD.status, NEW.status
+    USING ERRCODE = 'check_violation', HINT = 'invalid_status_transition';
+END IF;</code></pre>
+        <span class="source-cite">supabase/migrations/009_conversation_model.sql:63-98; src/app/api/tickets/[id]/route.ts:190-192</span>
+      </div>
+    </div>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK</td><td></td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL, FK &rarr; organizations CASCADE</td><td></td></tr>
+      <tr><td>ticket_id</td><td>uuid</td><td>NOT NULL, FK (ticket_id,org) &rarr; tickets(id,org) CASCADE</td><td></td></tr>
+      <tr><td>assigned_to</td><td>uuid</td><td>FK (assigned_to,org) &rarr; users(id,org) ON DELETE SET NULL</td><td>Null = unassignment event</td></tr>
+      <tr><td>assigned_by</td><td>uuid</td><td>FK (assigned_by,org) &rarr; users(id,org) ON DELETE SET NULL</td><td>The admin who acted</td></tr>
+      <tr><td>note</td><td>text</td><td>CHECK length &le; 500</td><td>Optional note on the assignment</td></tr>
+      <tr><td>created_at</td><td>timestamptz</td><td>NOT NULL, default now()</td><td></td></tr>
+    </table>
+    <p>Table name: <code>ticket_assignments</code> — the append-only history every call to <code>assign_ticket()</code> inserts into. <strong>Indexes:</strong> <code>ticket_assignments_ticket_idx (ticket_id, created_at DESC)</code>, <code>ticket_assignments_assignee_idx (organization_id, assigned_to)</code>.</p>
+    <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:245-261</span>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>PK, FK &rarr; organizations CASCADE</td><td>One counter row per workspace</td></tr>
+      <tr><td>last_number</td><td>integer</td><td>NOT NULL, CHECK &ge; 0</td><td>Last ticket number issued in this workspace</td></tr>
+    </table>
+    <p>Table name: <code>ticket_counters</code> (012) — see the Functions section for how <code>generate_ticket_number()</code> uses it.</p>
+    <span class="source-cite">supabase/migrations/012_normalize_expand.sql:16-25</span>
+
+    <div class="qa-item">
+      <div class="qa-question">Why did ticket numbering move from one global sequence to a counter row per organization?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The original schema (001) had a single <code>ticket_number_seq</code> shared by every tenant.
+        Because ticket numbers are visible to customers, two workspaces could compare notes and infer each
+        other's ticket volume from the gaps (<code>TKT-00031</code> then <code>TKT-00087</code> means roughly 55
+        tickets happened elsewhere in between). Migration 012 replaces the sequence with one
+        <code>ticket_counters</code> row per organization and an upsert-based
+        <code>generate_ticket_number()</code>: the row lock on that single counter row serializes concurrent
+        inserts for one organization without blocking any other organization's inserts.</p>
+        <span class="source-cite">supabase/migrations/012_normalize_expand.sql:7-25,46-48</span>
+      </div>
+    </div>
+
+    <h2>The conversation: ticket_messages, emails, auto_responses, auto_response_citations, faqs</h2>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK, default <code>gen_random_uuid()</code></td><td></td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL, FK &rarr; organizations CASCADE</td><td></td></tr>
+      <tr><td>ticket_id</td><td>uuid</td><td>NOT NULL, FK (ticket_id,org) &rarr; tickets(id,org) CASCADE</td><td></td></tr>
+      <tr><td>kind</td><td>text</td><td>NOT NULL, CHECK IN ('customer','reply','note')</td><td>Inbound email / outbound public email / internal-only note</td></tr>
+      <tr><td>author_type</td><td>text</td><td>NOT NULL, CHECK IN ('customer','agent','ai')</td><td></td></tr>
+      <tr><td>author_user_id</td><td>uuid</td><td>FK (author_user_id,org) &rarr; users(id,org) ON DELETE SET NULL</td><td>Set only when <code>author_type='agent'</code></td></tr>
+      <tr><td>email_id</td><td>uuid</td><td>UNIQUE (column-level)</td><td>One email belongs to at most one message</td></tr>
+      <tr><td>email_direction</td><td>text</td><td><strong>GENERATED ALWAYS AS</strong> <code>(CASE kind WHEN 'customer' THEN 'inbound' WHEN 'reply' THEN 'outbound' END) STORED</code></td><td>Cannot disagree with <code>kind</code>; used by the composite FK below</td></tr>
+      <tr><td>body_text</td><td>text</td><td>NOT NULL, CHECK length &le; 100000</td><td></td></tr>
+      <tr><td>delivery_status</td><td>text</td><td>CHECK IN ('sending','sent','failed'); NULL for customer/note rows</td><td>Reply lifecycle: written 'sending' before SMTP, then 'sent' or 'failed'</td></tr>
+      <tr><td>delivery_error</td><td>text</td><td>CHECK length &le; 1000, only allowed when <code>delivery_status='failed'</code></td><td></td></tr>
+      <tr><td>created_at</td><td>timestamptz</td><td>NOT NULL, default now()</td><td></td></tr>
+    </table>
+    <p><strong>Unique:</strong> <code>ticket_messages_id_org_key (id, organization_id)</code>. <strong>FK:</strong> <code>ticket_messages_email_fkey (email_id, organization_id, email_direction) REFERENCES emails (id, organization_id, direction)</code> — no <code>ON DELETE</code> action (a message's email can't be deleted on its own). <strong>CHECK:</strong> <code>ticket_messages_kind_shape</code> (below), <code>ticket_messages_user_only_for_agents</code>, <code>ticket_messages_error_only_when_failed</code>. <strong>Indexes:</strong> <code>ticket_messages_ticket_idx (ticket_id, created_at)</code>, <code>ticket_messages_author_idx (author_user_id) WHERE author_user_id IS NOT NULL</code>.</p>
+    <span class="source-cite">supabase/migrations/009_conversation_model.sql:131-171</span>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the <code>ticket_messages_kind_shape</code> CHECK actually enforce?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>It ties three columns together per <code>kind</code> so an inconsistent row is impossible: a
+        <code>customer</code> message must have <code>author_type='customer'</code> and no delivery status
+        (it was never sent by this app); a <code>reply</code> must have <code>author_type</code> agent or ai
+        <em>and</em> a delivery status (it always goes through SMTP); a <code>note</code> must have
+        <code>author_type='agent'</code>, no delivery status, and no linked email (it's never emailed).</p>
+        <pre><code>CONSTRAINT ticket_messages_kind_shape CHECK (
+     (kind = 'customer' AND author_type = 'customer' AND delivery_status IS NULL)
+  OR (kind = 'reply'    AND author_type IN ('agent', 'ai') AND delivery_status IS NOT NULL)
+  OR (kind = 'note'     AND author_type = 'agent' AND delivery_status IS NULL AND email_id IS NULL)
+),</code></pre>
+        <span class="source-cite">supabase/migrations/009_conversation_model.sql:161-165</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What indexes exist on the tables and why?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">How is a reply recorded atomically given that sending an email can't be part of a database transaction?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>Indexes are added on frequently filtered columns. For example:</p>
-        <ul>
-          <li><code>idx_tickets_org</code> on <code>tickets(organization_id)</code> — every query filters to one org.</li>
-          <li><code>idx_tickets_status</code> on <code>tickets(status)</code> — the ticket list is filtered by status.</li>
-          <li><code>idx_tickets_severity</code> on <code>tickets(severity)</code> — SLA alert computation groups by severity.</li>
-          <li><code>idx_emails_processed</code> on <code>emails(processed)</code> — the email pipeline looks for unprocessed messages.</li>
-          <li><code>idx_contacts_email</code> on <code>contacts(email)</code> — customer deduplication looks up existing contacts by email.</li>
-          <li><code>idx_users_org</code> on <code>users(organization_id)</code> — team member listings are org-scoped.</li>
-        </ul>
-        <p>No composite indexes or partial indexes are used; all are simple B-tree indexes on a single column.</p>
-        <span class="source-cite">supabase/migrations/001_initial_schema.sql and 002_auth.sql define all indexes; they follow a naming pattern idx_&lt;table&gt;_&lt;column&gt;</span>
+        <p><code>sendTicketReply()</code> splits the operation into three steps so a crash between them is
+        visible instead of silently inconsistent: (1) insert a <code>ticket_messages</code> row with
+        <code>delivery_status='sending'</code> — this is the only step before the network call, so it commits
+        even if SMTP never answers; (2) call SMTP; (3) on success, call <code>complete_ticket_reply()</code>,
+        which in one transaction inserts the outbound <code>emails</code> row, flips the message to
+        <code>'sent'</code> and links its <code>email_id</code>, sets <code>sla_first_response_at</code> if this
+        is the first reply, applies the requested status transition (re-validated against
+        <code>ticket_status_transitions</code>), links the AI draft via <code>sent_message_id</code> if one was
+        used, and writes the <code>reply_sent</code> audit row. A message stuck in <code>'sending'</code> is the
+        visible symptom of a crash between steps 2 and 3.</p>
+        <span class="source-cite">src/server/tickets/replies.ts:93-214; supabase/migrations/013_normalize_contract.sql:84-162</span>
+      </div>
+    </div>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK</td><td></td></tr>
+      <tr><td>message_id / in_reply_to</td><td>text</td><td>nullable</td><td>RFC 5322 headers, used for threading</td></tr>
+      <tr><td>references_header</td><td>text[]</td><td>default '{}'</td><td></td></tr>
+      <tr><td>from_address / to_address</td><td>text</td><td>NOT NULL, default ''</td><td></td></tr>
+      <tr><td>from_name / cc</td><td>text</td><td>nullable</td><td></td></tr>
+      <tr><td>subject / body_text</td><td>text</td><td>NOT NULL, default ''</td><td></td></tr>
+      <tr><td>body_html / raw_headers</td><td>text / jsonb</td><td>nullable</td><td></td></tr>
+      <tr><td>received_at</td><td>timestamptz</td><td>default now()</td><td></td></tr>
+      <tr><td>processed</td><td>boolean</td><td>NOT NULL, default false (008)</td><td>Intake-queue claim flag</td></tr>
+      <tr><td>is_spam</td><td>boolean</td><td>default false</td><td></td></tr>
+      <tr><td>language</td><td>text</td><td>nullable</td><td>AI-detected language</td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL, FK &rarr; organizations CASCADE (002, required 007)</td><td></td></tr>
+      <tr><td>processing_attempts</td><td>integer</td><td>NOT NULL, default 0, CHECK &ge; 0 (008)</td><td>Retry counter; poison messages stop retrying at <code>MAX_PROCESSING_ATTEMPTS</code> (5)</td></tr>
+      <tr><td>processing_error</td><td>text</td><td>CHECK length &le; 1000 (008)</td><td></td></tr>
+      <tr><td>last_attempt_at</td><td>timestamptz</td><td>nullable (008)</td><td></td></tr>
+      <tr><td>direction</td><td>text</td><td>NOT NULL, default 'inbound', CHECK IN ('inbound','outbound') (009)</td><td>Both directions live in this one table since 009</td></tr>
+      <tr><td>not_spam_by</td><td>uuid</td><td>FK (not_spam_by,org) &rarr; users(id,org) ON DELETE SET NULL (011)</td><td>Admin who overrode the spam filter</td></tr>
+      <tr><td>not_spam_at</td><td>timestamptz</td><td>nullable (011)</td><td></td></tr>
+      <tr><td>created_at</td><td>timestamptz</td><td>default now()</td><td></td></tr>
+    </table>
+    <p><strong>Dropped by 013:</strong> <code>embedding_id text</code> (the Pinecone vector id is just the row's own <code>id</code>, so a separate column was redundant).</p>
+    <p><strong>CHECK:</strong> <code>emails_outbound_not_queued</code> — <code>direction = 'inbound' OR processed</code> (an outbound row can never sit in the unprocessed intake queue); <code>emails_not_spam_pair</code> — <code>not_spam_by IS NULL OR not_spam_at IS NOT NULL</code>. <strong>Unique:</strong> <code>emails_id_org_key (id, org)</code>, <code>emails_id_org_direction_key (id, org, direction)</code> — the target the <code>ticket_messages</code> composite FK checks direction against.</p>
+    <p><strong>Indexes:</strong> <code>idx_emails_message_id/from/processed</code> (001), <code>idx_emails_org</code> (002), <code>emails_intake_queue_idx</code> — partial, <code>WHERE NOT processed</code> (008), <code>emails_org_received_idx</code>, <code>emails_message_id_idx</code> — partial (007) — <em>and</em> a near-duplicate <code>emails_org_message_id_idx</code> created <code>IF NOT EXISTS</code> with the same definition two migrations later (009, see callout), <code>emails_spam_review_idx</code> — partial, <code>WHERE is_spam</code> (011), <code>emails_outbound_recipient_idx</code> — partial, <code>WHERE direction='outbound'</code> (011, used for auto-reply rate limiting).</p>
+    <span class="source-cite">supabase/migrations/001_initial_schema.sql:40-62; 008_email_intake_queue.sql:11-21; 009_conversation_model.sql:113-125; 011_ai_settings_and_spam_review.sql:38-52; 013_normalize_contract.sql:281</span>
+
+    <div class="callout">
+      <strong>Minor schema quirk worth knowing</strong>
+      Migration 007 creates <code>emails_message_id_idx ON emails (organization_id, message_id) WHERE message_id IS NOT NULL</code>,
+      and migration 009 separately creates <code>emails_org_message_id_idx</code> with the identical
+      definition (guarded with <code>IF NOT EXISTS</code>, which only prevents an error on the exact same
+      <em>name</em>, not a duplicate definition under a different name). Both indexes exist in the live
+      database side by side.
+      <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:384; 009_conversation_model.sql:124-125</span>
+    </div>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK</td><td></td></tr>
+      <tr><td>ticket_id</td><td>uuid</td><td>NOT NULL, FK (ticket_id,org) &rarr; tickets(id,org) CASCADE</td><td></td></tr>
+      <tr><td>email_id</td><td>uuid</td><td>FK &rarr; emails(id) ON DELETE SET NULL</td><td>The inbound email this draft answered</td></tr>
+      <tr><td>response_text</td><td>text</td><td>NOT NULL</td><td>The AI's drafted answer</td></tr>
+      <tr><td>match_type</td><td>text</td><td>NOT NULL, CHECK IN ('perfect','partial','none')</td><td>How well the knowledge base matched</td></tr>
+      <tr><td>match_score</td><td>real</td><td>default 0.0</td><td></td></tr>
+      <tr><td>sent_message_id</td><td>uuid</td><td>FK (sent_message_id,org) &rarr; ticket_messages(id,org) ON DELETE SET NULL; UNIQUE INDEX <code>WHERE sent_message_id IS NOT NULL</code> (009)</td><td>The reply actually sent from this draft, if any — the draft's own text stays untouched so sent-vs-suggested can be compared</td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL, FK &rarr; organizations CASCADE (002, required 007)</td><td></td></tr>
+      <tr><td>created_at</td><td>timestamptz</td><td>default now()</td><td></td></tr>
+    </table>
+    <p><strong>Dropped by 013:</strong> <code>cited_faq_ids text[]</code>, <code>cited_ticket_ids text[]</code> (replaced by the <code>auto_response_citations</code> relation), <code>sent boolean</code>, <code>sent_at timestamptz</code> (now derivable: <code>sent_message_id IS NOT NULL</code> / that message's <code>created_at</code>). <strong>Unique:</strong> <code>auto_responses_id_org_key (id, org)</code> (012).</p>
+    <span class="source-cite">supabase/migrations/001_initial_schema.sql:139-151; 009_conversation_model.sql:175-180; 012_normalize_expand.sql:59; 013_normalize_contract.sql:271-275</span>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>auto_response_id</td><td>uuid</td><td>part of composite PK; FK (auto_response_id,org) &rarr; auto_responses(id,org) CASCADE</td><td></td></tr>
+      <tr><td>faq_id</td><td>uuid</td><td>part of composite PK; FK (faq_id,org) &rarr; faqs(id,org) CASCADE</td><td></td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL</td><td></td></tr>
+      <tr><td>rank</td><td>smallint</td><td>NOT NULL, CHECK BETWEEN 1 AND 10; UNIQUE (auto_response_id, rank)</td><td>Citation order</td></tr>
+      <tr><td>score</td><td>real</td><td>NOT NULL, CHECK BETWEEN 0 AND 1</td><td>Semantic-search similarity score</td></tr>
+    </table>
+    <p>Table name: <code>auto_response_citations</code> (012) — replaces <code>auto_responses.cited_faq_ids text[]</code>: a repeating group with no referential integrity (1NF violation; ids could dangle after an article was deleted) becomes a real join table, so "how often is this FAQ cited" is <code>COUNT(*)</code> instead of a counter someone has to keep in sync. <strong>Index:</strong> <code>auto_response_citations_faq_idx (faq_id)</code>.</p>
+    <span class="source-cite">supabase/migrations/012_normalize_expand.sql:52-75</span>
+
+    <table class="data-table">
+      <tr><th>Column</th><th>Type</th><th>Constraints</th><th>Meaning</th></tr>
+      <tr><td>id</td><td>uuid</td><td>PK</td><td></td></tr>
+      <tr><td>question / answer / category</td><td>text</td><td>NOT NULL</td><td></td></tr>
+      <tr><td>solution_steps</td><td>text[]</td><td>default '{}'</td><td></td></tr>
+      <tr><td>video_url / manual_ref</td><td>text</td><td>nullable</td><td></td></tr>
+      <tr><td>organization_id</td><td>uuid</td><td>NOT NULL, FK &rarr; organizations CASCADE (002, required 007)</td><td></td></tr>
+      <tr><td>created_at</td><td>timestamptz</td><td>default now()</td><td></td></tr>
+    </table>
+    <p><strong>Dropped by 013:</strong> <code>times_used int</code>, <code>success_rate real</code>, <code>avg_resolution_minutes int</code> (all now derived by counting <code>auto_response_citations</code>, per <code>GET /api/faqs</code>'s <code>select("*, auto_response_citations(count)")</code>), <code>embedding_id text</code> (redundant with the row's own id). <strong>Unique:</strong> <code>faqs_id_org_key (id, org)</code> (012).</p>
+    <span class="source-cite">supabase/migrations/001_initial_schema.sql:123-136; 012_normalize_expand.sql:60; 013_normalize_contract.sql:276-280; src/app/api/faqs/route.ts:27-30,46-50</span>
+
+    <h2>Teams, SLA, mailbox &amp; AI credentials, audit, login throttling</h2>
+
+    <table class="data-table">
+      <tr><th>Table</th><th>Key columns</th><th>Purpose</th></tr>
+      <tr><td>teams</td><td>id (PK), name, description, organization_id (NOT NULL, FK CASCADE). Unique: <code>teams_id_org_key</code>, <code>teams_org_name_key (organization_id, name)</code>. Dropped by 013: <code>category_routing text[]</code> (unused).</td><td>Named groups tickets can be routed to via <code>assigned_team_id</code></td></tr>
+      <tr><td>sla_policies</td><td>id (PK), severity, first_response_minutes, resolution_minutes, organization_id (nullable — NULL rows are the global defaults). Unique: <code>sla_policies_org_severity_key UNIQUE NULLS NOT DISTINCT (organization_id, severity)</code> (007, replacing the old global-only <code>UNIQUE(severity)</code>). CHECK: <code>resolution_minutes &ge; first_response_minutes &gt; 0</code>.</td><td>SLA thresholds by severity; an org-specific row overrides the global one for that severity</td></tr>
+      <tr><td>mailbox_connections</td><td>id (PK), organization_id (UNIQUE — one mailbox per workspace), provider (CHECK 'gmail'/'imap_smtp'), email_address (CHECK regex), username, imap_host/port, smtp_host/port (CHECK ports 1-65535), secret_ciphertext, status (CHECK 'active'/'error'/'disconnected'), last_error, last_synced_at, connected_by (FK &rarr; users, SET NULL).</td><td>The workspace's connected support inbox; credentials stored only as AES-256-GCM ciphertext</td></tr>
+      <tr><td>ai_credentials</td><td>organization_id (PK, FK CASCADE — 1:1 with organizations), provider (CHECK 'gemini'), secret_ciphertext, key_hint (CHECK length=4), status (CHECK 'active'/'error'), last_error, created_by (FK &rarr; users, SET NULL). CHECK: <code>status='error' OR last_error IS NULL</code>.</td><td>A workspace's own Gemini key (011), encrypted the same way as the mailbox secret</td></tr>
+      <tr><td>audit_logs</td><td>id (PK), ticket_id (FK, ON DELETE SET NULL since 012 — was CASCADE in 007), action, details (jsonb), organization_id (NOT NULL, FK CASCADE), actor_user_id (FK &rarr; users, SET NULL), actor_type (CHECK 'system'/'user'/'cron'/'webhook'). Dropped by 013: <code>performed_by text</code> (replaced by actor_user_id + actor_type).</td><td>Append-only activity trail — see Q&amp;A below</td></tr>
+      <tr><td>auth_login_attempts</td><td>id (bigint identity, PK), email, ip_address, succeeded (bool NOT NULL), created_at. No <code>organization_id</code> — global.</td><td>Every sign-in attempt, for the 15-minute brute-force throttle (5 failures/email, 20/IP)</td></tr>
+    </table>
+    <span class="source-cite">supabase/migrations/001_initial_schema.sql:72-78,64-70,153-163; 007_integrity_and_assignment.sql:180-208,324-357; 011_ai_settings_and_spam_review.sql:15-32; 012_normalize_expand.sql:139-141; 013_normalize_contract.sql:291,293; src/server/auth/config.ts:132-173</span>
+
+    <div class="qa-item">
+      <div class="qa-question">How is <code>audit_logs</code> actually made append-only — isn't that just a comment/convention?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>It's enforced by a trigger, not a convention. <code>protect_audit_log()</code> runs
+        <code>BEFORE UPDATE OR DELETE</code> and raises <code>insufficient_privilege</code> unless the session
+        has set <code>intellidesk.audit_maintenance = 'on'</code> for the current transaction — which no
+        application code does; it's reserved for deliberate manual maintenance. The one exception it allows
+        even without that flag: when a referenced user or ticket is deleted, the FK's
+        <code>ON DELETE SET NULL</code> nulls <code>actor_user_id</code> or <code>ticket_id</code> on the audit
+        row, and the trigger recognizes that specific shape of change (old row equal to new row except for one
+        of those two columns going to NULL) and lets it through without requiring the flag.</p>
+        <pre><code>IF current_setting('intellidesk.audit_maintenance', true) IS DISTINCT FROM 'on' THEN
+  RAISE EXCEPTION 'audit_logs is append-only (% refused)', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END IF;</code></pre>
+        <span class="source-cite">supabase/migrations/012_normalize_expand.sql:103-145</span>
+      </div>
+    </div>
+
+    <h2>Database functions</h2>
+    <p>9 functions exist in the live schema; three more (<code>sync_ticket_team</code>,
+    <code>mirror_ticket_email_to_message</code>, <code>enforce_ticket_email_same_org</code>) existed as
+    expand-phase bridges and were dropped by 013 — see the next section.</p>
+
+    <table class="data-table">
+      <tr><th>Function</th><th>Introduced / redefined</th><th>What it does</th></tr>
+      <tr><td>generate_ticket_number()</td><td>001, redefined 012</td><td>BEFORE INSERT trigger on tickets; originally read a global sequence, now upserts a per-org row in <code>ticket_counters</code></td></tr>
+      <tr><td>update_updated_at()</td><td>001</td><td>Generic BEFORE UPDATE trigger: sets <code>NEW.updated_at = now()</code>; reused on organizations, users, mailbox_connections, ai_credentials</td></tr>
+      <tr><td>enforce_ticket_assignee()</td><td>007</td><td>BEFORE INSERT/UPDATE OF assigned_agent on tickets; rejects assigning to anyone not an active admin/agent of the same org</td></tr>
+      <tr><td>assign_ticket(org, ticket, assignee, actor, note)</td><td>007, redefined 013</td><td>SECURITY: re-checks caller is an active admin; locks the ticket <code>FOR UPDATE</code>; updates <code>assigned_agent</code>, inserts a <code>ticket_assignments</code> history row and an audit row, all in one transaction. 013's redefinition only drops the now-gone <code>performed_by</code> column from the audit insert — logic is unchanged.</td></tr>
+      <tr><td>fill_contact_org()</td><td>007</td><td>BEFORE INSERT/UPDATE OF account_id, organization_id on contacts; derives organization_id from the linked account when old code omits it</td></tr>
+      <tr><td>enforce_ticket_status()</td><td>009</td><td>BEFORE INSERT/UPDATE OF status on tickets; validates the transition against <code>ticket_status_transitions</code> and owns <code>sla_resolved_at</code></td></tr>
+      <tr><td>complete_ticket_reply(...)</td><td>009, redefined 013</td><td>Locks the message and ticket <code>FOR UPDATE</code>; inserts the outbound email row, marks the message sent, sets first-response time, applies a validated status change, links the AI draft, writes the audit row — one transaction, the single commit point for "this reply went out"</td></tr>
+      <tr><td>record_inbound_message(org, email, body, thread_ticket, new_ticket)</td><td>010, redefined 013</td><td>The single commit point for an inbound email — see Q&amp;A below</td></tr>
+      <tr><td>protect_audit_log()</td><td>012</td><td>BEFORE UPDATE OR DELETE on audit_logs; blocks all writes except an FK-driven SET NULL, unless <code>intellidesk.audit_maintenance='on'</code> for the transaction</td></tr>
+    </table>
+    <span class="source-cite">supabase/migrations/001_initial_schema.sql:168-194; 007_integrity_and_assignment.sql:53-78,156-167,266-317; 009_conversation_model.sql:63-98,256-335; 010_record_inbound_message.sql:20-97; 012_normalize_expand.sql:27-44,112-135; 013_normalize_contract.sql:30-162,165-242</span>
+
+    <div class="qa-item">
+      <div class="qa-question">Walk through what <code>record_inbound_message()</code> does with a reply to a Closed ticket.<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>First it checks idempotency: if a <code>ticket_messages</code> row already references this
+        <code>email_id</code> (the column is UNIQUE), it returns the existing ticket immediately — safe to call
+        twice for the same email. Otherwise, if the thread detector matched a ticket and that ticket's status is
+        <em>not</em> Closed, the email is appended as a new <code>customer</code> message; if the ticket was
+        Pending or Resolved it's reopened to In Progress and a more urgent severity on the reply wins (compared
+        as text, since <code>'P1' &lt; 'P2'</code> lexically). But if the matched ticket <em>is</em> Closed, that
+        branch is skipped and it falls through to creating a brand-new ticket with
+        <code>follow_up_of</code> set to the old ticket's id — a Closed ticket never receives new messages
+        directly; a reply to it always starts a fresh, linked ticket.</p>
+        <pre><code>IF v_ticket.id IS NOT NULL AND v_ticket.status &lt;&gt; 'Closed' THEN
+  INSERT INTO public.ticket_messages (...) VALUES (...);
+  v_reopened := v_ticket.status IN ('Pending', 'Resolved');
+  ...
+  RETURN QUERY SELECT v_ticket.id, v_ticket.ticket_number, false, v_reopened;
+  RETURN;
+END IF;
+-- New ticket, or a follow-up to a Closed one.
+IF v_ticket.id IS NOT NULL THEN
+  v_follow_up := v_ticket.id;
+END IF;</code></pre>
+        <span class="source-cite">supabase/migrations/013_normalize_contract.sql:200-224 (identical logic to 010_record_inbound_message.sql:55-79)</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">Are there foreign-key constraints between all related tables?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">Where does row locking (<code>FOR UPDATE</code>) matter in these functions, and why?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>Most critical relationships have foreign keys with <code>ON DELETE CASCADE</code> or <code>ON DELETE SET NULL</code>. For example, <code>ticket_id UUID REFERENCES tickets(id) ON DELETE CASCADE</code> means if a ticket is deleted, all its related ticket_emails and auto_responses are deleted too. However, <code>assigned_agent TEXT</code> on tickets is just a TEXT column, not a foreign key to users — so the application code is responsible for validating that the assigned agent belongs to the same organization. This is why the API route for updating an assignee checks org membership before accepting the assignment.</p>
-        <span class="source-cite">supabase/migrations/001_initial_schema.sql shows ticket_emails with ON DELETE CASCADE (line 115); auto_responses with ON DELETE CASCADE (line 142); src/app/api/tickets/[id]/route.ts validates assigned agent membership in the PATCH handler before allowing the update</span>
+        <p>Three functions lock a row before mutating it: <code>assign_ticket()</code> locks the ticket
+        (<code>SELECT ... FOR UPDATE</code>) before comparing/changing <code>assigned_agent</code>, so two
+        concurrent assignment requests for the same ticket serialize instead of racing;
+        <code>complete_ticket_reply()</code> locks both the message and the ticket before updating them, since
+        it's finishing a reply that another concurrent request must not also try to complete;
+        <code>record_inbound_message()</code> locks the matched ticket before appending to it or deciding to
+        reopen it, so two inbound emails to the same ticket arriving close together don't both read a stale
+        status. All three run inside implicit function-level transactions (PL/pgSQL functions are
+        transactional by default when called outside an explicit transaction block), so the lock plus the
+        writes plus the audit insert commit or roll back together.</p>
+        <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:288-290; 013_normalize_contract.sql:106-119,196-198</span>
       </div>
     </div>
 
-    <h2>TypeScript types & API responses</h2>
+    <h2>Columns and objects that no longer exist</h2>
+    <p>013's own header comment is the clearest source for this — it lists every column it drops and what
+    replaced it:</p>
+    <table class="data-table">
+      <tr><th>Dropped</th><th>Replaced by</th></tr>
+      <tr><td>tickets.sla_breach</td><td>Computed live from due dates and timestamps (<code>src/server/pipeline/sla-tracker.ts</code>)</td></tr>
+      <tr><td>tickets.auto_response_sent / auto_response_type</td><td><code>ticket_messages</code> (<code>author_type = 'ai'</code>) / <code>auto_responses</code></td></tr>
+      <tr><td>tickets.assigned_team (text)</td><td><code>teams.name</code> via <code>assigned_team_id</code></td></tr>
+      <tr><td>tickets.ai_confidence (stored real)</td><td>Same name, now <code>GENERATED</code> from <code>ai_classification</code></td></tr>
+      <tr><td>tickets.escalation_count</td><td>Unused, dropped outright</td></tr>
+      <tr><td>auto_responses.sent / sent_at</td><td><code>sent_message_id IS NOT NULL</code> / that message's <code>created_at</code></td></tr>
+      <tr><td>auto_responses.cited_faq_ids / cited_ticket_ids</td><td><code>auto_response_citations</code> (real foreign keys, 1NF)</td></tr>
+      <tr><td>faqs.times_used / success_rate / avg_resolution_minutes</td><td>Derived from <code>auto_response_citations</code></td></tr>
+      <tr><td>emails.embedding_id, faqs.embedding_id</td><td>The vector id is the row's own id</td></tr>
+      <tr><td>audit_logs.performed_by</td><td><code>actor_user_id</code> + <code>actor_type</code></td></tr>
+      <tr><td>ticket_emails (whole table)</td><td><code>ticket_messages.email_id</code> — an email belongs to one message/ticket</td></tr>
+      <tr><td>contacts.subscribed_modules / is_lead / lead_status / last_login</td><td>Unused CRM leftovers, dropped outright</td></tr>
+      <tr><td>teams.category_routing</td><td>Unused, dropped outright</td></tr>
+      <tr><td>organizations.email_config (jsonb)</td><td><code>mailbox_connections</code> (typed table, encrypted secret)</td></tr>
+    </table>
+    <p>Also dropped in 013: the <code>ticket_emails</code> join table itself (with its triggers), and the two
+    bridge functions that existed only to keep old and new data in sync during the expand phase:
+    <code>mirror_ticket_email_to_message()</code> and <code>enforce_ticket_email_same_org()</code>. A third
+    bridge function, <code>sync_ticket_team()</code>, is dropped alongside the <code>assigned_team</code> column
+    it synchronized.</p>
+    <span class="source-cite">supabase/migrations/013_normalize_contract.sql:1-19,245-293</span>
+
+    <h2>Row-level security and the archive schema</h2>
+
+    <div class="callout">
+      <strong>RLS is enabled everywhere, but by policy, not by role separation</strong>
+      Migration 006 enables row-level security on every table in <code>public</code> and leaves zero policies
+      on any of them — the default-deny behavior means <code>anon</code> and <code>authenticated</code> (the
+      PostgREST-facing roles) see nothing, even if a stray <code>GRANT</code> were re-added by mistake later.
+      The application itself never uses those roles: it talks to Postgres exclusively with the
+      <code>service_role</code> key from the server (<code>src/server/db/supabase.ts</code>), which has
+      <code>BYPASSRLS</code>. Multi-tenant isolation is therefore enforced entirely by every route filtering on
+      <code>organization_id</code> and by the composite foreign keys described above — not by RLS policies,
+      which migration 003's earlier (superseded) per-table policies had attempted.
+      <span class="source-cite">supabase/migrations/006_lockdown_public_api.sql:1-73</span>
+    </div>
 
     <div class="qa-item">
-      <div class="qa-question">How do the TypeScript type definitions mirror the database schema?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">What is the <code>archive</code> schema and is anything still using it?<span class="qa-difficulty basic">Basic</span></div>
       <div class="qa-answer">
-        <p>Every table has a corresponding TypeScript interface in <code>src/types/index.ts</code>. For instance, the Ticket interface has fields that match the table columns: <code>id</code>, <code>ticket_number</code>, <code>status</code>, <code>severity</code>, <code>ai_confidence</code>, <code>subject</code>, <code>summary</code>, plus joinable fields like <code>account?: Account</code> and <code>emails?: TicketEmail[]</code> that reflect the foreign keys. Enums like <code>TicketStatus</code> and <code>Severity</code> map to the CHECK constraints in SQL (e.g., status IN ('New', 'In Progress', 'Resolved', 'Closed')).</p>
-        <span class="source-cite">src/types/index.ts defines Organization (lines 37-46), User (lines 48-61), Ticket (lines 113-143), and the other 9 entities; each maps to a table in the schema; Enums like TicketStatus (line 8) and Severity (line 10) match SQL CHECK constraints</span>
+        <p>Migration 006 moves two legacy prototype tables — <code>tickets_old</code> and
+        <code>customers_old</code> — out of <code>public</code> and into a new <code>archive</code> schema that
+        PostgREST does not expose, rather than dropping them outright. All privileges on that schema are
+        revoked from <code>PUBLIC</code>, <code>anon</code>, and <code>authenticated</code>. Nothing in the
+        application code read for this page (the 24 API routes, the server modules) queries
+        <code>archive.*</code>; PLAN.txt's ground truth confirms these two tables as "Archived… not used."</p>
+        <pre><code>CREATE SCHEMA IF NOT EXISTS archive;
+REVOKE ALL ON SCHEMA archive FROM PUBLIC, anon, authenticated;
+ALTER TABLE IF EXISTS public.tickets_old SET SCHEMA archive;
+ALTER TABLE IF EXISTS public.customers_old SET SCHEMA archive;
+REVOKE ALL ON ALL TABLES IN SCHEMA archive FROM PUBLIC, anon, authenticated;</code></pre>
+        <span class="source-cite">supabase/migrations/006_lockdown_public_api.sql:18-24</span>
       </div>
     </div>
 
-    <div class="qa-item">
-      <div class="qa-question">What does an API response for a ticket list look like?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The GET /api/tickets response is a TicketListResponse object with: <code>{ tickets: TicketListItem[], total: number, page: number, limit: number, total_pages: number }</code>. Each TicketListItem is a Ticket with the account and contact joined in, and optional fields like email threads. The response is paginated; by default it returns 20 per page, with a maximum of 100. The client can sort by created_at, updated_at, severity, or status, and can filter by status, severity, category, assigned agent, and search terms.</p>
-        <span class="source-cite">src/types/api.ts lines 38-44 define TicketListResponse; TicketListItem is defined at lines 33-36; src/app/api/tickets/route.ts implements the sorting, filtering, and pagination logic</span>
-      </div>
-    </div>
+    <p>For why the schema was reshaped this way rather than any other way — the full expand/contract reasoning
+    across migrations 007–013 — see <a href="database-design.html">Database Design &amp; Migrations</a>. For how
+    roles map onto what a session can read or write, see <a href="roles-permissions.html">Roles &amp; Permissions</a>.
+    For how each API route queries this schema, see <a href="api-routes.html">API &amp; Backend Routes</a>.</p>
 
   </main>
 </div>

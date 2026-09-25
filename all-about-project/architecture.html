@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>System Architecture Overview — IntelliDesk AI Project Docs</title>
+<title>System Architecture — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,127 +319,162 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>System Architecture Overview</h1>
-    <p class="page-intro">The shape of the app: a Next.js 16 monolith with App Router, layered into app routes, feature domains, and shared code. No microservices, no realtime updates — a single build that runs on Vercel, polls data from Supabase, and reaches out to Gemini, Pinecone, and IMAP/SMTP.</p>
+    <h1>System Architecture</h1>
+<p class="page-intro">How the pieces fit: one Next.js application on Vercel that serves the UI and the API, a server-only layer that alone holds secrets, Supabase Postgres as the system of record, Pinecone for vectors, Gemini for AI, the company's own mailbox over IMAP/SMTP, and a GitHub Actions schedule that drives email intake.</p>
 
-    <h2>High-level structure</h2>
+<h2>The big picture</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">What type of app is this — monolith, microservices, something else?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>A Next.js 16 monolith running on Vercel. Everything ships in one build artifact. There are no separate backend services, job queues, or worker processes — the app is the only code running on Vercel. Cron-triggered HTTP endpoints inside the app handle the email polling and queue processing.</p>
-        <span class="source-cite">README.md — "Framework: Next.js 16 (App Router, Turbopack, React Compiler)"; src/app/layout.tsx shows root layout wrapping the Providers component; vercel.json registers a cron job for /api/emails/poll</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Draw the system.<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+<pre><code>  Browser (React 19, SWR polling every 30 s)
+      │  HTTPS, NextAuth session cookie (JWT)
+      ▼
+  Next.js 16 App Router on Vercel ──────────────────────────────────────┐
+  │  src/app/**/page.tsx      server-rendered pages + requirePageRole    │
+  │  src/middleware.ts        redirects /dashboard/* without a session   │
+  │  src/app/api/**/route.ts  24 route handlers                          │
+  │        │ requireAuth → getOrgId → can.* policy                       │
+  │        ▼                                                             │
+  │  src/server/**  (import "server-only": secrets live only here)       │
+  │    auth/  crypto/  db/  email/  gemini/  pipeline/  tickets/         │
+  └──────┬──────────────┬───────────────┬──────────────┬────────────────┘
+         │ service-role │ vectors       │ AI           │ IMAP / SMTP (TLS)
+         ▼              ▼               ▼              ▼
+   Supabase Postgres  Pinecone      Google Gemini   Company mailbox (Gmail…)
+   20 tables, RLS     {org}_emails  classification  customer email in,
+   closed to browser  {org}_tickets drafts,         replies out
+                      {org}_faqs    embeddings
 
-    <div class="qa-item">
-      <div class="qa-question">What's the folder structure under src/ and why is it organized that way?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The structure is app → features → shared, enforced by import boundaries:</p>
-        <ul>
-          <li><code>src/app/</code> — routes only: pages, layouts, API handlers. Imports from features and shared.</li>
-          <li><code>src/features/</code> — seven product-area folders (analytics, auth, command-center, knowledge-base, queue, settings, ticket-workspace), each with <code>components/</code>, <code>hooks/</code>, and <code>lib/</code>. Never import other features except one exception: command-center imports queue's <code>WorkQueue</code> component.</li>
-          <li><code>src/components/</code> — shared UI: <code>ui/</code> (23 design primitives with zero business logic) and <code>layout/</code> (12 app-shell components like the sidebar and command palette).</li>
-          <li><code>src/server/</code> — 19 server-only files: auth config, Supabase client, Gemini integration, IMAP/SMTP, the email pipeline. Every file starts with <code>import "server-only";</code>.</li>
-          <li><code>src/hooks/</code>, <code>src/lib/</code>, <code>src/types/</code> — shared utilities available to all layers.</li>
-        </ul>
-        <p>This layering keeps business domains separate while preventing accidental leaks of server secrets into browser bundles.</p>
-        <span class="source-cite">README.md "Project structure" section; src/features/ contains 7 directories (analytics, auth, command-center, knowledge-base, queue, settings, ticket-workspace); src/server/ contains 19 TypeScript files per PLAN.txt; src/components/ui/ contains 23 files per PLAN.txt</span>
-      </div>
-    </div>
+  GitHub Actions (every 10 min) ── Bearer CRON_SECRET ──▶ /api/emails/poll
+  Vercel Cron (daily fallback)  ── Bearer CRON_SECRET ──▶ /api/emails/poll</code></pre>
+    <span class="source-cite">.github/workflows/poll-mailboxes.yml; vercel.json; src/middleware.ts; src/server/db/supabase.ts; src/server/auth/org-context.ts:20</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How does the app prevent server secrets from being imported into browser code?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Two layers: every file under <code>src/server/</code> opens with <code>import "server-only";</code>, a package Next.js bundles. If that module is ever pulled into a client bundle, the build fails immediately. Additionally, an ESLint <code>no-restricted-imports</code> rule blocks importing <code>@/server/*</code> from shared code, features, or components — so the mistake is caught in the editor before a build is even attempted.</p>
-        <span class="source-cite">src/app/providers.tsx line 1 shows "use client" at the top, proving it's client-rendered; src/server/auth/config.ts and other server files would fail if imported into this client component; README.md "Conventions" states every file in src/server/ starts with import "server-only"; eslint.config.mjs contains the no-restricted-imports rule for @/server/*</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why is it a single Next.js app rather than a separate frontend and backend?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Route handlers give a real server-side API (secrets, database access, SMTP) in the same deployable as the UI: one repository, one build, one Vercel project, shared TypeScript types between client and server (<code>src/types/api.ts</code>). The only work that isn't request/response, email polling, is triggered over HTTP by a scheduler rather than needing a separate worker.</p>
+    <span class="source-cite">src/types/api.ts (response shapes shared by routes and UI)</span>
+  </div>
+</div>
 
-    <h2>Request flow & routing</h2>
+<div class="qa-item">
+  <div class="qa-question">What are the main components and their responsibilities?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Layer</th><th>Folder</th><th>Responsibility</th></tr>
+      <tr><td>Routing &amp; pages</td><td><code>src/app</code></td><td>11 pages, 3 layouts, 24 route handlers; pages call <code>requirePageRole</code></td></tr>
+      <tr><td>Feature UI</td><td><code>src/features</code></td><td>8 domains (analytics, auth, command-center, knowledge-base, queue, settings, spam, ticket-workspace)</td></tr>
+      <tr><td>Shared UI</td><td><code>src/components/ui</code>, <code>layout</code></td><td>23 primitives, 13 shell components (sidebar, command palette, shortcuts, user menu)</td></tr>
+      <tr><td>Client data</td><td><code>src/hooks</code>, <code>src/lib</code></td><td>SWR hooks, API client, formatting, timezone helper</td></tr>
+      <tr><td>Server</td><td><code>src/server</code></td><td>28 modules: auth &amp; policy, encryption, DB clients, email intake/threading/SMTP, Gemini, pipeline, reply service</td></tr>
+      <tr><td>Database</td><td><code>supabase/migrations</code></td><td>13 migrations, 20 tables, 9 functions; tests in <code>supabase/tests</code></td></tr>
+    </table>
+    <span class="source-cite">PLAN.txt ground truth (measured counts)</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Walk me through the full flow for a page load, from the browser hitting the app until React renders.
-<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Browser hits <code>/dashboard/tickets</code>. Middleware (before any route handler runs) checks if the user is logged in via the NextAuth session. If not logged in, it redirects to <code>/login</code> with the original path as a callback. If logged in, it passes through to the route handler.</p>
-        <p>The route handler for that page is at <code>src/app/dashboard/page.tsx</code>. The dashboard layout (<code>src/app/dashboard/layout.tsx</code>) wraps the page and renders the app shell (sidebar, top bar) plus a Suspense boundary around the <code>TicketWorkspace</code> modal component. The root layout at <code>src/app/layout.tsx</code> wraps everything, loading fonts and calling the <code>Providers</code> component. The app streams the initial HTML to the browser, and React hydrates it into an interactive component tree. After hydration, the client-side SWR hooks start polling the API for data.</p>
-        <pre><code>// src/middleware.ts: auth check
-const isLoggedIn = !!req.auth?.user;
-if (isDashboard && !isLoggedIn) {
-  const loginUrl = new URL("/login", req.url);
-  loginUrl.searchParams.set("callbackUrl", pathname);
-  return NextResponse.redirect(loginUrl);
-}</code></pre>
-        <span class="source-cite">src/middleware.ts lines 27-39; src/app/dashboard/layout.tsx wraps children with AppShell and TicketWorkspace; src/app/layout.tsx wraps everything with Providers; src/app/providers.tsx sets up SessionProvider, ThemeProvider, SWRConfig</span>
-      </div>
-    </div>
+<h2>Request lifecycle &amp; boundaries</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">How does the app fetch data on the client side? Does it have websockets?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The client uses SWR (Stale-While-Revalidate) to poll the app's own API routes. SWR is configured with <code>dedupingInterval: 2000</code> (never make the same request twice within 2 seconds) and <code>errorRetryCount: 3</code>. In the README, it states "Data refreshes every 30 seconds." There are no websockets — no socket.io, no realtime subscriptions. A change made by one agent can take up to 30 seconds to appear in another agent's dashboard.</p>
-        <span class="source-cite">src/app/providers.tsx lines 27-33 define SWRConfig with dedupingInterval: 2000 and errorRetryCount: 3; README.md line 208 states "Data refreshes every 30 seconds and after every mutation. The status indicator in the top bar reflects whether the last refresh succeeded — the app polls and does not use a push/realtime connection."</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Walk through an authenticated API call.<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ol>
+      <li>The browser calls e.g. <code>GET /api/tickets/…</code> through <code>apiGet</code> (SWR) with the NextAuth cookie.</li>
+      <li><code>requireAuth()</code> decodes the JWT; the JWT callback has re-validated role, active flag and organization within the last 5 minutes.</li>
+      <li><code>getOrgId(session)</code> takes the organization from the session, never from the request body.</li>
+      <li><code>can.viewTicket</code> / <code>can.workTicket</code> decide access; agents get 404 for tickets that aren't theirs.</li>
+      <li>The handler queries through <code>supabaseAdmin</code> (service role) with <code>.eq("organization_id", orgId)</code> on every query.</li>
+      <li>Multi-row writes go through a Postgres function (<code>assign_ticket</code>, <code>complete_ticket_reply</code>, <code>record_inbound_message</code>) so they are atomic.</li>
+      <li>The JSON response matches a type in <code>src/types/api.ts</code>; SWR caches it and refreshes after mutations.</li>
+    </ol>
+    <span class="source-cite">src/server/auth/helpers.ts:12; src/server/auth/org-context.ts:8-14; src/server/auth/policy.ts; src/server/auth/config.ts:104-105</span>
+  </div>
+</div>
 
-    <h2>Data access & security</h2>
+<div class="qa-item">
+  <div class="qa-question">How is the client/server boundary enforced?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Three guards: every secret-bearing module imports <code>server-only</code> (importing it from a client component fails the build); ESLint's <code>no-restricted-imports</code> forbids <code>@/server/*</code> from client code and cross-feature imports; and only <code>NEXT_PUBLIC_*</code> variables reach the browser, none of which are secrets. The Supabase client is created lazily on first use behind a proxy, so importing the module has no side effects.</p>
+    <span class="source-cite">eslint.config.mjs:21-25; src/server/db/supabase.ts:1-20</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How does an API route know which organization to return data for?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Every authenticated API route calls <code>requireAuth()</code> to verify the user's session, then <code>getOrgId(session)</code> to extract their <code>organization_id</code>. Then it filters all queries to that organization using <code>.eq("organization_id", orgId)</code>. This is the primary access-control mechanism — the database has no foreign-key constraints forcing org membership, so the application code is responsible for scoping every read and write.</p>
-        <pre><code>const session = await requireAuth();
-const orgId = getOrgId(session);
-let query = supabaseAdmin
-  .from("tickets")
-  .select("...")
-  .eq("organization_id", orgId);</code></pre>
-        <span class="source-cite">src/app/api/tickets/route.ts lines 15-72; src/server/auth/helpers.ts defines requireAuth(); src/server/auth/org-context.ts defines getOrgId()</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How is multi-tenancy implemented end to end?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li><strong>Identity:</strong> the organization comes from the signed session.</li>
+      <li><strong>Queries:</strong> every query filters by <code>organization_id</code>; lookups like threading and ticket numbers are org-scoped.</li>
+      <li><strong>Database:</strong> composite <code>(id, organization_id)</code> foreign keys make cross-tenant references impossible; RLS is closed to browser roles.</li>
+      <li><strong>Vectors:</strong> Pinecone namespaces per organization (<code>{orgId}_emails</code>, <code>_tickets</code>, <code>_faqs</code>).</li>
+      <li><strong>Secrets:</strong> encrypted with the organization id as associated data, so they only decrypt in their own row.</li>
+      <li><strong>Numbers:</strong> ticket numbers are counted per organization, so tenants can't infer each other's volume.</li>
+    </ul>
+    <span class="source-cite">src/server/auth/org-context.ts:20-22; supabase/migrations/007_integrity_and_assignment.sql:15-32; src/server/crypto/secrets.ts:39; supabase/migrations/012_normalize_expand.sql:16-48</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What is row-level security (RLS) used for if application code is doing the access control?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Row-level security is configured in the database but acts as defense-in-depth, not the primary control. The app uses the Supabase service-role key, which bypasses RLS entirely. RLS policies exist to protect against: (1) a future client-side feature that uses the anon key instead of the service-role key, or (2) an accidental cross-org data leak if a developer forgets the <code>.eq("organization_id", orgId)</code> filter. The policies ensure that if the primary layer fails, the database itself stops the leak.</p>
-        <span class="source-cite">supabase/migrations/003_rls.sql line 20-21 state: "The application uses supabase service_role key which BYPASSES RLS. These policies are defense-in-depth for any future use of anon/user keys."; README.md "Security notes" confirms the service-role key is used from route handlers only and must never reach browser code</span>
-      </div>
-    </div>
+<h2>Background work without a job server</h2>
 
-    <h2>Request lifecycle details</h2>
+<div class="qa-item">
+  <div class="qa-question">How does email get in if there's no background worker?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>A GitHub Actions schedule calls <code>POST /api/emails/poll</code> every 10 minutes with the cron secret (Vercel Cron calls it daily as a fallback). One run has two phases within a 50-second budget: <strong>ingest</strong> (for each connected mailbox, fetch unseen mail, store each message as an unprocessed <code>emails</code> row, only then mark it read) and <strong>drain</strong> (process stored rows oldest first, claiming each with a compare-and-set, pausing 4 seconds between emails to stay under AI rate limits). The <code>emails</code> table <em>is</em> the queue; a message failing 5 times is parked with its error.</p>
+    <span class="source-cite">src/app/api/emails/poll/route.ts:9-32; src/server/email/intake.ts:16-19, 127-136; src/server/email/imap.ts:96-101</span>
+    <p>Full step-by-step: <a href="feature-walkthrough-pipeline.html">Email → Ticket Pipeline</a>.</p>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How does the app handle an API call from the client — what's the full path from the browser hook to the database and back?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>A React component uses the <code>useApi</code> hook (built on SWR) to call <code>GET /api/tickets</code>. The hook sends the request with the browser's session cookie (set by NextAuth). The route handler at <code>src/app/api/tickets/route.ts</code> receives the request, calls <code>requireAuth()</code> to verify the session, extracts <code>organization_id</code>, builds a Supabase query filtered to that org, and returns the paginated, sorted list. The response is a JSON object with <code>{ tickets: [...], total, page, limit, total_pages }</code>. The client SWR hook receives it, stores it in memory, and triggers a re-render. If the session expires (API returns 401), the error handler redirects to login.</p>
-        <span class="source-cite">src/app/providers.tsx lines 16-21 define the handleSwrError function that catches 401s and redirects to login; src/app/api/tickets/route.ts implements the full GET handler with auth, org-scoping, filtering, sorting, and pagination; src/types/api.ts line 38-44 define TicketListResponse shape</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why no realtime updates?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Supabase Realtime authorizes subscriptions with Supabase Auth and RLS; this app uses NextAuth and keeps the database closed to browser roles. Instead, SWR refreshes every 30 seconds and after every mutation, and the top bar shows whether the last refresh succeeded ("Up to date" / stale).</p>
+    <span class="source-cite">src/lib/sync-status.ts:6, 77; src/hooks/use-api.ts</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How are cron-triggered email endpoints protected, given they don't have a user session?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p><code>/api/emails/poll</code> and <code>/api/emails/process-queue</code> are called by Vercel Cron, not by a logged-in user. They authenticate with <code>Authorization: Bearer $CRON_SECRET</code>, checked against an environment variable using <code>timingSafeEqual</code> (resistant to timing attacks). If the secret is unset, the endpoint returns 503 "Endpoint is not configured" rather than silently accepting all requests — it fails closed and is diagnosable from the response alone.</p>
-        <span class="source-cite">src/server/auth/cron.ts implements verifyBearerSecret() and verifyCronRequest() with timingSafeEqual; README.md "Environment variables" section documents CRON_SECRET and the 503 fail-closed behavior at line 103</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What happens when an external dependency fails?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Failure</th><th>Behaviour</th></tr>
+      <tr><td>Mailbox login fails during polling</td><td>Recorded on <code>mailbox_connections</code> (status error, last_error); other mailboxes continue; Settings shows "Needs attention"</td></tr>
+      <tr><td>Gemini rate-limited / down</td><td>Retried with backoff; then the email stays queued for the next run (no invented labels)</td></tr>
+      <tr><td>Workspace Gemini key invalid</td><td>Key flagged <code>error</code> in Settings; emails wait; saving a new key requeues parked ones</td></tr>
+      <tr><td>SMTP rejects a reply</td><td>Message stays in the conversation as "Not delivered"; API returns 502</td></tr>
+      <tr><td>Function times out mid-run</td><td>Unstored mail stays unread; stored-but-unprocessed rows are retried; nothing lost</td></tr>
+      <tr><td>Cron secret missing</td><td>Endpoints return 503 (fail closed)</td></tr>
+    </table>
+    <span class="source-cite">src/server/email/mailbox.ts (recordMailboxSync); src/server/gemini/client.ts; src/server/tickets/replies.ts; src/server/auth/cron.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What is deliberately not part of the architecture?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <div class="callout missing"><strong>Not implemented</strong> No payments or billing; no websockets/realtime; no message broker or worker process (the queue is a table drained by HTTP-triggered runs); no attachment storage (attachments are ignored); no business-hours SLA calendar; no password-reset emails; no workspace branding UI yet; no committed end-to-end test suite.</div>
+    <span class="source-cite">PLAN.txt "Confirmed ABSENT"; roadmap.html</span>
+  </div>
+</div>
 
   </main>
 </div>

@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,16 +319,16 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
@@ -326,153 +336,426 @@
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
     <h1>Authentication &amp; Security</h1>
-    <p class="page-intro">How the application authenticates users, enforces organization-scoped access, and secures webhook endpoints. NextAuth v5 with credentials provider, JWT sessions, and multi-tenant isolation via organization_id checks on every route.</p>
+    <p class="page-intro">NextAuth v5 with credentials + JWT, a database-enforced tenant boundary, and layered defenses around the two things that talk to the outside world: the login form and the mail server connection. This page covers everything from bcrypt cost to Supabase Data API lockdown, with a table of the specific incidents that were found and fixed.</p>
 
-    <h2>Session &amp; User Roles</h2>
+    <h2>Sign-in</h2>
 
     <div class="qa-item">
-      <div class="qa-question">What does the session object contain?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">What happens, step by step, when someone submits the login form?<span class="qa-difficulty intermediate">Intermediate</span></div>
       <div class="qa-answer">
-        <p>After login, the session shape includes the user's id, email, name, role, organization_id, and optional avatar image. The role field is an enum: <code>admin</code>, <code>agent</code>, or <code>viewer</code>. All authenticated requests carry this session object through the auth() middleware.</p>
+        <p>The client-side login page calls NextAuth's <code>signIn("credentials", ...)</code>, which invokes the <code>authorize()</code> callback on the server. That callback: normalizes the email (lowercase, trim, capped at 254 chars) and caps the password at 200 chars; extracts the client IP from <code>x-forwarded-for</code>; checks the throttle table; looks up the user by email; runs a bcrypt compare against the stored hash (or a dummy hash if the user doesn't exist); logs the attempt to <code>auth_login_attempts</code>; and only then returns a user object (which NextAuth encodes into a JWT) or <code>null</code>.</p>
+        <pre><code>const email = credentials.email.toLowerCase().trim().slice(0, 254);
+const password = credentials.password.slice(0, 200);
+const ip = clientIp(request);
+
+if (await isThrottled(email, ip)) throw new TooManyAttempts();
+
+const { data: user } = await supabaseAdmin
+  .from("users")
+  .select("id, email, name, password_hash, role, organization_id, avatar_url, is_active")
+  .eq("email", email)
+  .maybeSingle();
+
+const valid = await compare(password, user?.password_hash ?? DUMMY_BCRYPT_HASH);
+const succeeded = Boolean(user && user.is_active && valid);</code></pre>
+        <span class="source-cite">src/server/auth/config.ts:50-76</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Why does login always run bcrypt, even for an email that doesn't exist?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>To close a timing side-channel. If the code short-circuited on "no such user" before touching bcrypt, an unknown-email response would return faster than a wrong-password response, letting an attacker enumerate valid accounts by measuring response time. Instead, a fixed dummy bcrypt hash is compared against unconditionally, so a nonexistent email costs the same bcrypt round-trip as a real one with a wrong password.</p>
+        <pre><code>/** bcrypt hash of a random string: compared against when the email is unknown. */
+const DUMMY_BCRYPT_HASH = "$2b$12$ToWn5XBrYxv3glMXcqhzPOsEAMtGO1oPgytuVTqAjL.kmrTuC9i2S";</code></pre>
+        <span class="source-cite">src/server/auth/config.ts:66-68,137</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How is brute-force login throttled?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Every login attempt (success or failure) is written to <code>auth_login_attempts</code> (email, ip_address, succeeded, created_at). Before checking the password, <code>isThrottled()</code> counts failed attempts in the last 15 minutes, two ways in parallel: by email (max 5) and by client IP (max 20). If either threshold is hit, <code>authorize()</code> throws a custom <code>TooManyAttempts</code> error whose <code>code</code> is <code>"rate_limited"</code>, which NextAuth surfaces to the client as <code>result.code</code>; the login page checks that code and shows "Too many failed attempts. Wait 15 minutes, then try again." If the attempts table itself errors, throttling fails open (returns false) since bcrypt is still the real gate.</p>
+        <pre><code>const THROTTLE_WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILURES_PER_EMAIL = 5;
+const MAX_FAILURES_PER_IP = 20;
+...
+class TooManyAttempts extends CredentialsSignin {
+  code = "rate_limited";
+}</code></pre>
+        <span class="source-cite">src/server/auth/config.ts:132-134,139-141,149-173</span>
+        <p>The client reads the code from the failed sign-in result:</p>
+        <pre><code>result?.code === "rate_limited"
+  ? "Too many failed attempts. Wait 15 minutes, then try again."
+  : "Incorrect email or password."</code></pre>
+        <span class="source-cite">src/app/(auth)/login/page.tsx:61-63</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does a deactivated account or a role change take effect without waiting for the session to expire?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Sessions are JWTs that last up to 30 days, so the <code>jwt</code> callback stamps a <code>checked_at</code> timestamp at login and re-reads <code>role</code>, <code>organization_id</code> and <code>is_active</code> from the database whenever more than <code>SESSION_RECHECK_MS</code> (5 minutes) has passed since the last check. If the user is gone or <code>is_active</code> is now false, the callback returns <code>null</code>, which invalidates the session; a transient DB error keeps the existing token and retries on the next request rather than logging the user out.</p>
+        <pre><code>if (!token.checked_at || Date.now() - token.checked_at > SESSION_RECHECK_MS) {
+  const { data: current, error } = await supabaseAdmin
+    .from("users")
+    .select("role, organization_id, is_active")
+    .eq("id", token.sub!)
+    .maybeSingle();
+  if (error) return token; // transient DB error: keep the session, retry next request
+  if (!current || !current.is_active) return null;
+  token.role = current.role as UserRole;
+  token.organization_id = current.organization_id;
+  token.checked_at = Date.now();
+}</code></pre>
+        <span class="source-cite">src/server/auth/config.ts:102-117,130</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does the session/JWT actually carry?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>The augmented NextAuth types add <code>role</code>, <code>organization_id</code> and (JWT-only) <code>checked_at</code>. The <code>session</code> callback copies <code>id</code> (from <code>token.sub</code>), <code>role</code> and <code>organization_id</code> onto <code>session.user</code>, so every server component and API route that calls <code>auth()</code> gets the role and tenant id without a database round trip.</p>
         <pre><code>interface Session {
   user: {
     id: string;
     email: string;
     name: string;
-    role: "admin" | "agent" | "viewer";
+    role: UserRole;
     organization_id: string;
     image?: string | null;
   };
 }</code></pre>
-        <span class="source-cite">src/server/auth/config.ts:8-23 (Session interface augmentation)</span>
+        <span class="source-cite">src/server/auth/config.ts:9-33,119-127</span>
       </div>
     </div>
 
-    <div class="qa-item">
-      <div class="qa-question">How is the session created and stored?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>NextAuth v5 uses a JWT strategy with a 30-day maxAge. When a user logs in via the credentials provider (email + password verified against bcryptjs hash), the user data is returned and then encoded into a JWT token. On every request, the JWT is decoded to reconstruct the session object. The JWT callbacks enrich the token with <code>role</code> and <code>organization_id</code>, and the session callback copies those fields from the token into the session object that route handlers receive.</p>
-        <pre><code>session: {
-  strategy: "jwt",
-  maxAge: 30 * 24 * 60 * 60, // 30 days
-},</code></pre>
-        <span class="source-cite">src/server/auth/config.ts:36-39</span>
-      </div>
-    </div>
+    <h2>Route &amp; page protection</h2>
 
     <div class="qa-item">
-      <div class="qa-question">How is the password verified during login?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">How is <code>/dashboard</code> gated at the request level, before any page component runs?<span class="qa-difficulty intermediate">Intermediate</span></div>
       <div class="qa-answer">
-        <p>The credentials provider queries the user by email (case-insensitive, trimmed), fetches the stored <code>password_hash</code>, and uses bcryptjs's <code>compare()</code> function to check if the plaintext password matches the hash. The hash was created when the user was invited or signed up; passwords are never stored in plaintext. If verification fails or the user is marked inactive, login returns null and the request fails.</p>
-        <pre><code>const isValid = await compare(password, user.password_hash);
-if (!isValid) {
-  return null;
+        <p>Next.js middleware wraps <code>auth()</code> and runs on every request matched by its matcher (everything except static assets). It always allows NextAuth's own routes and three public webhook prefixes (<code>/api/emails/ingest</code>, <code>/api/emails/poll</code>, <code>/api/emails/process-queue</code>). Logged-in users hitting <code>/login</code> or <code>/signup</code> are redirected to <code>/dashboard</code>; unauthenticated users hitting anything under <code>/dashboard</code> are redirected to <code>/login</code> with a <code>callbackUrl</code> back to where they were headed.</p>
+        <pre><code>const isPublicApi =
+  pathname.startsWith("/api/emails/ingest") ||
+  pathname.startsWith("/api/emails/poll") ||
+  pathname.startsWith("/api/emails/process-queue");
+...
+if (isDashboard && !isLoggedIn) {
+  const loginUrl = new URL("/login", req.url);
+  loginUrl.searchParams.set("callbackUrl", pathname);
+  return NextResponse.redirect(loginUrl);
 }</code></pre>
-        <span class="source-cite">src/server/auth/config.ts:71-74</span>
-      </div>
-    </div>
-
-    <h2>Organization Scoping &amp; Multi-Tenancy</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">Why is organization_id critical to the data model?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Every row in every data table (tickets, emails, users, faqs, etc.) is tagged with an organization_id. This enforces multi-tenant isolation: an agent in Organization A cannot see, modify, or query tickets belonging to Organization B because every API route filters results with <code>.eq("organization_id", orgId)</code> before returning. Without this check, a malicious user could simply change the organization_id in their session token or guess other org IDs to access data they shouldn't see.</p>
-        <p>The pattern is consistent across all protected routes: extract orgId from the session, then filter the Supabase query by that organization.</p>
-        <span class="source-cite">src/app/api/tickets/route.ts:19-72 (org-scoped queries); src/server/auth/org-context.ts (getOrgId helper)</span>
+        <span class="source-cite">src/middleware.ts:11-48</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">How does the getOrgId helper prevent accidental data leaks?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">Middleware only checks "is there a session" — where is per-role page access enforced?<span class="qa-difficulty intermediate">Intermediate</span></div>
       <div class="qa-answer">
-        <p>The <code>getOrgId()</code> function extracts organization_id from the session and throws if it's missing. This ensures that any route using it fails hard (500 error) rather than silently proceeding without an org filter, which would be a critical security bug. Throwing is better than silently defaulting because a missing organization_id should never happen for a valid authenticated session — if it does, something is wrong and the operator should know immediately.</p>
-        <pre><code>export function getOrgId(session: Session): string {
-  const orgId = session.user?.organization_id;
-  if (!orgId) {
-    throw new Error("Session missing organization_id");
-  }
-  return orgId;
+        <p>Each server-component page under <code>src/app/dashboard/**/page.tsx</code> calls <code>requirePageRole(...roles)</code> as its first line. It re-runs <code>auth()</code>, redirects to <code>/login</code> if there's no session, and redirects to a role-appropriate home (<code>/dashboard/my-work</code> for agents, <code>/dashboard</code> otherwise) if the signed-in role isn't in the allowed list — so a viewer hitting <code>/dashboard/settings</code> never renders the settings UI even for a moment.</p>
+        <pre><code>function homeFor(role: UserRole): string {
+  return role === "agent" ? "/dashboard/my-work" : "/dashboard";
+}
+
+export async function requirePageRole(...roles: UserRole[]) {
+  const session = await auth();
+  if (!session) redirect("/login");
+
+  const role = session.user.role;
+  if (!roles.includes(role)) redirect(homeFor(role));
+
+  return session;
 }</code></pre>
-        <span class="source-cite">src/server/auth/org-context.ts:8-14</span>
-      </div>
-    </div>
-
-    <h2>Webhook &amp; Cron Authentication</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">Why do webhook endpoints use bearer tokens instead of session auth?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Cron jobs and external webhooks (email ingest, email polling, queue processing) are not user-initiated requests with a logged-in session. Instead, they authenticate via a bearer token in the Authorization header, checked against a secret environment variable. This is the standard pattern for server-to-server communication. Three routes use this pattern: <code>/api/emails/ingest</code> (accepts emails from external service), <code>/api/emails/poll</code> (Vercel Cron), and <code>/api/emails/process-queue</code> (Vercel Cron).</p>
-        <span class="source-cite">src/middleware.ts:16-19 (three routes whitelisted as public-api); src/server/auth/cron.ts (verifyBearerSecret function)</span>
+        <span class="source-cite">src/server/auth/page-guard.ts:6-23</span>
+        <p>The full page &rarr; role table is on the <a href="roles-permissions.html">Roles &amp; Permissions</a> page.</p>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">How does bearer token verification prevent timing attacks?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-question">Can anyone sign up for a new workspace?<span class="qa-difficulty basic">Basic</span></div>
       <div class="qa-answer">
-        <p>The <code>verifyBearerSecret()</code> function uses Node.js's built-in <code>timingSafeEqual</code> to compare the incoming Authorization header against the expected secret. Regular string comparison (<code>===</code>) can leak information through timing side-channels: if the first byte is wrong, the comparison fails faster than if the first byte is correct but the second is wrong. The safe comparison always takes the same time regardless of which byte differs, preventing an attacker from reverse-engineering the secret one byte at a time. Importantly, the lengths are compared first—if they differ, the function returns false immediately without calling timingSafeEqual.</p>
-        <pre><code>let isValid = false;
+        <p>Not by default. <code>POST /api/auth/signup</code> returns <code>403</code> immediately unless <code>NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP === "true"</code>. When it is enabled, the route validates input with Zod, lowercases the email, creates a new <code>organizations</code> row (slug de-duped with a timestamp suffix) and inserts the first user as <code>admin</code> with a bcrypt(12) hash; if the user insert fails, the organization is rolled back. The login page also only shows the "Create a workspace" link when that same flag is true.</p>
+        <pre><code>if (process.env.NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP !== "true") {
+  return NextResponse.json(
+    { error: "Sign-up is closed. Ask your workspace admin to add you." },
+    { status: 403 },
+  );
+}</code></pre>
+        <span class="source-cite">src/app/api/auth/signup/route.ts:15-23,82-90; src/app/(auth)/login/page.tsx:182</span>
+      </div>
+    </div>
+
+    <h2>Accounts &amp; team management</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does changing your own password work?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>POST /api/me/password</code> requires the caller's <em>current</em> password (so a hijacked session token alone can't take over the account), enforces a 12-character minimum and 200-character maximum on the new password via Zod, and rejects a new password identical to the current one. The current password is checked with bcrypt <code>compare()</code>; the new one is stored with <code>hash(newPassword, 12)</code>.</p>
+        <pre><code>const schema = z
+  .object({
+    current_password: z.string().min(1, "Enter your current password").max(200),
+    new_password: z
+      .string()
+      .min(12, "Use at least 12 characters")
+      .max(200, "Use at most 200 characters"),
+  })
+  .strict()
+  .refine((v) => v.current_password !== v.new_password, "The new password must be different");</code></pre>
+        <span class="source-cite">src/app/api/me/password/route.ts:10-19,46-53</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How are new team members created, and how do they get their first password?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>POST /api/team</code> (admin only, gated by <code>can.manageTeam</code>) generates a random 16-character initial password from a 57-character unambiguous alphabet (~95 bits of entropy) using <code>node:crypto</code>'s <code>randomBytes</code>, hashes it with bcrypt(12), and inserts the user. The plaintext password is returned in the API response exactly once — it is never stored — so the admin can hand it to the new member out of band; it also writes a <code>member_added</code> audit log row.</p>
+        <pre><code>function generateInitialPassword(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = randomBytes(16);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+...
+// The initial password is returned exactly once and never stored in plain text.
+return NextResponse.json({ member: data, initial_password: initialPassword }, { status: 201 });</code></pre>
+        <span class="source-cite">src/app/api/team/route.ts:54-59,79-106</span>
+      </div>
+    </div>
+
+    <h2>Service-to-service authentication</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How do cron jobs and the email-ingest webhook authenticate, since they have no session?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>They carry a bearer token checked by <code>verifyBearerSecret()</code>: if the configured secret env var is unset, the endpoint fails closed with <code>503 Endpoint is not configured</code> rather than silently accepting every request. Otherwise it compares <code>Authorization: Bearer &lt;secret&gt;</code> against the expected value with <code>timingSafeEqual</code> — lengths are checked first (a mismatch returns false immediately without calling <code>timingSafeEqual</code>, which throws on unequal-length buffers) — so neither presence-of-secret nor its content is timing-leakable. <code>emails/poll</code> and <code>emails/process-queue</code> use <code>CRON_SECRET</code> via <code>verifyCronRequest()</code>; <code>emails/ingest</code> uses its own <code>EMAIL_INGEST_SECRET</code> via <code>verifyBearerSecret()</code> directly.</p>
+        <pre><code>if (!secret) {
+  console.error(`${name} is not configured`);
+  return NextResponse.json({ error: "Endpoint is not configured" }, { status: 503 });
+}
+const authHeader = req.headers.get("authorization") ?? "";
+const expected = `Bearer ${secret}`;
+let isValid = false;
 if (authHeader.length === expected.length) {
   try {
-    isValid = timingSafeEqual(
-      Buffer.from(authHeader),
-      Buffer.from(expected),
-    );
+    isValid = timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
   } catch {
     isValid = false;
   }
 }</code></pre>
-        <span class="source-cite">src/server/auth/cron.ts:27-36</span>
+        <span class="source-cite">src/server/auth/cron.ts:10-51</span>
+        <p>Confirmed at the call sites:</p>
+        <span class="source-cite">src/app/api/emails/poll/route.ts:16 (verifyCronRequest); src/app/api/emails/process-queue/route.ts:13 (verifyCronRequest); src/app/api/emails/ingest/route.ts:11-14 (verifyBearerSecret with EMAIL_INGEST_SECRET)</span>
+      </div>
+    </div>
+
+    <h2>Database-level lockdown</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">The app uses Supabase — what stops someone with the public anon key from reading the database directly through PostgREST?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Migration 006 closes the auto-generated public Data API entirely. It enables row-level security on every table in <code>public</code> with zero permissive policies (so RLS denies everything for non-bypass roles even if a grant is mistakenly re-added), revokes all privileges on tables, sequences and functions from <code>anon</code> and <code>authenticated</code> (including default privileges for objects created later), and moves two unused prototype tables into a separate <code>archive</code> schema that PostgREST never exposes. Only <code>service_role</code> — which has <code>BYPASSRLS</code> and is used exclusively by the server via <code>supabaseAdmin</code> — keeps full access.</p>
+        <pre><code>-- Enable RLS on every table in public (no policies = deny for non-bypass roles).
+...
+EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.relname);
+...
+REVOKE ALL ON ALL TABLES    IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM anon, authenticated, PUBLIC;</code></pre>
+        <span class="source-cite">supabase/migrations/006_lockdown_public_api.sql:1-71</span>
+        <p>New tables added by later migrations (mailbox_connections, auth_login_attempts, ticket_assignments, ai_credentials, ticket_counters, auto_response_citations) are each locked down the same way at creation time.</p>
+        <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:397-408; supabase/migrations/011_ai_settings_and_spam_review.sql:54-56; supabase/migrations/012_normalize_expand.sql:173-177</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What happens if a webhook secret environment variable is missing?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">With RLS denying everyone but service_role, what actually enforces that an org can't see another org's data?</div>
+      <div class="qa-answer"><span class="qa-difficulty advanced">Advanced</span>
+        <p>Two layers. First, every API route extracts <code>organization_id</code> from the session with <code>getOrgId()</code> and filters every query by it (<code>.eq("organization_id", orgId)</code>), the ordinary application-level tenant filter. Second, migration 007 backs that up in the schema itself: child rows reference their parent through a <em>composite</em> foreign key of <code>(id, organization_id)</code> — for example <code>tickets.assigned_agent</code> references <code>users (id, organization_id)</code> — so a row can only point at a parent in the same organization; the database rejects a cross-tenant link even if application code has a bug.</p>
+        <pre><code>ALTER TABLE public.tickets
+  ADD CONSTRAINT tickets_assigned_agent_fkey
+  FOREIGN KEY (assigned_agent, organization_id)
+  REFERENCES public.users (id, organization_id)
+  ON DELETE SET NULL (assigned_agent);</code></pre>
+        <span class="source-cite">supabase/migrations/007_integrity_and_assignment.sql:28-32,43-50; src/server/auth/org-context.ts:8-14</span>
+      </div>
+    </div>
+
+    <h2>Secrets at rest</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How are mailbox passwords and workspace Gemini keys encrypted at rest?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>Instead of silently accepting all requests (dangerous) or returning a generic 401 Unauthorized, the endpoint returns <code>503 Endpoint is not configured</code>. This fail-closed behavior signals that the deployment is misconfigured and must be fixed before the endpoint works. A 503 is also distinct from 401, so logs and monitoring can identify configuration errors separately from actual authentication failures.</p>
-        <pre><code>if (!secret) {
-  console.error(`${name} is not configured`);
-  return NextResponse.json(
-    { error: "Endpoint is not configured" },
-    { status: 503 },
-  );
+        <p><code>src/server/crypto/secrets.ts</code> implements AES-256-GCM with a random 96-bit IV per value and the organization id passed as additional authenticated data (AAD). The stored format is <code>"v1:&lt;iv&gt;:&lt;tag&gt;:&lt;ciphertext&gt;"</code> (base64 parts); binding the org id as AAD means a ciphertext copied into another organization's row fails to decrypt (the auth tag won't verify), so cross-tenant credential replay isn't possible even with direct database access. The key comes from <code>MAILBOX_ENCRYPTION_KEY</code>, a 32-byte base64 value.</p>
+        <pre><code>export function encryptSecret(plaintext: string, organizationId: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ALGORITHM, getKey(), iv);
+  cipher.setAAD(Buffer.from(organizationId, "utf8"));
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [VERSION, iv.toString("base64"), tag.toString("base64"), ciphertext.toString("base64")].join(":");
 }</code></pre>
-        <span class="source-cite">src/server/auth/cron.ts:15-20</span>
-      </div>
-    </div>
-
-    <h2>Login &amp; Route Protection</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the login page prevent open-redirect attacks?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>The login form accepts a <code>callbackUrl</code> query parameter to redirect users after login. However, it validates the URL with a regex before using it: <code>/^\/[^/\\]/</code>. This ensures the URL starts with a single forward slash, contains no backslashes, and has at least one more character after the slash, meaning it must be a relative path within the app (e.g., <code>/dashboard</code>) and not an external URL like <code>https://attacker.com</code>. If the validation fails, the default fallback is <code>/dashboard</code>.</p>
-        <pre><code>const callbackUrl =
-  callbackUrlParam && /^\/[^/\\]/.test(callbackUrlParam)
-    ? callbackUrlParam
-    : "/dashboard";</code></pre>
-        <span class="source-cite">src/app/(auth)/login/page.tsx:20-23</span>
+        <span class="source-cite">src/server/crypto/secrets.ts:12-25,36-43</span>
+        <p>It's used for two secrets: the connected mailbox's app password (<code>mailbox_connections.secret_ciphertext</code>, decrypted only in <code>src/server/email/mailbox.ts</code>) and, since migration 011, a workspace's own Gemini API key in a dedicated <code>ai_credentials</code> table (kept separate from <code>organizations</code> so reading the org row never touches the secret; only a 4-character <code>key_hint</code> is stored in the clear so an admin can recognize which key is saved).</p>
+        <span class="source-cite">src/server/email/mailbox.ts:55; supabase/migrations/011_ai_settings_and_spam_review.sql:18-32</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">How are dashboard routes protected from unauthenticated access?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">An admin can point a custom mailbox at any IMAP/SMTP host. What stops that from being used to probe the internal network (SSRF)?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>The Next.js middleware (at <code>src/middleware.ts</code>) runs on every request. For routes under <code>/dashboard</code>, it checks if the user has a session. If not, it redirects to <code>/login?callbackUrl=/dashboard/...</code>, preserving the original path so the user is sent to the right page after logging in. Auth pages (<code>/login</code>, <code>/signup</code>) are allowed for unauthenticated users; if a logged-in user tries to visit them, they're redirected to <code>/dashboard</code>.</p>
-        <span class="source-cite">src/middleware.ts:11-42</span>
+        <p><code>assertPublicMailHost()</code> rejects the connection attempt before it's saved if the host is a raw IP address, isn't a syntactically valid hostname, or resolves (via <code>dns.lookup</code>) to any address in a private/reserved range. The blocked IPv4 ranges are: <code>0.0.0.0/8</code>, <code>10.0.0.0/8</code>, <code>100.64.0.0/10</code> (CGNAT), <code>127.0.0.0/8</code>, <code>169.254.0.0/16</code> (link-local, which covers cloud metadata endpoints like <code>169.254.169.254</code>), <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>, and <code>224.0.0.0/3</code> (multicast/reserved). For IPv6 it blocks <code>::</code>, <code>::1</code>, and the <code>fc/fd</code> (unique-local) and <code>fe8/fe9/fea/feb</code> (link-local) prefixes, and unwraps IPv4-mapped addresses (<code>::ffff:...</code>) before checking them.</p>
+        <pre><code>const PRIVATE_V4: Array<[number, number]> = [
+  [0x00000000, 8], // 0.0.0.0/8
+  [0x0a000000, 8], // 10.0.0.0/8
+  [0x64400000, 10], // 100.64.0.0/10 (CGNAT)
+  [0x7f000000, 8], // 127.0.0.0/8
+  [0xa9fe0000, 16], // 169.254.0.0/16 (link-local, cloud metadata)
+  [0xac100000, 12], // 172.16.0.0/12
+  [0xc0a80000, 16], // 192.168.0.0/16
+  [0xe0000000, 3], // 224.0.0.0/3 (multicast, reserved)
+];</code></pre>
+        <span class="source-cite">src/server/email/mailbox.ts:119-160</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">How do API routes enforce authentication?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">Is mail traffic ever sent unencrypted?<span class="qa-difficulty intermediate">Intermediate</span></div>
       <div class="qa-answer">
-        <p>Every protected API route calls <code>requireAuth()</code> as the first step. This function calls NextAuth's <code>auth()</code> to get the session, and returns a 401 response if there's no session. After confirming authentication, routes call <code>getOrgId()</code> to extract and validate the organization_id, then filter all queries by that org. Webhook routes (poll, process-queue, ingest) skip this and call <code>verifyCronRequest()</code> instead, which checks the bearer token.</p>
-        <pre><code>const session = await requireAuth();
-if (session instanceof NextResponse) return session;
-const orgId = getOrgId(session);</code></pre>
-        <span class="source-cite">src/server/auth/helpers.ts:12-18; src/app/api/tickets/route.ts:16-19</span>
+        <p>No. <code>createSmtpTransport()</code> uses implicit TLS on port 465 and forces STARTTLS (<code>requireTLS: true</code>) on any other port, with <code>rejectUnauthorized: true</code> and a minimum of TLS 1.2 — so credentials are never sent over a plaintext connection and a self-signed/invalid certificate is refused rather than silently accepted. IMAP verification in <code>verifyMailboxCredentials()</code> connects with <code>secure: true</code> and the same <code>rejectUnauthorized: true</code>.</p>
+        <pre><code>const implicitTls = config.port === 465;
+return nodemailer.createTransport({
+  host: config.host,
+  port: config.port,
+  secure: implicitTls,
+  requireTLS: !implicitTls,
+  auth: { user: config.user, pass: config.pass },
+  tls: { rejectUnauthorized: true, minVersion: "TLSv1.2" },
+  ...
+});</code></pre>
+        <span class="source-cite">src/server/email/smtp.ts:11-26; src/server/email/mailbox.ts:181-199</span>
       </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Inbound email headers (subject, from-name) end up in outbound mail we send. How is header injection prevented?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>headerSafe()</code> strips CR/LF sequences from any value that lands in an SMTP header, which is the standard defense against header injection (an attacker embedding <code>\r\n</code> in a subject line to add extra headers or a second message). It's applied to the outgoing display name and subject, including the auto-response subject built from the original email's subject.</p>
+        <pre><code>/** Header values that came from inbound mail must not carry line breaks. */
+function headerSafe(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+...
+const fromName = headerSafe(options.fromName ?? "Support").replace(/"/g, "'");
+...
+subject: headerSafe(options.subject),</code></pre>
+        <span class="source-cite">src/server/email/smtp.ts:50-52,60,65; src/server/email/smtp.ts:106 (buildAutoResponseEmail subject)</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Auto-response emails embed the customer's name and an AI-generated body into HTML. How is HTML/script injection prevented?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>escapeHtml()</code> escapes <code>&amp; &lt; &gt; " '</code>, and <code>buildAutoResponseEmail()</code> runs every interpolated value — customer name (from the sender's own From header), the response body, ticket number, SLA time, company name — through it before building the HTML part. The comment in the source calls this out explicitly: these values are untrusted (one comes from an email header, the other from a language model).</p>
+        <pre><code>export function escapeHtml(value: string): string {
+  return value
+    .replace(/&amp;/g, "&amp;amp;")
+    .replace(/&lt;/g, "&amp;lt;")
+    .replace(/&gt;/g, "&amp;gt;")
+    .replace(/"/g, "&amp;quot;")
+    .replace(/'/g, "&amp;#039;");
+}</code></pre>
+        <span class="source-cite">src/server/email/smtp.ts:89-96</span>
+        <pre><code>// Every interpolated value is escaped: the customer name comes from the
+// sender's own From header and the body from a language model.
+const html = `
+&lt;div style="font-family: Arial, sans-serif; max-width: 600px;"&gt;
+  &lt;p&gt;Hi ${escapeHtml(customerName)},&lt;/p&gt;
+  &lt;div style="margin: 16px 0; white-space: pre-wrap;"&gt;${escapeHtml(responseBody)}&lt;/div&gt;</code></pre>
+        <span class="source-cite">src/server/email/smtp.ts:121-127</span>
+      </div>
+    </div>
+
+    <h2>Frontend and API injection defenses</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Customer email bodies are rendered in the ticket workspace. Is there a stored-XSS risk there?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>No — the conversation column never uses <code>dangerouslySetInnerHTML</code>. Customer messages, agent replies and internal notes are all rendered through plain JSX text interpolation (<code>{body}</code> inside a <code>&lt;p&gt;</code>), which React escapes automatically, so a customer email containing <code>&lt;script&gt;</code> renders as literal text rather than executing.</p>
+        <pre><code>&lt;p className="whitespace-pre-wrap break-words px-4 pb-4 text-sm leading-6 text-foreground sm:pl-[60px]"&gt;{body}&lt;/p&gt;</code></pre>
+        <span class="source-cite">src/features/ticket-workspace/components/conversation-column.tsx:1-4,123-125,161,192</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Search and FAQ text are interpolated directly into a PostgREST filter string (<code>.or(\`question.ilike.%${"${search}"}%...\`)</code>). Isn't that a filter-injection risk?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>It would be if the raw query string reached that call. Both the FAQ list route and the ticket list route strip PostgREST's filter-syntax metacharacters — commas, parentheses, wildcards, backslash, colon, quotes — out of the search term (and cap its length) before it's interpolated, so a search value can't close out of the intended column and inject an additional filter clause or operator.</p>
+        <pre><code>// The search text is interpolated into a PostgREST filter string, so strip
+// the characters that filter syntax uses (commas, parentheses, wildcards).
+const search = (searchParams.get("search") ?? "").replace(/[,()*%\\:"]/g, " ").trim().slice(0, 100);</code></pre>
+        <span class="source-cite">src/app/api/faqs/route.ts:20-22</span>
+        <pre><code>const search = rawSearch
+  .replace(/[,()*%\\:]/g, " ")
+  .trim()
+  .slice(0, 100);</code></pre>
+        <span class="source-cite">src/app/api/tickets/route.ts:41-45</span>
+      </div>
+    </div>
+
+    <h2>Audit trail</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Can an audit log row be edited or deleted after the fact?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Migration 012 adds a <code>protect_audit_log</code> trigger that raises on any <code>UPDATE</code> or <code>DELETE</code> against <code>audit_logs</code> unless the transaction has explicitly set <code>intellidesk.audit_maintenance = 'on'</code> locally, or the "change" is only a referential clear (a user or ticket being deleted sets <code>actor_user_id</code>/<code>ticket_id</code> to <code>NULL</code> via <code>ON DELETE SET NULL</code>, which the trigger allows through without the flag). Since the app always connects as <code>service_role</code> — which would otherwise bypass RLS and could bypass a policy-based restriction — enforcing this as a trigger on the table itself (not RLS) means even the app's own privileged connection can't quietly rewrite history.</p>
+        <pre><code>IF current_setting('intellidesk.audit_maintenance', true) IS DISTINCT FROM 'on' THEN
+  RAISE EXCEPTION 'audit_logs is append-only (% refused)', TG_OP
+    USING ERRCODE = 'insufficient_privilege';
+END IF;</code></pre>
+        <span class="source-cite">supabase/migrations/012_normalize_expand.sql:103-145</span>
+      </div>
+    </div>
+
+    <h2>AI-specific defenses (see AI Design &amp; Safety)</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Where are prompt-injection and mail-loop protections documented?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Both are AI-pipeline concerns covered in depth on <a href="ai-safety.html">AI Design &amp; Safety</a>: prompt-injection defenses (customer text passed as delimited untrusted data, structured JSON output, grounding checks against the cited knowledge-base articles) and mail-loop protection (bounces, auto-replies and our own outbound mail are recognized and never auto-answered, RFC 3834 <code>Auto-Submitted</code> headers on our own automated replies, a cap on automatic replies per recipient per day). This page covers the transport- and access-control layer around those features, not the AI logic itself.</p>
+      </div>
+    </div>
+
+    <h2>Security incidents found and fixed</h2>
+    <p>The project's git history includes two dedicated security commits. Each row below was verified against the current code (or the current absence of the old behavior) as well as the commit message.</p>
+
+    <table class="data-table">
+      <tr><th>Incident</th><th>Fixed in</th><th>Current state</th></tr>
+      <tr><td>Supabase Data API open: RLS disabled, anon/authenticated held full table grants</td><td>df3c686, migration 006</td><td>RLS enabled with zero policies on every table; anon/authenticated revoked entirely; only service_role has access</td></tr>
+      <tr><td>Plaintext admin password committed in a seed migration</td><td>041ab64</td><td>005_seed_admin.sql now stores only a bcrypt(12) hash with a comment "never put a real password in a migration"; the password was rotated in the database</td></tr>
+      <tr><td>Unauthenticated dev routes that mutated or wiped data (<code>/api/seed</code>, <code>/api/seed/test-emails</code>, <code>/api/cleanup</code>, <code>/api/migrate</code>)</td><td>041ab64</td><td>Deleted outright; confirmed absent from src/app/api/**/route.ts (24 route files, none named seed/cleanup/migrate)</td></tr>
+      <tr><td>Public self-serve signup always open</td><td>041ab64</td><td>403 unless NEXT_PUBLIC_ALLOW_PUBLIC_SIGNUP=true</td></tr>
+      <tr><td>No login throttling (unlimited password guesses)</td><td>041ab64, migration 007 (auth_login_attempts)</td><td>5 failures/email and 20/IP per 15-minute window</td></tr>
+      <tr><td>JWT never revalidated against the database after login</td><td>041ab64</td><td>Re-checked every 5 minutes (SESSION_RECHECK_MS)</td></tr>
+      <tr><td>Login response timing revealed whether an email had an account</td><td>041ab64</td><td>bcrypt always runs, against a dummy hash for unknown emails</td></tr>
+      <tr><td>No role separation: any signed-in user could act like an admin (assign tickets, manage team/settings)</td><td>c9a20ed</td><td>Central policy module (src/server/auth/policy.ts); every mutating route checks a `can.*` predicate</td></tr>
+      <tr><td>Agents could see or act on tickets not assigned to them</td><td>c9a20ed</td><td>tickets route filters `assigned_agent = session.user.id` for non-privileged roles; enforced again in ticket detail/messages routes via `can.viewTicket`/`can.workTicket`</td></tr>
+      <tr><td>SSRF via arbitrary IMAP/SMTP host when connecting a mailbox</td><td>484d91d</td><td>assertPublicMailHost() rejects IPs and any hostname resolving to a private/reserved range</td></tr>
+      <tr><td>SMTP could be used without TLS</td><td>484d91d</td><td>Implicit TLS on 465, mandatory STARTTLS otherwise, certificate validation on</td></tr>
+      <tr><td>HTML/header injection possible in auto-reply emails via customer-controlled name/subject</td><td>484d91d</td><td>escapeHtml() on all interpolated HTML values; headerSafe() strips CR/LF from header values</td></tr>
+      <tr><td>Customer email content logged in plaintext</td><td>484d91d (commit message: "customer email content no longer goes to logs")</td><td>Not independently re-verified across every log call site this task; flagged in "Known gaps" below</td></tr>
+    </table>
+    <span class="source-cite">git log --format=%B (commits df3c686, 041ab64, c9a20ed, 484d91d); supabase/migrations/006_lockdown_public_api.sql; supabase/migrations/005_seed_admin.sql:14-21; supabase/migrations/007_integrity_and_assignment.sql:346-356; src/server/auth/config.ts; src/server/email/mailbox.ts:146-160; src/server/email/smtp.ts:11-26,89-96</span>
+
+    <div class="callout missing">
+      <strong>Known gaps</strong>
+      <p>Not implemented, verified by their absence in the routes and config read for this page:</p>
+      <ul>
+        <li>No password-reset email flow — confirmed absent from PLAN.txt's ground-truth list and no reset route exists among the 24 files under src/app/api/**/route.ts. A locked-out user needs an admin to add them again or manually update the hash.</li>
+        <li>No two-factor authentication (TOTP, WebAuthn, etc.) anywhere in the credentials provider or user schema.</li>
+        <li>No explicit CSRF token handling was found in the API routes, but this wasn't flagged as a gap: NextAuth/Auth.js's built-in CSRF protection covers its own sign-in/callback endpoints, and the session cookie is <code>SameSite=Lax</code> by default (verified in <code>@auth/core</code>'s cookie config; no override is set in <code>src/server/auth/config.ts</code>), which blocks the cookie from being sent on cross-site POSTs from a third-party page — the standard baseline defense against classic CSRF for a same-origin fetch-based app like this one. This was not tested end-to-end.</li>
+        <li>No rate limiting was found on any API route other than login — <code>/api/tickets</code>, <code>/api/faqs</code>, <code>/api/team</code>, etc. have no per-user or per-IP request throttling.</li>
+      </ul>
+      <span class="source-cite">node_modules/@auth/core/lib/utils/cookie.js:52 (sameSite: "lax" default); src/server/auth/config.ts (no cookies override present)</span>
     </div>
 
   </main>

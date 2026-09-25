@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,16 +319,16 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
@@ -326,141 +336,183 @@
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
     <h1>Testing Strategy</h1>
-    <p class="page-intro">How this project verifies correctness in the absence of automated tests. The project uses TypeScript strict mode, ESLint architectural boundaries, and build-time checks instead. This section also covers where a test suite would provide the most value if one were added.</p>
+<p class="page-intro">What is tested automatically (45 database checks, 16 unit tests), how each kind of test runs, why they are designed the way they are, how end-to-end behaviour was verified during development, and what is honestly not covered yet.</p>
 
-    <h2>Current verification approach</h2>
+<h2>The test layers</h2>
 
-    <div class="callout missing"><strong>Not implemented</strong> — There are no automated unit, integration, or end-to-end tests in this project. Verification relies on static analysis and the build process.</div>
+<div class="qa-item">
+  <div class="qa-question">What kinds of tests does the project have?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Layer</th><th>Where</th><th>Count</th><th>Run with</th><th>Proves</th></tr>
+      <tr><td>Database rules</td><td><code>supabase/tests/*.sql</code></td><td>5 suites, 45 checks</td><td><code>psql -f</code> (inside BEGIN…ROLLBACK)</td><td>Constraints, triggers and functions refuse invalid data and behave atomically</td></tr>
+      <tr><td>Unit</td><td><code>tests/unit/*.test.ts</code></td><td>4 files, 16 tests</td><td><code>npm test</code> (node:test)</td><td>Pure safety logic: loop detection, grounding, timezone math, personal domains</td></tr>
+      <tr><td>Static</td><td>whole repo</td><td>—</td><td><code>tsc --noEmit</code>, <code>npm run lint</code>, <code>npm run build</code></td><td>Types, import boundaries (server/client), React rules, the app compiles</td></tr>
+      <tr><td>End-to-end</td><td>scripted Playwright runs (not committed)</td><td>per phase</td><td>against a local production build</td><td>Roles, flows and UI against the real database</td></tr>
+    </table>
+    <span class="source-cite">package.json (scripts.test); supabase/tests/; tests/unit/</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What mechanisms catch bugs before they reach production?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The project uses a defense-in-depth approach without automated runtime tests:</p>
-        <ul>
-          <li><strong>TypeScript strict mode</strong> catches type mismatches at build time, preventing entire classes of runtime errors (accessing undefined properties, type guards, null coercion).</li>
-          <li><strong>ESLint's <code>no-restricted-imports</code> rule</strong> prevents architectural violations at lint time: server-only modules cannot be imported into browser code, and feature code cannot import from shared utilities.</li>
-          <li><strong><code>server-only</code> package</strong> makes the build fail if a server-only file is accidentally bundled for the browser.</li>
-          <li><strong><code>npm run build</code></strong> (Next.js production build) catches dead code, unreachable branches, and initialization errors before deployment.</li>
-          <li><strong><code>npm run lint</code></strong> (ESLint) runs on every commit in CI/CD and catches import violations, unused variables, and style issues.</li>
-        </ul>
-        <span class="source-cite">package.json scripts; eslint.config.mjs; src/server/db/supabase.ts line 1 (import "server-only")</span>
-      </div>
+<div class="qa-item">
+  <div class="qa-question">What is the pre-push gate?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+<pre><code>npx tsc --noEmit -p .
+npm run lint
+npm test
+npm run build
+for f in supabase/tests/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done</code></pre>
+    <span class="source-cite">README.md (Commands, Database)</span>
+  </div>
+</div>
+
+<h2>Database tests</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How can tests run against the live production database safely?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Each suite is one <code>BEGIN; DO $$ … $$; ROLLBACK;</code> script. The <code>DO</code> block creates its own fixtures (users, tickets, emails) inside the transaction, attempts the forbidden operation inside a nested <code>BEGIN … EXCEPTION WHEN &lt;error&gt;</code> block, and raises if the database did <em>not</em> refuse. Every check prints <code>PASS …</code>; the first failure aborts. The final <code>ROLLBACK</code> discards everything, so nothing touches real data. Running against production is deliberate: it tests the real schema and the real data (e.g. that the backfills left no gaps).</p>
+<pre><code>ok := false; BEGIN UPDATE audit_logs SET action = 'tampered' WHERE ticket_id = t; EXCEPTION WHEN insufficient_privilege THEN ok := true; END;
+IF NOT ok THEN RAISE EXCEPTION 'FAIL 5a: audit row edited'; END IF;</code></pre>
+    <span class="source-cite">supabase/tests/normalization.sql (check 5)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What does every database check prove?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Suite</th><th>#</th><th>Proves</th></tr>
+      <tr><td>assignment_integrity</td><td>1a</td><td>trigger rejects cross-org assignee</td></tr>
+      <tr><td>assignment_integrity</td><td>1b</td><td>composite FK independently rejects cross-org assignee</td></tr>
+      <tr><td>assignment_integrity</td><td>2</td><td>viewer assignee rejected</td></tr>
+      <tr><td>assignment_integrity</td><td>3</td><td>non-admin actor rejected</td></tr>
+      <tr><td>assignment_integrity</td><td>4</td><td>admin assignment is atomic with history and audit</td></tr>
+      <tr><td>assignment_integrity</td><td>4d</td><td>foreign-org admin rejected</td></tr>
+      <tr><td>assignment_integrity</td><td>4e</td><td>deleting assignee nulls only assigned_agent</td></tr>
+      <tr><td>assignment_integrity</td><td>5</td><td>team must exist in the same organization</td></tr>
+      <tr><td>assignment_integrity</td><td>6</td><td>cross-org email can&#x27;t join a conversation</td></tr>
+      <tr><td>assignment_integrity</td><td>7</td><td>contact org derived from account</td></tr>
+      <tr><td>assignment_integrity</td><td>8</td><td>SLA single-row lookups unaffected</td></tr>
+      <tr><td>assignment_integrity</td><td>9</td><td>all contacts backfilled</td></tr>
+      <tr><td>assignment_integrity</td><td>10</td><td>new objects closed to anon/authenticated</td></tr>
+      <tr><td>conversation_model</td><td>1</td><td>invalid transitions and unknown statuses rejected</td></tr>
+      <tr><td>conversation_model</td><td>2</td><td>resolved_at set on resolve, cleared on reopen, kept on close</td></tr>
+      <tr><td>conversation_model</td><td>3</td><td>follow-up link is tenant-safe</td></tr>
+      <tr><td>conversation_model</td><td>4</td><td>outbound emails are never queued</td></tr>
+      <tr><td>conversation_model</td><td>5</td><td>message kind, author and email direction are consistent</td></tr>
+      <tr><td>conversation_model</td><td>6</td><td>cross-org message rejected</td></tr>
+      <tr><td>conversation_model</td><td>7</td><td>complete_ticket_reply is atomic and single-use</td></tr>
+      <tr><td>conversation_model</td><td>8</td><td>recording a reply never fails on the status rule</td></tr>
+      <tr><td>conversation_model</td><td>9</td><td>first response time is the first reply</td></tr>
+      <tr><td>conversation_model</td><td>10</td><td>an email belongs to at most one message</td></tr>
+      <tr><td>conversation_model</td><td>11</td><td>ai_confidence is generated from ai_classification</td></tr>
+      <tr><td>conversation_model</td><td>12</td><td>new objects closed to anon/authenticated</td></tr>
+      <tr><td>inbound_messages</td><td>1</td><td>ticket and first message created together</td></tr>
+      <tr><td>inbound_messages</td><td>2</td><td>retrying the same email is a no-op</td></tr>
+      <tr><td>inbound_messages</td><td>3</td><td>reply to Pending reopens and raises priority</td></tr>
+      <tr><td>inbound_messages</td><td>4</td><td>priority is never lowered by a reply</td></tr>
+      <tr><td>inbound_messages</td><td>5</td><td>reply to Closed creates a linked follow-up</td></tr>
+      <tr><td>inbound_messages</td><td>6</td><td>cross-org thread match ignored</td></tr>
+      <tr><td>inbound_messages</td><td>7</td><td>function closed to anon</td></tr>
+      <tr><td>normalization</td><td>1</td><td>ticket numbers are per organization and consecutive</td></tr>
+      <tr><td>normalization</td><td>2</td><td>one account per domain per workspace</td></tr>
+      <tr><td>normalization</td><td>3</td><td>contacts are unique per workspace, not globally</td></tr>
+      <tr><td>normalization</td><td>4</td><td>citations are tenant-safe and never dangle</td></tr>
+      <tr><td>normalization</td><td>5</td><td>audit log is append-only; only referential clears and explicit maintenance get through</td></tr>
+      <tr><td>normalization</td><td>6</td><td>timezone validated by the database</td></tr>
+      <tr><td>normalization</td><td>7</td><td>new tables closed to anon/authenticated</td></tr>
+      <tr><td>ai_settings</td><td>1</td><td>automatic sending is off by default</td></tr>
+      <tr><td>ai_settings</td><td>2</td><td>key hint is exactly four characters</td></tr>
+      <tr><td>ai_settings</td><td>3</td><td>key creator must belong to the workspace</td></tr>
+      <tr><td>ai_settings</td><td>4</td><td>last_error only when the key is failing</td></tr>
+      <tr><td>ai_settings</td><td>5</td><td>spam override is tenant-safe and timestamped</td></tr>
+      <tr><td>ai_settings</td><td>6</td><td>ai_credentials closed to anon/authenticated</td></tr>
+    </table>
+    <span class="source-cite">supabase/tests/*.sql (RAISE NOTICE 'PASS …' lines)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How were the tests used when writing migrations?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Every migration was <em>rehearsed</em> before being applied: the migration body plus every suite ran in a single rolled-back transaction against production. This caught real problems before they reached the live database: an existing constraint name colliding in 007, Postgres refusing <code>ON DELETE SET NULL</code> on a foreign key with a generated column in 009, unique keys that had to exist before the table referencing them in 012, and a test whose setup the new trigger (correctly) overrode. After applying, the suites ran again against the live schema.</p>
+    <span class="source-cite">database-design.html (migration process); bugs-lessons.html</span>
+  </div>
+</div>
+
+<h2>Unit tests</h2>
+
+<div class="qa-item">
+  <div class="qa-question">Which unit tests exist?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>File</th><th>Test</th></tr>
+      <tr><td>automated-mail.test.ts</td><td>an ordinary customer email is not automated</td></tr>
+      <tr><td>automated-mail.test.ts</td><td>mail from the workspace&#x27;s own mailbox is ignored (case-insensitive)</td></tr>
+      <tr><td>automated-mail.test.ts</td><td>bounces: system senders, null Return-Path, delivery-status reports</td></tr>
+      <tr><td>automated-mail.test.ts</td><td>RFC 3834 Auto-Submitted marks auto replies, except &#x27;no&#x27;</td></tr>
+      <tr><td>automated-mail.test.ts</td><td>X-Autoreply, Precedence: auto_reply and out-of-office subjects are auto replies</td></tr>
+      <tr><td>automated-mail.test.ts</td><td>lists, bulk mail and no-reply senders are bulk (ticketed, never auto-answered)</td></tr>
+      <tr><td>automated-mail.test.ts</td><td>a subject merely mentioning &#x27;reply&#x27; is not an auto reply</td></tr>
+      <tr><td>grounding.test.ts</td><td>a reply that only uses facts from the articles is grounded</td></tr>
+      <tr><td>grounding.test.ts</td><td>links, emails, prices and phone numbers not in the articles are flagged</td></tr>
+      <tr><td>grounding.test.ts</td><td>trailing punctuation doesn&#x27;t make a grounded link look new</td></tr>
+      <tr><td>grounding.test.ts</td><td>a price that does appear in the articles is fine</td></tr>
+      <tr><td>time-zone.test.ts</td><td>UTC midnight</td></tr>
+      <tr><td>time-zone.test.ts</td><td>India (UTC+5:30): the local day starts at 18:30 UTC the previous day</td></tr>
+      <tr><td>time-zone.test.ts</td><td>New York across the DST change uses the offset at midnight</td></tr>
+      <tr><td>email-domains.test.ts</td><td>personal providers are recognised, case-insensitively</td></tr>
+      <tr><td>email-domains.test.ts</td><td>company domains are not personal</td></tr>
+    </table>
+    <span class="source-cite">tests/unit/*.test.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why Node's built-in test runner instead of Jest or Vitest?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Node 22+ runs TypeScript directly (type stripping) and ships <code>node:test</code> and <code>node:assert</code>, so there is no test dependency, config or transpiler to maintain. The script disables one warning about module type detection:</p>
+<pre><code>"test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/unit/"</code></pre>
+    <span class="source-cite">package.json</span>
+    <p>The trade-off: the tested modules must be importable without Next.js. So the unit-tested code is written as <em>pure</em> modules with no I/O and no <code>server-only</code> import (<code>automated.ts</code>, <code>grounding.ts</code>, <code>time-zone.ts</code>, <code>email-domains.ts</code>), and imports use explicit <code>.ts</code> paths, allowed by <code>allowImportingTsExtensions</code> in tsconfig. Keeping decision logic pure and I/O at the edges is good design anyway.</p>
+    <span class="source-cite">src/server/email/automated.ts:1; tsconfig.json</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Did the tests catch real bugs?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Yes. The bounce test failed on its first run: mailparser parses <code>Content-Type</code> into <code>{ value, params }</code>, so reading only <code>value</code> lost <code>report-type=delivery-status</code> and delivery reports weren't recognised. The detector now inspects the whole header object.</p>
+    <span class="source-cite">src/server/email/automated.ts (content-type handling); tests/unit/automated-mail.test.ts</span>
+  </div>
+</div>
+
+<h2>End-to-end verification</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How was end-to-end behaviour verified?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>For each phase, a Playwright script (headless Chromium) ran against a local production build (<code>npm run build</code>, <code>AUTH_TRUST_HOST=true npm start</code>) connected to the real database. Scripts created temporary admin/agent/viewer accounts, exercised APIs and UI, took screenshots, and then cleaned up every row they created (using the audit-maintenance flag where needed). Examples of what was checked: agents only see their tickets and get 404 for others; nobody but an admin can assign; viewers can't write; deactivation releases tickets and blocks login; the sixth failed login is throttled; signup is closed; notes and replies obey roles; invalid status changes return readable errors; a rejected AI key saves nothing; spam recovery requeues the email; without an AI key email waits in the queue instead of becoming a ticket.</p>
+    <div class="callout missing"><strong>Not committed</strong> These scripts lived in a scratch directory and are not part of the repository or CI. Turning them into a committed Playwright suite is on the roadmap.</div>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What isn't tested?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <div class="callout warning"><strong>Gaps</strong>
+      <ul>
+        <li>No committed end-to-end suite and no CI workflow that runs tests on every push.</li>
+        <li>Route handlers have no automated tests (verified by the scripted runs only).</li>
+        <li>Real sending and threading through Gmail wasn't exercised end to end in production (no mailbox was connected at the time).</li>
+        <li>No load or concurrency tests beyond the database-level locking guarantees.</li>
+        <li>AI output quality isn't measured.</li>
+      </ul>
     </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How does ESLint's <code>no-restricted-imports</code> rule enforce architecture?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The ESLint config defines two import boundaries to prevent accidental architectural violations:</p>
-        <pre><code>files: ["src/components/**", "src/hooks/**", "src/lib/**", "src/types/**"],
-rules: { "no-restricted-imports": ["error", { patterns: [
-  { group: ["@/server", "@/server/*"], message: "Server-only module..." },
-  { group: ["@/features", "@/features/*"], message: "Shared code must not depend on a feature..." }
-] }] }</code></pre>
-        <p>If a client component tries to <code>import { supabaseAdmin } from "@/server/db/supabase"</code>, lint fails immediately with a clear error message, before the code is even built. This catches the mistake in the editor in real time.</p>
-        <span class="source-cite">eslint.config.mjs lines 5-26</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">Does the build catch runtime errors in server code, even without tests?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Yes, partially. TypeScript strict mode and the Next.js build process catch many errors before production:</p>
-        <ul>
-          <li>Type mismatches on API route parameters and responses (the type system prevents passing the wrong shape to a database query).</li>
-          <li>Calling a method that doesn't exist on an object (e.g., <code>supabaseAdmin.from('tickets').slct()</code> fails at build time because <code>slct</code> is not a valid method).</li>
-          <li>Missing environment variables are caught when the route first runs, not at build time, but the error message is clear and the app fails fast.</li>
-          <li>Logic errors (e.g., an off-by-one error in SLA calculations) are <em>not</em> caught without a test or manual verification; the code compiles and runs.</li>
-        </ul>
-        <span class="source-cite">next.config.ts; TypeScript with strict mode enabled</span>
-      </div>
-    </div>
-
-    <h2>Manual verification in practice</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How is new functionality verified before it ships?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Changes are verified through manual testing in the development and staging environments:</p>
-        <ul>
-          <li>Local <code>npm run dev</code> runs the full app for manual exploration before any commit.</li>
-          <li>The build pipeline (<code>npm run lint && npm run build</code>) must pass for any pull request.</li>
-          <li>Integration testing is manual: standing up a full test org with sample IMAP mailbox credentials, sending test emails, and verifying the end-to-end pipeline (ingest → classify → draft → reply).</li>
-          <li>Data accuracy (SLA calculations, AI confidence scores, ticket sorting) is verified by hand against expected outputs.</li>
-        </ul>
-        <p>The README notes this explicitly: "No automated test suite exists yet; verification is <code>npm run lint</code> and <code>npm run build</code>, plus manual QA."</p>
-        <span class="source-cite">README.md "Known limitations" section</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">What is the cost of missing automated tests for this codebase?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The risk is concentrated in a few high-impact areas:</p>
-        <ul>
-          <li><strong>Email pipeline logic</strong> (IMAP polling, spam detection, thread matching) is complex and stateful; a regression here could silently drop emails or misclassify threads. Current verification is manual with sample mailboxes.</li>
-          <li><strong>SLA calculations and date arithmetic</strong> using the date-fns library are easy to get wrong (off-by-one, timezone mishandling); a change to <code>readSla()</code> could silently cause incorrect breach predictions.</li>
-          <li><strong>Database queries and org-scoping</strong>: every API route filters by <code>organization_id</code>, and a missing filter would silently leak data between organizations. This is caught at code review and by type checking, but not by automated tests.</li>
-          <li><strong>API response shapes</strong> are documented in the README but not validated by the client; a backend route that returns the wrong shape could silently break the UI.</li>
-        </ul>
-        <p>None of these have caused production incidents in the current project lifetime, suggesting that manual review and the build-time checks are sufficient for the team's velocity and project scope. A test suite would reduce regression risk and allow faster iteration.</p>
-      </div>
-    </div>
-
-    <h2>Recommendations: adding tests</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">If you were to add a test suite, where would you start?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p><strong>Start with the SLA calculation logic</strong>, which is pure, deterministic, and easy to test. The <code>readSla()</code> function in <code>src/lib/ticket-meta.ts</code> takes a due date, a completion timestamp, and a current time, and returns the tone/label without side effects:</p>
-        <pre><code>export function readSla(
-  dueIso: string | null | undefined,
-  completedAt: string | null | undefined,
-  now: Date,
-  windowMinutes?: number,
-): SlaReading {
-  if (!dueIso) return { tone: "none", label: "No SLA", minutesRemaining: null };
-  const due = parseISO(dueIso);
-  if (completedAt) {
-    const done = parseISO(completedAt);
-    return done <= due
-      ? { tone: "met", label: "Met", minutesRemaining: null }
-      : { tone: "breached", label: `Missed by ${formatDuration(differenceInMinutes(done, due))}`, minutesRemaining: null };
-  }
-  const remaining = differenceInMinutes(due, now);
-  if (remaining < 0) {
-    return { tone: "breached", label: `Breached ${formatDuration(-remaining)} ago`, minutesRemaining: remaining };
-  }
-  const warnAt = windowMinutes ? windowMinutes * 0.25 : 240;
-  const tone: SlaTone = remaining < 60 ? "critical" : remaining < warnAt ? "warning" : "ok";
-  return { tone, label: `${formatDuration(remaining)} left`, minutesRemaining: remaining };
-}</code></pre>
-        <p>This function is a perfect candidate for unit tests: pass in a due date in the past with no completion time and verify the "breached" tone is returned. Cover edge cases like midnight crossings, the 25% warning threshold, and the special "critical" mode below 60 minutes. These tests would run in milliseconds and be stable (no flaky clock dependencies once you freeze the "now" parameter).</p>
-        <span class="source-cite">src/lib/ticket-meta.ts:97-118</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">What other parts of the codebase would benefit most from unit tests?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>In order of impact and ease:</p>
-        <ul>
-          <li><strong>Email parser utility functions</strong> (<code>src/server/email/parser.ts</code>): <code>isLikelySpam()</code>, <code>extractSignature()</code>, <code>cleanEmailBody()</code>, and <code>normalizeSubject()</code> are deterministic and have many edge cases (HTML entities, quoted reply markers, signature patterns). Unit tests would catch regressions in spam filtering and body cleaning instantly.</li>
-          <li><strong>Formatters in <code>ticket-meta.ts</code></strong>: <code>formatDuration()</code>, <code>formatDateTime()</code>, and <code>confidencePercent()</code> take simple inputs and produce strings; tests would verify they handle boundary cases (0 minutes, null values, NaN).</li>
-          <li><strong>API route integration tests</strong> (harder): spin up a test database, create a test org, call <code>GET /api/tickets</code>, and verify the response shape and SLA values. These would catch regressions in data shape but would require a test database and more setup.</li>
-          <li><strong>Email pipeline end-to-end tests</strong> (hardest): ingest a raw email, verify it's parsed correctly, classified, and stored with the right SLA dates. This would require a full Supabase/Gemini/Pinecone test harness and would be slow, but it would catch subtle regressions in the core feature.</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">Should this project prioritize unit tests or end-to-end tests?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p><strong>Start with unit tests for pure utilities, then add E2E tests for the email pipeline.</strong></p>
-        <p>Unit tests for utility functions (SLA calc, email parsing, formatters) are fast, stable, and catch regressions instantly. They're also low friction to add — just import the function, call it with test data, and assert the output.</p>
-        <p>End-to-end tests are slower and require a test database, but they're essential for the email pipeline because the logic is complex and involves multiple services (IMAP, Supabase, Gemini, Pinecone). An E2E test that verifies "email arrives → ticket created with correct SLA due date → AI draft generated" would catch whole-system regressions that unit tests alone can't catch. However, E2E tests would run in seconds, not milliseconds, so run them less frequently (per PR, not per save).</p>
-        <p>A pragmatic plan: write unit tests for the utility functions in the next sprint, add E2E smoke tests for the pipeline in the sprint after, and gradually expand both as confidence grows.</p>
-      </div>
-    </div>
+    <span class="source-cite">roadmap.html</span>
+  </div>
+</div>
 
   </main>
 </div>

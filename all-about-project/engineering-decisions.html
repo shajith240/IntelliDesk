@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Engineering Decisions &amp; Trade-offs — IntelliDesk AI Project Docs</title>
+<title>Decisions &amp; Trade-offs — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,222 +319,239 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>Key Engineering Decisions &amp; Trade-offs</h1>
-    <p class="page-intro">Deliberate choices made while building this project, with the alternative that was
-      rejected and why. These are the ones most likely to come up as "why did you do it this way?" follow-ups.</p>
+    <h1>Decisions &amp; Trade-offs</h1>
+<p class="page-intro">Every significant design decision in the project, written as an interviewer would ask it: what was chosen, what the alternatives were, and why. Each answer is tied to the file where the decision lives. Database-specific decisions (normalization, constraints, migrations) are covered in depth in <a href="database-design.html">Database Design &amp; Migrations</a>; this page summarizes them and covers everything else.</p>
 
-    <h2>Architecture &amp; organization</h2>
+<h2>Product &amp; scope</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">Why is server-only code split into <code>src/server/</code> instead of living in <code>src/lib/</code> with everything else?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The codebase mixes two kinds of shared code: client-safe utilities (formatters, the API fetch wrapper, `cn()`)
-          and server-only integrations (the Supabase service-role client, Gemini, Pinecone, IMAP/SMTP, auth config).
-          Before the split they all lived in <code>src/lib/</code>, which meant nothing stopped a client component from
-          accidentally importing the Supabase service-role key into browser code.</p>
-        <p>The fix was two-layered rather than relying on developer discipline alone:</p>
-        <ul>
-          <li>Every file under <code>src/server/</code> starts with <code>import "server-only";</code> — a package
-            Next.js already bundles (no install needed), which makes the build fail if that module is ever pulled into
-            a client bundle.</li>
-          <li>An ESLint <code>no-restricted-imports</code> rule additionally blocks importing <code>@/server/*</code>
-            from anything under <code>src/components/</code>, <code>src/hooks/</code>, <code>src/lib/</code>, or
-            <code>src/types/</code>, and blocks importing <code>@/features/*</code> from those same shared folders.</li>
-        </ul>
-        <p>Trade-off: this is two enforcement mechanisms for one rule (belt-and-suspenders), which is slightly
-          redundant. The reason for both: <code>server-only</code> only fails at build time, after the mistake is
-          already written; the ESLint rule catches it immediately, in the editor, before a build is even attempted.</p>
-        <span class="source-cite">eslint.config.mjs — no-restricted-imports patterns for @/server/* and @/features/*; every file under src/server/ (19 files) starts with import "server-only"</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why is IntelliDesk built as an internal, white-label, admin-led tool instead of a self-service helpdesk?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>The target is a small company that wants its own support desk: one workspace per company, an admin who connects the company mailbox and decides who works on what, and agents who only see their own tickets. That drove concrete decisions: public signup is off by default, members are added by an admin with a one-time password, only admins assign tickets, and each workspace can bring its own AI key so AI costs are billed to the company, not the platform.</p>
+    <span class="source-cite">src/app/api/auth/signup/route.ts; src/app/api/team/route.ts; src/server/auth/policy.ts; src/server/gemini/client.ts (getAiContext)</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why <code>src/features/&lt;name&gt;/</code> instead of putting everything in <code>src/components/</code>?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The alternative (bulletproof-react style: one flat <code>components/</code> tree, or putting page-specific
-          UI directly under <code>app/</code> in private <code>_components</code> folders) was rejected because
-          several components — most notably the ticket work queue — are genuinely shared across multiple routes: the
-          Command Center embeds the same <code>WorkQueue</code> component that the dedicated Incoming Queue and My
-          Work pages render standalone. A feature folder per product area (<code>command-center</code>,
-          <code>queue</code>, <code>ticket-workspace</code>, <code>knowledge-base</code>, <code>analytics</code>,
-          <code>settings</code>, plus <code>auth</code>) keeps each domain's components, hooks, and helpers together,
-          while <code>src/components/ui</code> stays reserved for primitives with zero business logic.</p>
-        <p>The import-direction rule (<code>app → features → shared</code>) has exactly one intentional exception,
-          documented rather than silently allowed: <code>command-center</code> imports <code>queue</code>'s
-          <code>WorkQueue</code>. Every other cross-feature import is disallowed.</p>
-        <span class="source-cite">src/features/command-center/components/command-center.tsx imports WorkQueue from @/features/queue/components/work-queue</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why can't agents assign tickets to themselves?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Self-assignment lets people cherry-pick easy tickets and leaves hard ones unowned. In a small team, a lead distributing work is the norm. So assignment is an admin capability enforced at three layers: the UI shows the assign menu only to admins, the API checks <code>can.assignTickets</code>, and the <code>assign_ticket()</code> database function re-checks that the actor is an active admin of the same organization. <code>PATCH /api/tickets/[id]</code> explicitly rejects <code>assigned_agent</code>, so there's no side door.</p>
+    <span class="source-cite">src/app/api/tickets/[id]/assign/route.ts; src/app/api/tickets/[id]/route.ts (server-owned fields rejected); supabase/migrations/013_normalize_contract.sql:30-80</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why no barrel <code>index.ts</code> re-export files anywhere in the project?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Barrel files (a folder's <code>index.ts</code> re-exporting everything inside it) were deliberately not
-          used, in favor of importing each module by its direct path (e.g.
-          <code>import { Button } from "@/components/ui/button"</code>, never
-          <code>from "@/components/ui"</code>). Two concrete costs of barrels were the reason: they defeat some
-          bundler tree-shaking because the bundler has to statically prove the rest of the barrel's exports are
-          unused, and they're a common source of circular-import bugs once two feature folders both re-export through
-          their own barrel and end up importing each other indirectly. With 129 source files and no barrels, every
-          import in the project is directly traceable to the exact file that defines it.</p>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How does "tickets needing human review go to an available person" work without automatic routing?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Flagged, unassigned, open tickets collect in a <strong>Needs Review</strong> queue (<code>?view=review</code>). When the admin opens the assign menu, candidates come from <code>/api/team/workload</code>, ranked available-first, then by fewest open tickets. The admin makes the final call. Automatic round-robin was considered and rejected for the MVP: a wrong automatic assignment in a 3-person team costs more than one click, and it keeps the "only admins assign" rule absolute.</p>
+    <span class="source-cite">src/app/api/tickets/route.ts (view=review); src/app/api/team/workload/route.ts</span>
+  </div>
+</div>
 
-    <h2>Data &amp; API design</h2>
+<div class="qa-item">
+  <div class="qa-question">Why must the whole thing run on free tiers, and what did that constrain?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>It's a college project with no budget. Consequences: Vercel Hobby only allows a daily cron, so mailbox polling every 10 minutes runs from GitHub Actions (free for public repos); no paid queue service, so the intake queue is rows in the <code>emails</code> table drained by HTTP-triggered runs; Gmail is connected with an app password over IMAP/SMTP instead of the Gmail API (OAuth verification for a public app is a long process); Gemini Flash and Pinecone's free tier for AI and vectors.</p>
+    <span class="source-cite">.github/workflows/poll-mailboxes.yml; vercel.json; src/server/email/intake.ts</span>
+    <div class="callout warning"><strong>Vendor facts, not code facts</strong> Vercel Hobby prohibits commercial use and Supabase free projects pause after a week of inactivity; a paying customer would need Vercel Pro and Supabase Pro (backups).</div>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why are SLA due dates computed at read time in <code>GET /api/tickets</code> instead of being stored on the ticket row?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>The email-processing pipeline does not persist <code>sla_first_response_due</code> /
-          <code>sla_resolution_due</code> on every ticket at creation time. Rather than backfilling every historical
-          row or forcing the pipeline to always know the SLA policy at ingest time, the ticket list route fetches all
-          rows from <code>sla_policies</code> once per request and computes each missing due date as
-          <code>created_at + policy_minutes</code> in application code before returning the list.</p>
-        <p>Trade-off accepted: this couples the read path to <code>sla_policies</code> lookup logic that,
-          conceptually, belongs closer to ticket creation. The alternative — a database trigger or a backfill
-          migration — was rejected for a project at this scale: it adds a migration and a stateful trigger to
-          maintain, for a computation that's cheap to do per-request with a single extra query.</p>
-        <span class="source-cite">src/app/api/tickets/route.ts — SLA due dates are computed from sla_policies because the email pipeline does not store them on the ticket</span>
-      </div>
-    </div>
+<h2>Architecture &amp; code organization</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">Why does <code>/api/dashboard</code> start the SLA alert computation before the ticket-count queries, instead of after?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>The SLA alert/metrics computation (<code>getSLAAlerts</code> → <code>getSLAMetrics</code>) is the slowest
-          part of assembling the dashboard response, and it was originally awaited sequentially after a batch of
-          independent count queries had already finished. The fix: kick off the SLA alerts promise and the recent-
-          activity audit-log query immediately, in parallel with the <code>Promise.all</code> batch of ticket/email
-          counts, so the slow query overlaps with the fast ones instead of stacking after them. <code>getSLAMetrics</code>
-          was also changed to accept the already-fetched alerts as an optional parameter, so it doesn't refetch and
-          recompute them a second time internally.</p>
-        <span class="source-cite">src/app/api/dashboard/route.ts — slaAlertsPromise / slaMetricsPromise / recentActivityPromise started before the Promise.all batch; src/server/pipeline/sla-tracker.ts — getSLAMetrics(orgId, precomputedAlerts?)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why is server-only code in <code>src/server/</code> instead of <code>src/lib/</code>?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Anything that touches secrets (the Supabase service-role key, mailbox passwords, AI keys) must never be bundled into the browser. Server modules start with <code>import "server-only"</code> (the build fails if a client component imports them) and ESLint's <code>no-restricted-imports</code> forbids importing <code>@/server/*</code> from client code. <code>src/lib/</code> holds only code that is safe on both sides (formatting, the API client, the timezone helper). Pure modules that have no secrets and are unit-tested, like the automated-mail detector, deliberately don't import <code>server-only</code> so Node's test runner can load them.</p>
+    <span class="source-cite">eslint.config.mjs (no-restricted-imports); src/server/email/automated.ts:1</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why do the cron/webhook endpoints use a bearer secret instead of session auth, and why do they fail with 503 rather than 401 when unconfigured?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p><code>/api/emails/poll</code>, <code>/api/emails/process-queue</code>, and <code>/api/emails/ingest</code>
-          are called by Vercel Cron or an external mail relay — there is no logged-in user session on those requests,
-          so the normal <code>requireAuth()</code> pattern doesn't apply. Instead they check
-          <code>Authorization: Bearer &lt;secret&gt;</code> against <code>CRON_SECRET</code> /
-          <code>EMAIL_INGEST_SECRET</code>, compared with <code>node:crypto</code>'s <code>timingSafeEqual</code>
-          (only after confirming equal length) so the comparison isn't vulnerable to a timing side-channel.</p>
-        <p>The deliberate part: if the secret environment variable is simply <em>unset</em> — for example, a fresh
-          deploy where someone forgot to configure it — the endpoint returns <code>503 Endpoint is not configured</code>
-          rather than silently accepting all requests or than returning a generic <code>401</code> that looks like
-          "you sent the wrong secret." It fails closed, and it fails in a way that's diagnosable from the response
-          alone.</p>
-        <pre><code>if (!secret) {
-	console.error(`${name} is not configured`);
-	return NextResponse.json({ error: "Endpoint is not configured" }, { status: 503 });
-}</code></pre>
-        <span class="source-cite">src/server/auth/cron.ts — verifyBearerSecret() / verifyCronRequest(); timingSafeEqual import at line 3</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why feature folders (<code>src/features/&lt;domain&gt;</code>) and no barrel <code>index.ts</code> files?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Code that changes together lives together: the ticket workspace's components, hooks and helpers are all under <code>src/features/ticket-workspace/</code>, while <code>src/components/ui</code> holds only generic primitives. There are no barrel re-export files because they hide real import paths, create circular-import traps, and defeat tree-shaking; every import names the actual file.</p>
+    <span class="source-cite">src/features/* (8 domains, 37 files); README.md (Conventions)</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why does <code>PATCH /api/tickets/[id]</code> validate that a new <code>assigned_agent</code> is an active member of the caller's own organization, rather than trusting the client-supplied id?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Without this check, an authenticated agent in one organization could PATCH a ticket's
-          <code>assigned_agent</code> to any user id they knew or guessed — including a user in a different
-          organization — since the column itself has no foreign-key constraint tying it to the same org as the
-          ticket. The route now runs a lookup (<code>users</code> table, filtered by id, <code>organization_id</code>,
-          and <code>is_active</code>) before accepting the new value, and rejects with a 400 if it doesn't resolve.
-          <code>null</code> (unassigning) is always allowed without the lookup.</p>
-        <span class="source-cite">src/app/api/tickets/[id]/route.ts — PATCH handler, assignee active-membership check before .update(updates)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why SWR polling every 30 seconds instead of realtime (websockets / Supabase Realtime)?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Supabase Realtime authorizes through Postgres RLS with Supabase Auth JWTs. This app uses NextAuth and keeps the Data API closed to browser roles entirely, so realtime would require a second auth system just for subscriptions and re-opening the database to the browser. For a support queue, 30-second freshness plus revalidation after every mutation is enough. The top bar shows whether the last refresh succeeded.</p>
+    <span class="source-cite">src/lib/sync-status.ts:6 (REFRESH_INTERVAL_MS = 30_000); src/hooks/use-api.ts</span>
+  </div>
+</div>
 
-    <h2>UI &amp; design</h2>
+<div class="qa-item">
+  <div class="qa-question">Why a central authorization policy module instead of role checks inside each route?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>With checks scattered across 24 routes, one forgotten <code>if</code> becomes a hole, and "what can a viewer do?" can't be answered by reading one file. <code>can.*</code> in <code>policy.ts</code> is the single source of truth (<code>viewTicket</code>, <code>workTicket</code>, <code>assignTickets</code>, <code>manageSettings</code>…), routes call it, and pages use <code>requirePageRole</code>. The database repeats the critical rules (assignment, tenant keys) as a last line of defense.</p>
+    <span class="source-cite">src/server/auth/policy.ts; src/server/auth/page-guard.ts</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why does the ticket queue use CSS container queries instead of viewport media-query breakpoints?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>The queue table can render in more than one context with different available widths at the same viewport
-          size — full width on its own page, or narrower next to the Command Center's sidebar. A viewport breakpoint
-          (<code>md:</code>, <code>lg:</code>) can't tell those two cases apart, so a column set tuned for one context
-          would overflow or look cramped in the other. Tailwind v4's container queries (<code>@container</code> on
-          the wrapper, <code>@min-[560px]:</code> etc. on cells) size columns against the table's own rendered width
-          instead, so the same component genuinely never produces horizontal scroll regardless of where it's mounted.
-          Low-value columns (category, then updated-time, then customer/confidence) drop first as the container
-          narrows, verified at 390/768/1024/1280/1440px in every place the queue is rendered.</p>
-        <span class="source-cite">src/features/queue/lib/grid.ts — shared ROW_GRID container-query breakpoints; src/features/queue/components/queue-list.tsx</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why does an agent get 404, not 403, for a ticket that isn't theirs?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>A 403 confirms the ticket exists, which lets someone probe ids. Returning the same 404 for "doesn't exist" and "not yours" leaks nothing. 403 is reserved for the case where the caller may <em>see</em> the ticket but not act on it (a viewer trying to reply).</p>
+    <span class="source-cite">src/app/api/tickets/[id]/route.ts:60</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why a custom "AI" monogram mark instead of a sparkle/star icon for AI-generated content?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Sparkle icons are used inconsistently across products to mean "AI," "favorite," "new," or "effects," with
-          no standardized meaning to a user encountering it cold — this is a documented usability complaint (Nielsen
-          Norman Group has written about exactly this ambiguity). The project instead uses a small custom SVG
-          monogram (<code>AiMark</code>) paired with an explicit text label (<code>AiLabel</code>, defaulting to
-          "AI suggestion" for analysis and "AI draft" for reply text) everywhere AI output is shown, so provenance is
-          stated in words, not inferred from an icon.</p>
-        <span class="source-cite">src/components/ui/ai-mark.tsx</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why do cron/webhook routes use a bearer secret and fail with 503 when it's unset?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Cron callers (GitHub Actions, Vercel Cron) have no user session, so they authenticate with a shared secret compared in constant time. If the environment variable is missing, the route returns 503 instead of running unprotected: a misconfiguration fails closed rather than exposing an endpoint anyone could call.</p>
+    <span class="source-cite">src/server/auth/cron.ts (verifyCronRequest, timingSafeEqual)</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why is the AI confidence indicator a 5-segment proportional meter instead of a plain percentage bar?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>A single continuous progress bar communicates magnitude but not a judgment about whether that magnitude is
-          good — a reader has to know the threshold themselves. The confidence meter instead fills a fixed 5-segment
-          bar in proportion to the score <em>and</em> colors the fill by band (green ≥85%, blue ≥70%, amber ≥50%, red
-          below), with the same band function driving both the meter and any nearby text label, so the color and the
-          words never disagree with each other.</p>
-        <span class="source-cite">src/components/ui/confidence-meter.tsx — confidenceBand() shared by ConfidenceMeter and the ticket workspace's "High/Moderate/Low confidence" text</span>
-      </div>
-    </div>
+<h2>Email handling</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">Why is the login page's animated gradient built in pure CSS instead of a canvas/WebGL shader or an animation library?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The brief was a slowly drifting, grainy blue gradient with no new npm dependencies. The implementation uses
-          three oversized, blurred radial-gradient elements animated purely on <code>transform</code> (translate/
-          rotate/scale) via CSS keyframes — <code>transform</code> is GPU-composited and doesn't trigger layout or
-          paint on every frame, unlike animating <code>background-position</code> or gradient stops directly would.
-          The grain texture is a single inline SVG data URI using <code>feTurbulence</code> (fractal noise) plus a
-          <code>feColorMatrix</code> to push it toward white/transparent, tiled with <code>mix-blend-mode: overlay</code>.
-          The whole thing collapses to a static gradient under the existing global
-          <code>prefers-reduced-motion</code> rule with no extra code, since that rule already zeroes out animation
-          durations project-wide.</p>
-        <span class="source-cite">src/app/globals.css — .grain-field / .grain-noise / id-drift-a/b/c keyframes; src/features/auth/components/auth-hero.tsx</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why store an email before marking it read, and why a queue in the database?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Serverless functions get killed at their time limit. The original code marked mail read when it fetched it, so a timeout mid-run lost that mail forever. Now each message is durably stored (<code>processed = false</code>) <em>before</em> <code>\Seen</code> is set: a crash leaves it unread and it is fetched again (at-least-once delivery; storage is idempotent on Message-ID). Processing then drains the stored queue within a 50-second budget; whatever doesn't fit waits for the next run.</p>
+    <span class="source-cite">src/server/email/imap.ts:48, 96-101; src/app/api/emails/poll/route.ts:13; src/server/email/intake.ts</span>
+    <p>A database table is the queue because it's free, transactional, and the rows are the data anyway. Rows are claimed with a compare-and-set on <code>processing_attempts</code> so overlapping runs never process the same email, and after 5 failed attempts a message is parked with its error (a poison-message limit) instead of retried forever.</p>
+    <span class="source-cite">src/server/email/intake.ts:16, 127-136</span>
+  </div>
+</div>
 
-    <h2>Repository structure</h2>
+<div class="qa-item">
+  <div class="qa-question">Why is an email marked processed only at the very end of the pipeline?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>If it were marked processed earlier (as it originally was), a failure afterwards left an email that was "done" but on no ticket. Now the commit point is <code>record_inbound_message()</code>, which is idempotent per email, and <code>processed = true</code> is the last write. Any failure leaves the email queued, and a retry safely lands on the same ticket.</p>
+    <span class="source-cite">src/server/pipeline/processor.ts:236, 313</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why does the app live at the repository root instead of in a subfolder?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The app previously lived in an <code>intellidesk-frontend/</code> subfolder inside the repo. It was moved
-          to the repo root because Vercel's default "Root Directory" setting is the repo root — leaving the app in a
-          subfolder means every teammate and every deploy configuration has to know and set that non-default path.
-          The move was scripted rather than done by hand: a script resolved every relative and <code>@/</code>-alias
-          import in the old tree to a concrete file <em>before</em> moving anything, then re-emitted each import
-          path against the new location, so nothing could be left pointing at a file that had silently moved out from
-          under it.</p>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why "record intent, then send, then complete" for outgoing replies?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>SMTP can't be part of a database transaction. So a reply is first inserted as a message with <code>delivery_status = 'sending'</code>, then handed to SMTP with our own Message-ID, then recorded atomically by <code>complete_ticket_reply()</code>. A failed send becomes a visible "Not delivered" message, and a crash between send and record leaves a visible "sending" row instead of silently losing the fact that the customer got an email. It is the same idea as the transactional outbox pattern, applied without a separate worker.</p>
+    <span class="source-cite">src/server/tickets/replies.ts:12, 158, 169, 193</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why set our own Message-ID on outgoing mail?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Email threading works through <code>In-Reply-To</code>/<code>References</code> headers. If we know the Message-ID of every reply we send (stored in <code>emails</code> as an outbound row), a customer's answer carries it in <code>In-Reply-To</code> and matches the right ticket exactly, which is more reliable than subject matching. All threading lookups are scoped to the organization, so an id that happens to exist in another workspace can never attach mail there.</p>
+    <span class="source-cite">src/server/email/smtp.ts (newMessageId); src/server/email/thread-detector.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why Gmail app passwords over IMAP instead of "Sign in with Google"?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Reading Gmail through OAuth uses restricted scopes that require Google's app verification and a security assessment before real users can connect, which isn't feasible for this project. An app password over IMAP/SMTP works with any Google account that has 2-Step Verification, and the same code supports any provider (Outlook, Zoho) through the "Other provider" option. The connect form walks the admin through creating the app password; credentials are verified with a real login before anything is saved, then encrypted.</p>
+    <span class="source-cite">src/features/settings/components/mailbox-form.tsx; src/app/api/settings/email-config/route.ts</span>
+  </div>
+</div>
+
+<h2>AI</h2>
+
+<div class="qa-item">
+  <div class="qa-question">Why is automatic sending off by default, and why a separate policy module?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>An AI email that promises a refund or quotes a wrong price can't be taken back. Production AI agents (Intercom Fin, Zendesk AI) roll out as drafts first and expand automatic answers per topic. Here, a strong knowledge-base match only makes a reply <em>eligible</em>; <code>decideAutoSend</code> can only say no, and says no unless every rule passes: the workspace opted in, low-risk category, calm sentiment, not flagged, human sender, and at most 2 automatic replies per address per day. Keeping the rules in one module makes them auditable and easy to explain.</p>
+    <span class="source-cite">src/server/pipeline/auto-reply-policy.ts:11-19, 41-61; supabase/migrations/011_ai_settings_and_spam_review.sql:15-16</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why does an AI outage leave emails in the queue instead of creating tickets with default labels?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>The original classifier caught every error and returned made-up defaults, so a Gemini outage produced tickets labelled "General Inquiry, P3". Now Gemini calls retry transient failures with exponential backoff and jitter; if they still fail, the error propagates and the email stays queued for the next run. Only when the model <em>answers</em> but unusably does the pipeline fall back to "needs human review" defaults. A permanently failing workspace key is flagged in Settings.</p>
+    <span class="source-cite">src/server/gemini/client.ts:24-31, 56, 71-80; src/server/gemini/classify.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why let each workspace bring its own Gemini key?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>For a white-label product the customer should pay their own (tiny) AI bill directly to Google, while the platform charges a flat fee; a shared key would make the platform pay for everyone's usage and hit one rate limit for all tenants. The key is verified with a free <code>countTokens</code> call, encrypted like the mailbox password, and the platform key is only a fallback.</p>
+    <span class="source-cite">src/server/gemini/client.ts (getAiContext); src/app/api/settings/ai/route.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why keep Gemini instead of switching AI providers?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Gemini Flash has a free tier and very low paid prices, supports JSON-schema output and system instructions (both used for safety), and provides the embedding model used for Pinecone. All model access is isolated in <code>src/server/gemini/</code>, so a provider change would touch one folder.</p>
+    <span class="source-cite">src/server/gemini/generate.ts; src/server/gemini/embeddings.ts</span>
+  </div>
+</div>
+
+<h2>Security</h2>
+
+<div class="qa-item">
+  <div class="qa-question">Why AES-256-GCM with the organization id as associated data for stored secrets?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Mailbox passwords and AI keys must be recoverable (we log in with them), so they're encrypted, not hashed. GCM is authenticated encryption: tampering is detected. Binding the organization id as additional authenticated data means a ciphertext copied into another organization's row fails to decrypt, so even a database-level mix-up can't hand one tenant another's credentials. The <code>v1:</code> prefix leaves room for key rotation.</p>
+    <span class="source-cite">src/server/crypto/secrets.ts:12-13, 38-39, 50-51</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why re-check the user every 5 minutes when the JWT is valid for 30 days?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Stateless JWTs can't be revoked. Without re-checking, a deactivated or demoted member keeps access until the token expires. The JWT callback re-reads role, active flag and organization every 5 minutes and ends the session if the account is inactive: near-immediate revocation for one small query per user every few minutes.</p>
+    <span class="source-cite">src/server/auth/config.ts:104-105, 130</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why always run bcrypt at login, even for unknown emails?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>If unknown emails returned immediately while known ones spent ~200 ms in bcrypt, response time would reveal which emails have accounts. Comparing against a real dummy hash makes both paths take the same time. Combined with throttling (5 failures per email and 20 per IP in 15 minutes), this blocks both account enumeration and brute force.</p>
+    <span class="source-cite">src/server/auth/config.ts:68, 132-137</span>
+  </div>
+</div>
+
+<h2>UI &amp; design</h2>
+
+<div class="qa-item">
+  <div class="qa-question">Why does the ticket queue use CSS container queries instead of viewport breakpoints?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>The same queue renders full-width on its own page and inside the narrower Command Center next to other panels. Viewport breakpoints would hide columns based on the window, not the space the list actually has. Container queries let the list drop columns based on its own width, with the breakpoints shared between header and rows so they never misalign.</p>
+    <span class="source-cite">src/features/queue/lib/grid.ts; src/features/queue/components/queue-list.tsx</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why is AI output always visibly labelled?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Agents must know what a human verified versus what a model suggested. AI summaries, drafts and automatically-sent replies all carry the IntelliDesk AI mark ("AI suggestion", "AI draft", "Sent automatically"), and the confidence is shown as a 5-segment meter with a text band rather than a false-precision percentage.</p>
+    <span class="source-cite">src/components/ui/ai-mark.tsx; src/components/ui/confidence-meter.tsx; src/features/ticket-workspace/components/conversation-column.tsx</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Why does the app live at the repository root?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>It was reorganized from a nested frontend folder into a single Next.js app at the root, so Vercel builds it with default settings (empty Root Directory) and tooling (ESLint, TypeScript, the Supabase CLI, <code>npm test</code>) runs from one place.</p>
+    <span class="source-cite">README.md (Deploying to Vercel); package.json</span>
+  </div>
+</div>
 
   </main>
 </div>

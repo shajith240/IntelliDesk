@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Email → Ticket → AI Draft — IntelliDesk AI Project Docs</title>
+<title>Email &rarr; Ticket Pipeline — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,327 +319,592 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>Email → Ticket → AI Draft: End-to-End Pipeline</h1>
-    <p class="page-intro">Trace a single incoming customer email through the entire processing pipeline: from ingestion, spam detection, and deduplication, through AI classification and ticket creation, to draft response generation. Understand what database tables are written in what order, and which decisions determine whether a ticket is auto-classified or flagged for human review.</p>
+    <h1>Email &rarr; Ticket Pipeline</h1>
+    <p class="page-intro">One customer email, followed line by line from a GitHub Actions cron tick to a row in
+    <code>tickets</code>. Every step below is read straight out of <code>src/server/pipeline/processor.ts</code> and
+    the modules it calls &mdash; nothing here is paraphrased from memory. See also
+    <a href="ai-safety.html">AI Design &amp; Safety</a> for why each AI call is shaped the way it is, and
+    <a href="database-design.html">Database Design &amp; Migrations</a> for the schema underneath.</p>
 
-    <h2>Step 1: Email Ingestion (Webhook or Cron)</h2>
+    <h2>How mail gets in</h2>
 
     <div class="qa-item">
-      <div class="qa-question">How does an email enter the system—via webhook or cron?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">What actually triggers ingestion, and why is it GitHub Actions instead of Vercel's own cron?<span class="qa-difficulty basic">Basic</span></div>
       <div class="qa-answer">
-        <p>Two entry points exist, both secured by bearer-secret authentication rather than session auth. <code>POST /api/emails/ingest</code> is a webhook endpoint called directly by an external email relay service; <code>GET/POST /api/emails/poll</code> is a Vercel Cron endpoint that pulls new messages from IMAP on a schedule for each organization that has email configured. Both routes call <code>processEmail()</code> from the processor pipeline. Ingest fails closed with 503 if the secret environment variable is unset; poll silently skips orgs without IMAP credentials rather than erroring.</p>
-        <pre><code>// src/app/api/emails/ingest/route.ts — webhook ingestion
-export async function POST(req: NextRequest) {
-	const denied = verifyBearerSecret(
-		req,
-		process.env.EMAIL_INGEST_SECRET,
-		"EMAIL_INGEST_SECRET",
-	);
+        <p>A GitHub Actions workflow calls the app's own HTTP endpoint every 10 minutes. The workflow file explains why
+        it isn't Vercel's built-in cron: Vercel's free plan only allows a <em>daily</em> cron trigger, and GitHub
+        Actions gives free scheduled runs on a public repository, so the schedule lives there instead. It POSTs
+        <code>$APP_URL/api/emails/poll</code> with <code>Authorization: Bearer $CRON_SECRET</code>, with a 90s curl
+        timeout and a 3-minute job timeout, and fails the job unless the response is HTTP 200. A
+        <code>concurrency</code> group (<code>poll-mailboxes</code>, <code>cancel-in-progress: false</code>) means a
+        slow run is never cancelled by the next scheduled tick &mdash; it just queues behind it.</p>
+        <pre><code>on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: poll-mailboxes
+  cancel-in-progress: false</code></pre>
+        <span class="source-cite">.github/workflows/poll-mailboxes.yml:9-19</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What does <code>GET/POST /api/emails/poll</code> do, in order?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Both GET and POST route to the same handler. It verifies the bearer token
+        (<code>verifyCronRequest</code>), computes a deadline <code>BUDGET_MS</code> (50 seconds) ahead of now, then
+        runs two phases sequentially: <code>ingestAllMailboxes()</code> (fetch new mail into the queue) followed by
+        <code>drainIntakeQueue(deadline)</code> (process queued rows until the deadline). After both finish it deletes
+        <code>auth_login_attempts</code> rows older than 30 days &mdash; unrelated to email, piggy-backed onto the
+        same scheduled tick because the throttle window they exist for is only 15 minutes. The route declares
+        <code>maxDuration = 60</code>, so the 50,000ms budget leaves roughly 10 seconds of headroom for the function
+        to actually return before Vercel kills it.</p>
+        <pre><code>export const maxDuration = 60;
+const BUDGET_MS = 50_000;
+
+async function handle(req: NextRequest) {
+	const denied = verifyCronRequest(req);
 	if (denied) return denied;
-	const body = await req.json();
-	// ... validate required fields ...
-	const result = await processEmail(rawEmail, orgId);</code></pre>
-        <span class="source-cite">src/app/api/emails/ingest/route.ts:7-51; src/app/api/emails/poll/route.ts:11-69</span>
+	const deadline = Date.now() + BUDGET_MS;
+
+	const intake = await ingestAllMailboxes();
+	const drain = await drainIntakeQueue(deadline);
+	...</code></pre>
+        <span class="source-cite">src/app/api/emails/poll/route.ts:9-33</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What fields are required in an ingest webhook payload?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-question">Is there a second cron route that only drains without ingesting?<span class="qa-difficulty basic">Basic</span></div>
       <div class="qa-answer">
-        <p>Four fields must be present: <code>from_address</code>, <code>subject</code>, <code>received_at</code>, and <code>organization_id</code>. All other fields (message_id, from_name, to_address, cc, body_text, body_html, etc.) are optional and default to empty string or null. The route validates required fields and rejects with 400 if any are missing.</p>
-        <span class="source-cite">src/app/api/emails/ingest/route.ts:19-31</span>
+        <p>Yes &mdash; <code>GET/POST /api/emails/process-queue</code>, listed separately in the API surface, drains
+        the queue only (no IMAP fetch). It exists for triggering extra drain passes between the 10-minute ingest
+        ticks without hitting the mailboxes again.</p>
+        <span class="source-cite">PLAN.txt API routes table, row "emails/process-queue"</span>
       </div>
     </div>
 
-    <h2>Step 2–5: Pipeline Orchestration and AI Classification</h2>
+    <h2>Step 1 — Ingest: getting mail into the queue durably</h2>
 
     <div class="qa-item">
-      <div class="qa-question">What is the exact sequence of operations inside the email processor?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-question">Why is ingestion split into "ingest" and "drain" instead of one pass?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>The processor runs 11 sequential steps in this order: (0) clean email body, (1) quick spam check by pattern/regex, (2) generate embedding, (3) check for duplicates, (4) detect thread (reply-to/in-reply-to), (5) AI classification by Gemini, (5b) skip ticket if AI flags as spam, (6) customer identification, (7) save email to DB, (8) store embedding in Pinecone, (9) create or update ticket, (10) generate and conditionally send auto-response, (11) audit log. If any step fails, an error response is returned and the failed email is saved for retry.</p>
-        <pre><code>// src/server/pipeline/processor.ts — the 11-step pipeline
-export async function processEmail(rawEmail: RawEmail, orgId: string): Promise<PipelineResult> {
-	// 0. Clean body
-	const cleanBody = cleanEmailBody(rawEmail.body_text || rawEmail.body_html || "");
-	// 1. Quick local spam check
-	if (isLikelySpam(...)) { return spam_result; }
-	// 2. Generate embedding for dedup and search
-	const embedding = await generateEmailEmbedding(rawEmail.subject, cleanBody);
-	// 3. Check for duplicates
-	const dupResult = await checkDuplicate(...);
-	if (dupResult.is_duplicate) { return duplicate_result; }
-	// 4. Thread detection
-	const threadResult = await detectThread(...);
-	// 5. AI Classification
-	const classification = await classifyEmail(...);
-	// 5b. Skip if AI flagged spam
-	if (classification.is_spam) { return ai_spam_result; }
-	// 6. Customer identification
-	const customer = await identifyCustomer(...);
-	// 7. Save email to database
-	const savedEmailId = await saveEmailToDb(...);
-	// 8. Store embedding in Pinecone
-	await upsertVectors(...);
-	// 9. Create or update ticket
-	// 10. Auto-response generation
-	// 11. Audit log</code></pre>
-        <span class="source-cite">src/server/pipeline/processor.ts:22-351</span>
+        <p>The file's own header comment states the reasoning directly: ingest fetches unseen mail and durably stores
+        each message as an unprocessed row <em>before</em> marking it read (<code>\Seen</code>) in the mailbox, then
+        drain processes stored rows until the time budget runs out. If a run times out mid-way, nothing is lost:
+        unstored mail is still unread in the mailbox (a later poll will refetch it) and stored-but-unprocessed rows
+        sit in <code>emails</code> for the next drain to pick up. This makes the whole thing an
+        <strong>at-least-once</strong> pipeline, not exactly-once at the mailbox layer &mdash; exactly-once is instead
+        enforced downstream by the <code>message_id</code> idempotency check in <code>storeRawEmail</code> and by
+        <code>record_inbound_message</code>'s own idempotency.</p>
+        <span class="source-cite">src/server/email/intake.ts:8-13</span>
       </div>
     </div>
 
-    <h2>Step 3: Deduplication</h2>
+    <div class="qa-item">
+      <div class="qa-question">Walk through <code>fetchUnseenMessages</code>'s store-then-<code>\Seen</code> ordering.<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p><code>ingestAllMailboxes</code> calls <code>listPollableMailboxes()</code> to get every organization's
+        connected IMAP config, then for each one calls <code>fetchUnseenMessages(config.imap, callback)</code> where
+        the callback is <code>storeRawEmail</code>. The naming and the module comment make the ordering explicit:
+        each message is durably stored via the callback <em>before</em> the IMAP client marks it <code>\Seen</code>.
+        That means a crash between "stored" and "marked seen" simply causes the same message to be refetched next
+        poll &mdash; safe, because storage is idempotent on <code>message_id</code>. A mailbox whose fetch throws is
+        counted in <code>mailboxErrors</code> and its sync failure recorded via <code>recordMailboxSync</code>, but
+        does not stop the loop over the other organizations' mailboxes.</p>
+        <pre><code>for (const { organizationId, config } of mailboxes) {
+	try {
+		const result = await fetchUnseenMessages(config.imap, (email) => storeRawEmail(email, organizationId));
+		summary.fetched += result.fetched;
+		summary.stored += result.stored;
+		await recordMailboxSync(organizationId);
+	} catch (err) {
+		summary.mailboxErrors++;
+		await recordMailboxSync(organizationId, err instanceof Error ? err : new Error(String(err)));
+	}
+}</code></pre>
+        <span class="source-cite">src/server/email/intake.ts:60-76</span>
+      </div>
+    </div>
 
     <div class="qa-item">
-      <div class="qa-question">How does the system detect duplicate emails?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-question">How does <code>storeRawEmail</code> avoid storing the same message twice?<span class="qa-difficulty intermediate">Intermediate</span></div>
       <div class="qa-answer">
-        <p>Two methods are used in order: first, an exact Message-ID lookup (if the incoming email has one and a non-spam prior email with the same Message-ID already exists in Pinecone, it's a duplicate). Second, semantic similarity search via Pinecone: if the embedding matches another email from the same sender within the last 72 hours with a similarity score ≥ 0.85, it's flagged as a duplicate. If either check matches, the result includes the duplicate_of ID and similarity score.</p>
+        <p>If the message carries a <code>message_id</code>, it first does a scoped lookup
+        (<code>organization_id</code> + <code>message_id</code>) and returns early without inserting if a row already
+        exists. Only then does it insert. This is the idempotency layer that makes "store, maybe refetch later" safe:
+        a message re-delivered after an interrupted run, or refetched because <code>\Seen</code> was never set, is
+        stored exactly once. Messages with no <code>message_id</code> at all (malformed mail) are always inserted
+        without a duplicate check.</p>
+        <pre><code>if (email.message_id) {
+	const { data: existing } = await supabaseAdmin
+		.from("emails")
+		.select("id")
+		.eq("organization_id", organizationId)
+		.eq("message_id", email.message_id)
+		.limit(1)
+		.maybeSingle();
+	if (existing) return;
+}</code></pre>
+        <span class="source-cite">src/server/email/intake.ts:28-40</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does <code>drainIntakeQueue</code> select and claim rows, and what stops two overlapping runs from double-processing?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>It selects up to 50 unprocessed rows (<code>processed = false</code>, <code>processing_attempts &lt;
+        MAX_PROCESSING_ATTEMPTS</code>, i.e. &lt; 5) ordered oldest-received-first. For each row, before calling
+        <code>processEmail</code>, it does a compare-and-set: an <code>UPDATE</code> that increments
+        <code>processing_attempts</code> and sets <code>last_attempt_at</code>, filtered on
+        <code>id</code> <strong>and</strong> <code>processed = false</code> <strong>and</strong>
+        <code>processing_attempts = row.processing_attempts</code> (the value read a moment earlier). If a concurrent
+        run already claimed and bumped that row, the filter no longer matches, <code>.maybeSingle()</code> returns
+        null, and this run skips it (<code>continue</code>) instead of processing it a second time. This is the
+        concurrency guarantee referenced in the function's own doc comment: "two overlapping runs never process the
+        same email twice."</p>
+        <pre><code>const { data: claimed } = await supabaseAdmin
+	.from("emails")
+	.update({ processing_attempts: row.processing_attempts + 1, last_attempt_at: new Date().toISOString() })
+	.eq("id", row.id)
+	.eq("processed", false)
+	.eq("processing_attempts", row.processing_attempts)
+	.select("id")
+	.maybeSingle();
+if (!claimed) continue; // another run took it</code></pre>
+        <span class="source-cite">src/server/email/intake.ts:103-137</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What is <code>PACE_MS</code> for, and how does the loop decide to stop before its budget runs out?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>PACE_MS = 4_000</code>: after each processed row (except the last), the loop awaits a 4-second pause,
+        so consecutive Gemini calls stay under free-tier per-minute rate limits. Before claiming each row, the loop
+        checks <code>Date.now() + PACE_MS &gt; deadline</code> &mdash; if there isn't even room for one more paced
+        iteration, it sets <code>summary.remaining = true</code> and breaks, leaving the rest of the 50-row batch for
+        the next scheduled run. If exactly 50 rows were fetched (the <code>.limit(50)</code> cap) and the loop still
+        finished within budget, <code>remaining</code> is also forced true, since a full page means there could be
+        more rows the query didn't even see.</p>
+        <span class="source-cite">src/server/email/intake.ts:19,122-126,172</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What happens to a message that keeps failing? Is there a poison-message mechanism?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Yes. The query that selects candidate rows filters on <code>processing_attempts &lt;
+        MAX_PROCESSING_ATTEMPTS</code> (5). Every claim increments <code>processing_attempts</code> regardless of
+        whether <code>processEmail</code> succeeds, so after 5 failed attempts the row simply stops matching the
+        query and is never selected again &mdash; it is left in the table, unprocessed, for manual inspection, rather
+        than retried forever. On a genuine failure the row's <code>processing_error</code> column is also set (from
+        the caught error message, truncated to 1000 chars) so an admin looking at the row can see why.</p>
+        <span class="source-cite">src/server/email/intake.ts:16,117,159-164</span>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>Recovering emails stuck at the attempt cap</strong>
+      Saving a new workspace Gemini key (<code>POST /api/settings/ai</code>) resets
+      <code>processing_attempts</code> to 0 and clears <code>processing_error</code> for every unprocessed email at or
+      past <code>MAX_PROCESSING_ATTEMPTS</code> for that organization &mdash; emails that gave up only because AI
+      wasn't configured get another chance the moment it is.
+      <span class="source-cite">src/app/api/settings/ai/route.ts:118-124</span>
+    </div>
+
+    <h2>Step 2 — <code>processEmail</code>: the pipeline in order</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Sequence diagram: one email from cron tick to ticket row.<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Built from the literal call order inside <code>processEmail</code> (the function's own doc comment states
+        the same order: "Clean &rarr; Spam check &rarr; Embed &rarr; Dedup &rarr; Thread &rarr; Classify &rarr;
+        Customer &rarr; record_inbound_message (the commit point) &rarr; Auto-response &rarr; Audit &rarr; mark
+        processed").</p>
+        <pre><code>GitHub Actions (*/10 * * * *)
+  └─ POST /api/emails/poll  (Bearer CRON_SECRET)
+       ├─ ingestAllMailboxes()
+       │    └─ per mailbox: fetchUnseenMessages → storeRawEmail (dedup by message_id)
+       │                     …then IMAP \Seen
+       └─ drainIntakeQueue(deadline)            ×N rows, oldest first, paced 4s
+            └─ claim row (CAS on processing_attempts)
+                 └─ processEmail(rawEmail, orgId)
+                      0. stripHtml (if HTML-only) → cleanEmailBody
+                      0b. detectAutomatedMail(own/bounce/auto_reply/bulk)
+                          ├─ own/bounce/auto_reply → save processed=true, status "ignored", STOP
+                          └─ bulk or none → continue
+                      1. isLikelySpam(local, no API call)
+                          └─ match → save is_spam=true processed=true, status "spam", STOP
+                      2. getAiContext(orgId) → generateEmailEmbedding (Gemini)
+                      3. checkDuplicate(message_id exact, then semantic ≥0.85 / 72h)
+                          └─ message_id match → save processed=true, status "duplicate", STOP
+                      4. detectThread (header / TKT- ref / fuzzy subject 48h)
+                          └─ (near-duplicate email attaches to the earlier ticket as a thread)
+                      5. classifyEmail (Gemini, JSON schema)
+                      5b. classification.is_spam → save is_spam=true processed=true, STOP
+                      6. identifyCustomer (contact → account by domain → new lead)
+                      7. saveEmailToDb  (processed still FALSE)
+                      8. upsertVectors  (Pinecone, emails namespace)
+                      9. rpc record_inbound_message  ← COMMIT POINT (append/reopen/follow-up/new)
+                      10. (if created) upsertVectors (Pinecone, tickets namespace)
+                      11. (if created) draftOrSendAutoResponse → decideAutoSend → sendTicketReply
+                      12. audit_logs insert
+                      13. UPDATE emails SET processed = true   ← only exit point that "succeeds"
+                 (any throw above 13) → saveEmailToDb processed:false, status "error", STOP (stays queued)</code></pre>
+        <span class="source-cite">src/server/pipeline/processor.ts:19-27,42-345</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Every outcome <code>processEmail</code> can return, and what is stored for each.<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The <code>status</code> field on the returned <code>PipelineResult</code> is one of five values; each maps
+        to a distinct write pattern.</p>
+        <table class="data-table">
+          <tr><th>status</th><th>Trigger</th><th>What's stored</th><th>Left in queue?</th></tr>
+          <tr><td><code>ignored</code></td><td>Automated mail, kind <code>own</code>/<code>bounce</code>/<code>auto_reply</code></td><td><code>emails</code> row, <code>processed = true</code>, no ticket</td><td>No</td></tr>
+          <tr><td><code>spam</code></td><td>Local <code>isLikelySpam</code> match, or AI <code>classification.is_spam</code></td><td><code>emails</code> row, <code>is_spam = true</code>, <code>processed = true</code>, no ticket, no Pinecone vector</td><td>No</td></tr>
+          <tr><td><code>duplicate</code></td><td>Exact <code>message_id</code> already processed for this org</td><td><code>emails</code> row, <code>processed = true</code>, no new ticket (near-duplicates are <em>not</em> this status — they're processed and threaded, see below)</td><td>No</td></tr>
+          <tr><td><code>processed</code></td><td>Every step through step 13 succeeded</td><td><code>emails</code> row (processed=true), Pinecone email vector, ticket row (new or existing), <code>ticket_messages</code> row, Pinecone ticket vector (if new), <code>audit_logs</code> row, maybe an <code>auto_responses</code> draft and a sent reply</td><td>No</td></tr>
+          <tr><td><code>error</code></td><td>Any thrown exception (DB, Gemini, Pinecone, RPC)</td><td><code>emails</code> row upserted with <code>processed = false</code>; caller (<code>drainIntakeQueue</code>) also writes <code>processing_error</code></td><td><strong>Yes</strong> — retried next drain, up to <code>MAX_PROCESSING_ATTEMPTS</code></td></tr>
+        </table>
+        <p>Note that a <em>near-duplicate</em> (semantic match &ge;0.85 within 72h, not an exact Message-ID hit) is
+        not returned as <code>duplicate</code> at all &mdash; it falls through to thread detection, gets attached to
+        the earlier email's ticket as <code>thread_type: "near_duplicate"</code>, and is fully processed (a new
+        <code>ticket_messages</code> row on the existing ticket).</p>
+        <span class="source-cite">src/server/pipeline/processor.ts:70-344; src/types (PipelineResult status union)</span>
+      </div>
+    </div>
+
+    <h2>Cleaning, spam filtering and automated-mail detection</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How is the body cleaned before anything else runs?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>If <code>body_text</code> is present and non-blank it's used as-is; otherwise <code>body_html</code> is run
+        through <code>stripHtml</code> (strips <code>&lt;style&gt;</code>/<code>&lt;script&gt;</code>, turns
+        <code>&lt;br&gt;</code> and block-closing tags into newlines, strips remaining tags, decodes basic entities,
+        collapses whitespace). The result then goes through <code>cleanEmailBody</code>, which trims quoted-reply
+        tails: it stops copying lines at the first <code>"On ... wrote:"</code> line, a
+        <code>"--- Original Message ---"</code> banner, <code>&gt;&gt;</code>-quoted lines, or an Outlook-style
+        <code>"From: ... Sent: ... To:"</code> block.</p>
+        <span class="source-cite">src/server/pipeline/processor.ts:52-58; src/server/email/parser.ts:7-45</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What are the four kinds of automated mail, and which ones get ticketed?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p><code>detectAutomatedMail</code> is pure logic (no I/O), unit-tested in
+        <code>tests/unit/automated-mail.test.ts</code>. It checks, in order: is the sender this workspace's own
+        mailbox address (<code>own</code>); is it a bounce &mdash; a <code>mailer-daemon</code>/<code>postmaster</code>-style
+        sender, an empty <code>Return-Path: &lt;&gt;</code>, or a <code>multipart/report</code> with
+        <code>delivery-status</code> (<code>bounce</code>); does it carry RFC 3834 <code>Auto-Submitted</code> (any
+        value except literal <code>no</code>), an <code>X-Autoreply</code>/<code>X-Autorespond</code> header,
+        <code>Precedence: auto_reply</code>, or an out-of-office-shaped subject (<code>auto_reply</code>); or does it
+        look like bulk mail &mdash; <code>Precedence: bulk/junk/list</code>, mailing-list headers
+        (<code>List</code>/<code>List-Id</code>/<code>List-Unsubscribe</code>), or a
+        <code>no-reply</code>/<code>do-not-reply</code>/<code>notifications@</code>/<code>alerts@</code> sender
+        (<code>bulk</code>). The pipeline treats these very differently: processor.ts only short-circuits (skip
+        ticketing entirely, mark processed, return <code>"ignored"</code>) for <code>own</code>, <code>bounce</code>
+        and <code>auto_reply</code> &mdash; the check is <code>if (automated &amp;&amp; automated.kind !==
+        "bulk")</code>. A <code>bulk</code> email (e.g. a newsletter) falls through and is ticketed normally; it is
+        only ever prevented from being <em>auto-answered</em> later, via <code>decideAutoSend</code>'s
+        <code>automatedReason</code> check.</p>
+        <span class="source-cite">src/server/email/automated.ts:10-95; src/server/pipeline/processor.ts:64-79</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">There are two separate spam checks. What's the difference, and what does the "not spam" override do?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><strong>Local (step 1):</strong> <code>isLikelySpam(subject, body, from)</code> is a zero-API-call keyword
+        scorer &mdash; it adds points for promotional phrases (e.g. "limited time offer", "claim your prize"),
+        automated-content phrases (e.g. "newsletter", "verification code"), a <code>noreply</code>/marketing-shaped
+        sender (+2), more than 15 links in the body (+2), and a
+        social-network sender like LinkedIn/Facebook (+3); score &ge;3 flags it as spam, run entirely before any
+        Gemini call. <strong>AI (step 5b):</strong> after classification, <code>classification.is_spam</code> (the
+        model's own judgment) is checked separately, catching spam the keyword list misses. Both checks are skipped
+        entirely when <code>options.notSpam</code> is true &mdash; set when the row's <code>not_spam_at</code>
+        column is non-null, i.e. an admin already called <code>POST /api/emails/[id]/not-spam</code> to override a
+        prior spam classification and the row is being reprocessed.</p>
+        <span class="source-cite">src/server/email/parser.ts:187-281; src/server/pipeline/processor.ts:81-101,172-187; src/server/email/intake.ts:155-156</span>
+      </div>
+    </div>
+
+    <h2>Embedding, dedup and thread detection</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Where does the embedding used for dedup and search come from?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p><code>ai = await getAiContext(orgId)</code> picks the workspace's own Gemini key if one is saved, else the
+        platform key. <code>generateEmailEmbedding(ai, subject, cleanBody)</code> concatenates subject and body
+        (truncated to 5000 chars) and calls the shared <code>generateEmbedding</code> helper, which uses
+        <code>gemini-embedding-001</code>, truncates the native 3072-dim output to the configured Pinecone dimension
+        (Matryoshka truncation) and re-normalizes to unit length. This single embedding is reused for both the
+        dedup/thread check and the Pinecone <code>emails</code> namespace upsert later &mdash; it is not
+        recomputed.</p>
+        <span class="source-cite">src/server/pipeline/processor.ts:103-105; src/server/gemini/classify.ts:159-166; src/server/gemini/embeddings.ts:14-29</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Exactly how does <code>checkDuplicate</code> tell an exact repeat from a semantic near-duplicate?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Two methods, tried in order. <strong>1. Exact:</strong> if a <code>message_id</code> is present, look for
+        an existing, already-processed, non-spam row with the same <code>message_id</code> in this org (excluding
+        the current row's own id when reprocessing). A hit returns <code>method: "message_id"</code>,
+        <code>similarity_score: 1.0</code>. <strong>2. Semantic:</strong> query the org's <code>emails</code>
+        Pinecone namespace for the 5 nearest vectors to this embedding, filtered to the same
+        <code>from_address</code> and a <code>timestamp &gt;=</code> cutoff of <code>received_at - 72h</code>
+        (<code>DEDUP_TIME_WINDOW_HOURS</code>). Matches are filtered to exclude the row's own vector id
+        (<code>excludeEmailId</code>) &mdash; otherwise reprocessing an email already in Pinecone would always find
+        itself as the closest match. If the top remaining match scores &ge; 0.85
+        (<code>DEDUP_SIMILARITY_THRESHOLD</code>), it's <code>method: "semantic"</code>.</p>
         <pre><code>const DEDUP_SIMILARITY_THRESHOLD = 0.85;
 const DEDUP_TIME_WINDOW_HOURS = 72;
-
-export async function checkDuplicate(messageId: string | null, fromAddress: string,
-	embedding: number[], receivedAt: Date, orgId: string): Promise<DeduplicationResult> {
-	// 1. Exact message-id match
-	if (messageId) {
-		const { data: existing } = await supabaseAdmin.from("emails")
-			.select("id, is_spam").eq("message_id", messageId)
-			.eq("organization_id", orgId).single();
-		if (existing && !existing.is_spam) {
-			return { is_duplicate: true, similarity_score: 1.0, method: "message_id" };
-		}
+...
+const matches = (results ?? []).filter((match) => match.id !== excludeEmailId);
+if (matches.length > 0) {
+	const topMatch = matches[0];
+	if (topMatch.score && topMatch.score >= DEDUP_SIMILARITY_THRESHOLD) {
+		return { is_duplicate: true, duplicate_of: topMatch.id, similarity_score: topMatch.score, method: "semantic" };
 	}
-	// 2. Semantic similarity
-	const results = await queryVectors(orgNamespace(orgId, "emails"), embedding, 5,
-		{ from_address: fromAddress, timestamp: { $gte: cutoffTimestamp } });
-	if (results && results[0]?.score >= DEDUP_SIMILARITY_THRESHOLD) {
-		return { is_duplicate: true, similarity_score: results[0].score, method: "semantic" };
-	}
-	return { is_duplicate: false, ... };</code></pre>
-        <span class="source-cite">src/server/pipeline/deduplicator.ts:7-74</span>
-      </div>
-    </div>
-
-    <h2>Step 4: Customer Identification</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the system identify which customer account an email belongs to?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The system tries three strategies in order, each creating a contact/account if needed: (1) exact email match in existing contacts for this org, (2) domain match against existing accounts (if email domain matches an account's domain, create a new contact under that account), (3) new lead (extract name and company from email signature, create both account and contact as Bronze tier). The result includes contact_id, account_id, account_name, account_tier, and the method used.</p>
-        <pre><code>// src/server/pipeline/customer-identifier.ts
-export async function identifyCustomer(fromAddress: string, fromName: string | null,
-	bodyText: string, orgId: string): Promise<CustomerIdentificationResult> {
-	const emailDomain = fromAddress.split("@")[1]?.toLowerCase();
-	// 1. Exact contact match
-	const { data: existingContact } = await supabaseAdmin.from("contacts")
-		.select("id, name, email, role, account_id, accounts(...)")
-		.eq("email", fromAddress.toLowerCase())
-		.eq("accounts.organization_id", orgId).single();
-	if (existingContact) { return { is_existing: true, contact_id: ..., method: "email_match" }; }
-	// 2. Domain match
-	if (emailDomain) {
-		const { data: account } = await supabaseAdmin.from("accounts")
-			.select("id, company_name, domain, tier").eq("domain", emailDomain)
-			.eq("organization_id", orgId).single();
-		if (account) { /* create new contact under existing account */ }
-	}
-	// 3. New lead
-	const { data: newAccount } = await supabaseAdmin.from("accounts")
-		.insert({ organization_id: orgId, company_name, domain, tier: "Bronze" })
-		.select("id").single();</code></pre>
-        <span class="source-cite">src/server/pipeline/customer-identifier.ts:10-135</span>
-      </div>
-    </div>
-
-    <h2>Step 5: AI Classification</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">What does the Gemini classification prompt return, and how is it parsed?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The classification prompt sends the email (from, subject, body) to Gemini and asks for a JSON object with these fields: is_spam (boolean), category (one of 9 predefined values like "Technical Support", "Billing/Invoice", etc.), severity (P1–P4), language (english/hindi/mixed/other), sentiment (positive/neutral/negative/angry), confidence (0–1), summary (1–2 sentences), key_entities (array), suggested_tags (array), requires_human_review (boolean), and reasoning (brief explanation). The response is parsed as JSON, with markdown code fences stripped. Invalid or missing fields are replaced with safe defaults (category→"General Inquiry", severity→"P3", confidence→0).</p>
-        <pre><code>const CLASSIFICATION_PROMPT = `You are an AI email classifier for a B2B SaaS helpdesk.
-Analyze the following email and return a JSON object with these fields:
-{
-  "is_spam": boolean,
-  "category": one of ["Technical Support", "Access Request", "Billing/Invoice", ...],
-  "severity": one of ["P1", "P2", "P3", "P4"],
-  "confidence": number between 0 and 1,
-  "requires_human_review": boolean,
-  ...
-}`;
-
-const text = await geminiGenerate(CLASSIFICATION_PROMPT, emailContent);
-const jsonStr = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-const parsed = JSON.parse(jsonStr);
-const classification: ClassificationResult = {
-	is_spam: Boolean(parsed.is_spam),
-	category: VALID_CATEGORIES.includes(parsed.category) ? parsed.category : "General Inquiry",
-	severity: VALID_SEVERITIES.includes(parsed.severity) ? parsed.severity : "P3",
-	confidence: Math.min(1, Math.max(0, Number(parsed.confidence) || 0.5)),
-	requires_human_review: parsed.confidence < 0.8 || Boolean(parsed.requires_human_review),
-	...
-};</code></pre>
-        <span class="source-cite">src/server/gemini/classify.ts:20-126</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">What triggers the "flagged for human review" flag on a ticket?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>A ticket is flagged for human review (<code>is_flagged_for_review: true</code>) if either the Gemini model's <code>requires_human_review</code> field is true OR the confidence score is below 0.8. This decision is made in the classification function and stored on the ticket row when created.</p>
-        <pre><code>requires_human_review: parsed.confidence < 0.8 || Boolean(parsed.requires_human_review),
-
-// When creating ticket:
-is_flagged_for_review: classification.requires_human_review || false,</code></pre>
-        <span class="source-cite">src/server/gemini/classify.ts:103-104; src/server/pipeline/processor.ts:200</span>
-      </div>
-    </div>
-
-    <h2>Step 6–7: Embeddings and Ticket Creation</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How are embeddings generated and stored?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Email embeddings are generated by Gemini's <code>gemini-embedding-001</code> model, which natively returns 3072 dimensions. The SDK does not expose dimensionality control, so the code downscales via Matryoshka truncation (the model is trained for this) to match the Pinecone index dimension (default 768, configurable via <code>PINECONE_EMBEDDING_DIMENSIONS</code). After truncation, embeddings are re-normalized to unit length. The email embedding is stored in Pinecone under the namespace <code>orgs/{orgId}/emails</code> with metadata (from_address, category, severity, timestamp). A separate embedding is also stored under <code>orgs/{orgId}/tickets</code> when a new ticket is created.</p>
-        <pre><code>function toTargetDimension(values: number[]): number[] {
-	const sliced = values.length > EMBEDDING_DIMENSIONS ? values.slice(0, EMBEDDING_DIMENSIONS) : values;
-	const norm = Math.sqrt(sliced.reduce((sum, v) => sum + v * v, 0)) || 1;
-	return sliced.map((v) => v / norm);
-}
-
-export async function generateEmbedding(text: string): Promise<number[]> {
-	const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-	const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
-	const result = await model.embedContent(text);
-	return toTargetDimension(result.embedding.values);
 }</code></pre>
-        <span class="source-cite">src/server/gemini/embeddings.ts:12-29; src/server/db/pinecone.ts:11-32</span>
+        <span class="source-cite">src/server/pipeline/deduplicator.ts:7-8,15-82</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What happens when a new ticket is created versus when an email is added to an existing thread?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-question">Only an exact Message-ID duplicate short-circuits the pipeline. What happens to a semantic near-duplicate?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>If the email is detected as a new thread (not a reply to an existing ticket), a new ticket row is created with all the classification data, and the email is linked with relationship="original". If it's a reply to an existing ticket, only a ticket_emails link is created with relationship="reply", and the existing ticket's severity is updated if the new email has higher priority. Both paths store the embedding and create audit logs.</p>
-        <pre><code>// src/server/pipeline/processor.ts:154-242
-if (threadResult.is_thread && threadResult.existing_ticket_id) {
-	// Add to existing ticket
-	ticketId = threadResult.existing_ticket_id;
-	await supabaseAdmin.from("ticket_emails").insert({
-		ticket_id: ticketId, email_id: savedEmailId, relationship: "reply",
-	});
-	// Update ticket severity if new email is higher priority
-	if (severityOrder[classification.severity] < severityOrder[existingTicket.severity]) {
-		await supabaseAdmin.from("tickets").update({ severity: classification.severity }).eq("id", ticketId);
-	}
-} else {
-	// Create new ticket
-	const { data: newTicket } = await supabaseAdmin.from("tickets").insert({
-		organization_id: orgId,
-		subject: rawEmail.subject,
-		summary: classification.summary,
-		status: "New",
-		severity: classification.severity,
-		category: classification.category,
-		ai_confidence: classification.confidence,
-		is_flagged_for_review: classification.requires_human_review || false,
-		ai_classification: { /* full classification object */ },
-	}).select("id, ticket_number").single();
-	// Link email with relationship="original"
-	await supabaseAdmin.from("ticket_emails").insert({
-		ticket_id: ticketId, email_id: savedEmailId, relationship: "original",
-	});
-}</code></pre>
-        <span class="source-cite">src/server/pipeline/processor.ts:157-242</span>
-      </div>
-    </div>
-
-    <h2>Step 8: Auto-Response Generation</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">When and how is an auto-response generated?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Auto-responses are generated for non-spam emails with P3 or P4 severity only (P1/P2 never auto-respond). The function generates an embedding from the email subject and body, then semantically searches for matching FAQs by category. If the top match has similarity ≥ 0.9 (perfect match), the response is auto-sent; if 0.7–0.9 (partial match), it's saved as a draft suggestion for the agent; if &lt;0.7, no response is generated. A Gemini call personalizes each suggested response using the top 3 matching FAQ answers. The auto-response record is saved to the database with <code>sent: true/false</code> and <code>response_type: "auto"|"suggest"|"none"</code>.</p>
-        <pre><code>// src/server/gemini/respond.ts:18-116
-export async function generateAutoResponse(emailSubject: string, emailBody: string,
-	category: string, severity: Severity, customerName: string | undefined,
-	accountTier: string | null | undefined, orgId: string): Promise<AutoResponseResult> {
-	// Don't auto-respond to P1/P2
-	if (severity === "P1" || severity === "P2") {
-		return { should_respond: false, response_type: "none", ... };
-	}
-	// Semantic search for matching FAQs
-	const embedding = await generateEmbedding(queryText);
-	const faqResults = await queryVectors(orgNamespace(orgId, "faqs"), embedding, 5, { category });
-	const topMatch = faqMatches[0];
-	if (!topMatch || topMatch.score < 0.7) {
-		return { should_respond: false, response_type: "none", ... };
-	}
-	const response = await generatePersonalizedResponse(...);
-	if (topMatch.score >= 0.9) {
-		return { should_respond: true, response_type: "auto", response_text: response, ... };
-	}
-	return { should_respond: true, response_type: "suggest", response_text: response, ... };
-}</code></pre>
-        <span class="source-cite">src/server/gemini/respond.ts:18-116; src/server/pipeline/processor.ts:244-295</span>
+        <p>In <code>processEmail</code>, the early-return only fires for
+        <code>dupResult.is_duplicate &amp;&amp; dupResult.method === "message_id"</code>. A semantic-only match falls
+        through to thread detection. If <code>detectThread</code> found nothing (<code>!threadResult.existing_ticket_id</code>)
+        but the dedup check did find a semantic duplicate, processor.ts looks up which ticket the matched earlier
+        email is attached to (via <code>ticket_messages.email_id</code>) and, if found, synthesizes a thread result
+        with <code>thread_type: "near_duplicate"</code>, <code>confidence: dupResult.similarity_score</code>. That
+        means "the customer wrote again in different words" gets appended to their existing ticket instead of either
+        being dropped or spawning a second ticket.</p>
+        <span class="source-cite">src/server/pipeline/processor.ts:120-160</span>
       </div>
     </div>
 
     <div class="qa-item">
-      <div class="qa-question">What database rows are written during email processing, and in what order?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-question">List <code>detectThread</code>'s match strategies in priority order, and what "our own outbound Message-IDs" has to do with it.<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>The order is: (1) <code>emails</code> row (upsert, for dedup safety), (2) <code>tickets</code> row (if new thread), (3) <code>ticket_emails</code> links (relationship: "original" or "reply"), (4) <code>auto_responses</code> row (if applicable, with sent=true/false), (5) <code>audit_logs</code> entry (with full classification and processing metadata). Pinecone vectors are stored in parallel with step 1. If an email is marked spam at step 1, only the email row is written and processing stops. If classified as spam by AI (step 5), the email row is updated with is_spam=true and processing stops before ticket creation.</p>
-        <span class="source-cite">src/server/pipeline/processor.ts:130-322</span>
+        <p>Priority, as stated in the function's own comment ("header match &gt; ticket reference &gt; subject+sender
+        match &gt; none"), every lookup scoped to <code>organization_id</code>:</p>
+        <ol>
+          <li><strong>In-Reply-To header:</strong> exact match against any stored <code>emails.message_id</code> in
+          this org &mdash; <code>confidence: 1.0</code>. Because every outbound reply is stored with its own
+          Message-ID (via <code>sendTicketReply</code> → <code>complete_ticket_reply</code>, an outbound
+          <code>emails</code> row), a customer's reply-to-our-reply matches here even though the matched row is one
+          <em>we</em> sent, not one they sent.</li>
+          <li><strong>References header:</strong> same table, matched against the last 20 entries of the
+          <code>References</code> list &mdash; <code>confidence: 0.95</code>.</li>
+          <li><strong>Ticket reference in text:</strong> <code>extractTicketReferences</code> pulls
+          <code>TKT-#####</code>-shaped tokens (among other patterns) out of subject+body; a live match against
+          <code>tickets.ticket_number</code> in this org gives <code>confidence: 0.95</code>.</li>
+          <li><strong>Fuzzy subject match:</strong> within the last 48 hours, same <code>from_address</code>,
+          processed inbound emails in this org are fuzzy-matched on <code>normalizeSubject</code> (strips
+          <code>Re:</code>/<code>Fwd:</code>/bracketed tags) using Fuse.js, threshold 0.3; a score &lt;0.3 counts as a
+          match, <code>confidence: 1 - score</code>.</li>
+          <li>Otherwise <code>thread_type: "none"</code>.</li>
+        </ol>
+        <span class="source-cite">src/server/email/thread-detector.ts:13-18,30-163</span>
       </div>
     </div>
 
-    <h2>Step 9: Pipeline Result and Error Handling</h2>
+    <h2>Classification, customer identification, and the commit point</h2>
 
     <div class="qa-item">
-      <div class="qa-question">What does the pipeline return on success, and what error cases can occur?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-question">What does the classification step return, and what happens if the AI call itself fails versus returns garbage?<span class="qa-difficulty advanced">Advanced</span></div>
       <div class="qa-answer">
-        <p>On success, <code>processEmail()</code> returns an object with status="processed", email_id, ticket_id, ticket_number, classification, thread, customer, auto_response_sent, and processing_time_ms. On failure at any step, the function catches the error, saves a failed email (with processed=false) for retry, and returns status="error" with the error message. Spam-detected and duplicate-detected emails return status="spam" or status="duplicate" with the detection method and similarity score. The HTTP route responds with 200 on success (even if status is "spam" or "duplicate"), and 500 only if the entire request processing fails.</p>
-        <pre><code>// src/server/pipeline/processor.ts:324-351
-return {
-	email_id: savedEmailId,
-	ticket_id: ticketId,
-	ticket_number: ticketNumber,
-	status: "processed",
-	classification,
-	thread: threadResult,
-	customer,
-	auto_response_sent: autoResponseSent,
-	message: `Email processed → ${threadResult.is_thread ? "added to" : "created"} ticket ${ticketNumber}`,
-	processing_time_ms: Date.now() - startTime,
-};
-
-// On error:
-catch (error) {
-	console.error("Pipeline error:", error);
-	await saveEmailToDb(emailId, rawEmail, orgId, { processed: false }).catch(() => {});
-	return {
-		email_id: emailId,
-		status: "error",
-		message: `Processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-		processing_time_ms: Date.now() - startTime,
-	};
-}</code></pre>
-        <span class="source-cite">src/server/pipeline/processor.ts:324-350</span>
+        <p><code>classifyEmail</code> wraps the customer text in an <code>untrusted()</code> delimiter and asks Gemini
+        for a strict JSON object (category, severity P1&ndash;P4, language, sentiment, confidence, summary,
+        key_entities, suggested_tags, requires_human_review, reasoning, is_spam) via
+        <code>responseSchema</code>. Two distinct failure modes are handled differently: if the underlying call
+        throws an <code>AiCallError</code> (outage, bad key, rate limit), it is <strong>rethrown</strong> unchanged
+        &mdash; the pipeline's outer catch turns this into a <code>status: "error"</code> result and the email stays
+        queued for retry, so an AI outage can never create a ticket with invented labels. If the call
+        <em>succeeds</em> but the JSON is unparseable or otherwise unusable, the function instead returns a safe
+        fallback object with <code>requires_human_review: true</code> and a P3/General Inquiry default, logging the
+        parse failure. See <a href="ai-safety.html">AI Design &amp; Safety</a> for the full reliability story.</p>
+        <span class="source-cite">src/server/gemini/classify.ts:83-154</span>
       </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does customer identification decide contact vs. account, and why does a personal-domain sender never get grouped into a company?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>Strategy, per the module comment: existing contact &gt; company account by domain &gt; new contact.
+        <code>identifyCustomer</code> first looks up an existing <code>contacts</code> row by lowercased email; a hit
+        returns immediately with <code>method: "email_match"</code>. Otherwise, only if the sender's domain is
+        <em>not</em> in <code>isPersonalEmailDomain</code>'s list (29 free/personal providers &mdash; gmail.com,
+        outlook.com, icloud.com, protonmail.com, qq.com, etc., in <code>src/lib/email-domains.ts</code>) does it look
+        up or create an <code>accounts</code> row for that domain. A personal-domain sender always gets a bare
+        contact with <code>account_id: null</code> &mdash; the code comment calls out grouping every Gmail user into
+        one "gmail.com" company as "the classic mistake here." Concurrent account/contact creation is handled by
+        catching Postgres <code>23505</code> (unique violation) and re-reading the row the racing request just
+        created.</p>
+        <span class="source-cite">src/server/pipeline/customer-identifier.ts:14-26,55-64,115-127,139-144; src/lib/email-domains.ts:3-13</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Why does the email get saved to the DB (step 7) <em>before</em> the ticket RPC, still marked unprocessed?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p><code>saveEmailToDb</code> upserts by the email's own id, with <code>processed: false</code>, right after
+        classification and customer identification but before the Pinecone upsert and the ticket RPC. This gives the
+        row a stable id that the subsequent Pinecone vector and <code>ticket_messages.email_id</code> foreign key can
+        both reference. Since it's an upsert (not insert) on a primary key, calling it again on a retried run is
+        harmless. The email only leaves the "unprocessed" state at step 13, after every downstream step succeeded
+        &mdash; so a crash between step 7 and step 13 leaves a row that looks unprocessed and will be retried, not
+        one that's silently lost or double-committed.</p>
+        <span class="source-cite">src/server/pipeline/processor.ts:197-202,310-315,457-487</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">What exactly does <code>record_inbound_message</code> do, and how did it change between migration 010 and 013?<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>This Postgres function (called via <code>supabaseAdmin.rpc</code>) is the pipeline's single commit point.
+        Its rules, straight from migration 010's comment (the Zendesk/Zammad convention):</p>
+        <ul>
+          <li>reply to an open ticket (New/In Progress) &rarr; message appended, ticket untouched otherwise</li>
+          <li>reply to a Pending or Resolved ticket &rarr; appended <strong>and reopened</strong> to In Progress</li>
+          <li>reply to a Closed ticket &rarr; a brand-new <strong>follow-up</strong> ticket, linked via
+          <code>follow_up_of</code></li>
+          <li>severity only ever rises on an existing ticket, never falls (text comparison: <code>'P1' &lt;
+          'P2'</code>), via <code>CASE WHEN v_severity IS NOT NULL AND v_severity &lt; severity THEN v_severity ELSE
+          severity END</code></li>
+        </ul>
+        <p>It is idempotent per email: it first checks whether <code>ticket_messages.email_id = p_email_id</code>
+        already exists (that column is <code>UNIQUE</code>) and, if so, returns the existing ticket with
+        <code>created: false, reopened: false</code> instead of inserting again &mdash; this is what makes retrying a
+        failed run safe even after the commit point already ran once. Migration <strong>013</strong>
+        (<code>normalize_contract</code>) re-created the same function as part of the schema's expand/contract
+        normalization: it dropped the <code>ai_confidence</code> column from the ticket INSERT (confidence is now
+        read out of the <code>ai_classification</code> jsonb instead of being stored twice) and dropped
+        <code>performed_by</code> from the reopened-ticket audit-log insert. The business logic &mdash;
+        append/reopen/follow-up/new, idempotency, priority-only-rises &mdash; is unchanged between the two
+        versions.</p>
+        <pre><code>-- 013, ticket INSERT no longer includes ai_confidence:
+INSERT INTO public.tickets (
+    organization_id, status, subject, summary, severity, category, subcategory,
+    contact_id, account_id, ai_classification, is_flagged_for_review, follow_up_of
+  ) VALUES (
+    p_org_id, 'New', v_new.subject, v_new.summary, v_new.severity, v_new.category, v_new.subcategory,
+    v_new.contact_id, v_new.account_id, v_new.ai_classification,
+    COALESCE(v_new.is_flagged_for_review, false), v_follow_up
+  )</code></pre>
+        <span class="source-cite">supabase/migrations/010_record_inbound_message.sql:1-15,31-45; supabase/migrations/013_normalize_contract.sql:165-239</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">Why does the auto-response only run for tickets the run itself created (step 11), never for appended replies?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>The code comment states the reasoning directly: "A customer writing back on an existing conversation is
+        answered by a person." <code>draftOrSendAutoResponse</code> is only invoked when
+        <code>inbound.created</code> is true, i.e. the RPC actually made a new row in <code>tickets</code> (not an
+        append, not a reopen). This is a deliberate scope-narrowing of AI autonomy: only the very first reply on a
+        brand-new conversation is eligible for an unattended send; every follow-up message is guaranteed a human
+        reply path. See <a href="ai-safety.html">AI Design &amp; Safety</a> for the rest of the auto-send policy.</p>
+        <span class="source-cite">src/server/pipeline/processor.ts:274-291</span>
+      </div>
+    </div>
+
+    <h2>Retry &amp; idempotency guarantees</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">Summarize, end to end, why this pipeline can be safely retried at any point.<span class="qa-difficulty advanced">Advanced</span></div>
+      <div class="qa-answer">
+        <p>Each layer has its own idempotency mechanism, so a retry at any point never double-delivers to the
+        customer or double-creates a ticket:</p>
+        <table class="data-table">
+          <tr><th>Layer</th><th>Guarantee</th><th>Mechanism</th></tr>
+          <tr><td>IMAP fetch</td><td>At-least-once</td><td>Store before <code>\Seen</code>; unread mail is refetched next poll</td></tr>
+          <tr><td>Storage (<code>storeRawEmail</code>)</td><td>Exactly-once per <code>message_id</code></td><td>Pre-insert lookup by (org, message_id)</td></tr>
+          <tr><td>Queue claim (<code>drainIntakeQueue</code>)</td><td>At most one worker processes a row concurrently</td><td>Compare-and-set UPDATE on <code>processing_attempts</code></td></tr>
+          <tr><td>Poison messages</td><td>Bounded retries</td><td><code>processing_attempts &lt; MAX_PROCESSING_ATTEMPTS</code> (5) query filter</td></tr>
+          <tr><td>Ticket commit (<code>record_inbound_message</code>)</td><td>Exactly-once per email</td><td><code>ticket_messages.email_id UNIQUE</code> + pre-check, idempotent return</td></tr>
+          <tr><td>Whole pipeline run</td><td>Safe to re-run entirely</td><td><code>emails.processed</code> flips to true only after every step (audit log, Pinecone, RPC) succeeds; any throw leaves it false</td></tr>
+        </table>
+        <span class="source-cite">src/server/email/intake.ts:8-13,16,28-40,103-137; supabase/migrations/009_conversation_model.sql:139; src/server/pipeline/processor.ts:24-26,310-344</span>
+      </div>
+    </div>
+
+    <div class="callout warning">
+      <strong>What is not idempotent</strong>
+      The outbound SMTP send inside <code>sendTicketReply</code> is not itself transactional with the database: the
+      code's own comment explains that a crash between the SMTP send succeeding and <code>complete_ticket_reply</code>
+      recording it leaves a message row stuck in <code>delivery_status: 'sending'</code> rather than silently
+      resending. This applies to agent replies and AI auto-responses alike, since both go through
+      <code>sendTicketReply</code>.
+      <span class="source-cite">src/server/tickets/replies.ts:7-16,192-213</span>
+    </div>
+
+    <h2>The other two ways mail gets in: webhook and bulk import</h2>
+
+    <div class="qa-item">
+      <div class="qa-question">How does the ingest webhook (<code>POST /api/emails/ingest</code>) differ from the cron path?<span class="qa-difficulty intermediate">Intermediate</span></div>
+      <div class="qa-answer">
+        <p>It authenticates with a separate bearer secret (<code>EMAIL_INGEST_SECRET</code>, via the same
+        <code>verifyBearerSecret</code> helper), validates required fields
+        (<code>from_address</code>/<code>subject</code>/<code>received_at</code>/<code>organization_id</code>) and
+        that <code>organization_id</code> is a real UUID matching an existing org, builds a <code>RawEmail</code> from
+        the JSON body, and calls <code>processEmail(rawEmail, orgId)</code> <strong>directly</strong> &mdash; there
+        is no queue row and no <code>drainIntakeQueue</code> involved; it runs the pipeline synchronously inside the
+        HTTP request and returns the <code>PipelineResult</code> as JSON (500 if <code>status === "error"</code>,
+        else 200). This means a webhook-delivered email that errors is <em>not</em> automatically retried by anything
+        in this codebase &mdash; the caller (the external email-service webhook) is responsible for retrying based on
+        the non-200 response.</p>
+        <span class="source-cite">src/app/api/emails/ingest/route.ts:1-83</span>
+      </div>
+    </div>
+
+    <div class="qa-item">
+      <div class="qa-question">How does <code>POST /api/emails/bulk</code> (admin import) differ, and what are its limits?<span class="qa-difficulty basic">Basic</span></div>
+      <div class="qa-answer">
+        <p>Session-authenticated (<code>requireAuth</code> + <code>can.importEmails</code>, admin-only), not
+        bearer-token like the other two intake routes. It requires a non-empty <code>emails</code> array capped at 50
+        per request, maps each entry into a <code>RawEmail</code>, and calls
+        <code>processEmailBatch(rawEmails, orgId)</code>, which runs <code>processEmail</code> once per email in a
+        simple <code>for</code> loop with a 4-second pause between calls (default <code>delayMs = 4000</code>,
+        the same figure as the queue drain's <code>PACE_MS</code>). It returns a summary
+        (<code>total</code>/<code>success</code>/<code>duplicates</code>/<code>spam</code>/<code>errors</code>)
+        alongside every individual <code>PipelineResult</code>. Like the webhook, there's no queue and no retry:
+        an email that errors here is simply reported as an error in the response.</p>
+        <span class="source-cite">src/app/api/emails/bulk/route.ts:8-66; src/server/pipeline/processor.ts:514-532</span>
+      </div>
+    </div>
+
+    <div class="callout missing">
+      <strong>Not implemented</strong>
+      There is no job-queue service behind any of this. The "queue" is rows in the <code>emails</code> table with
+      <code>processed = false</code>, drained by HTTP-triggered runs on a schedule &mdash; there is no separate worker
+      process, message broker, or background job runner anywhere in the codebase.
+      <span class="source-cite">PLAN.txt "Confirmed ABSENT" block</span>
     </div>
 
   </main>

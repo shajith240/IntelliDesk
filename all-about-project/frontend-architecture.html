@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,16 +319,16 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
@@ -326,173 +336,155 @@
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
     <h1>Frontend Architecture</h1>
-    <p class="page-intro">How the React/Next.js frontend is organized: data fetching patterns, state management, the app shell layout, and the feature folder structure. The frontend polls the API every 30 seconds rather than using realtime push.</p>
+<p class="page-intro">How the UI is organized: App Router pages and layouts, server components that guard access, feature folders, the app shell, SWR data fetching, URL-driven state, and the ticket workspace's composer state. Visual tokens and components are covered in <a href="design-system.html">Design System</a>.</p>
 
-    <h2>Data fetching &amp; state</h2>
+<h2>Routing &amp; rendering</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">How is data fetched from the API? Are there realtime subscriptions?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The app uses SWR (stale-while-revalidate) for client-side data fetching with polling, not realtime push. Every API fetch is wrapped with a <code>refreshInterval: 30_000</code> option, and the app revalidates on focus and after mutations. There are no WebSockets, subscriptions, or Vercel KV realtime — just standard HTTP polling at a 30-second interval.</p>
-        <pre><code>const liveOptions = {
-  refreshInterval: REFRESH_INTERVAL_MS,
-  revalidateOnFocus: true,
-  keepPreviousData: true,
-} as const;</code></pre>
-        <span class="source-cite">src/hooks/use-api.ts:16-20; REFRESH_INTERVAL_MS = 30_000 from src/lib/sync-status.ts:6</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What pages exist and who can open them?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Route</th><th>Page</th><th>Roles</th></tr>
+      <tr><td><code>/</code></td><td>Redirect to <code>/dashboard</code></td><td>—</td></tr>
+      <tr><td><code>/login</code>, <code>/signup</code></td><td>Auth (route group <code>(auth)</code>, animated hero)</td><td>public (signup closed by default)</td></tr>
+      <tr><td><code>/dashboard</code></td><td>Command Center</td><td>admin, viewer</td></tr>
+      <tr><td><code>/dashboard/review</code></td><td>Needs Review</td><td>admin, viewer</td></tr>
+      <tr><td><code>/dashboard/queue</code></td><td>Incoming Queue</td><td>admin, viewer</td></tr>
+      <tr><td><code>/dashboard/my-work</code></td><td>My Work</td><td>admin, agent</td></tr>
+      <tr><td><code>/dashboard/analytics</code></td><td>Analytics</td><td>admin, viewer</td></tr>
+      <tr><td><code>/dashboard/knowledge-base</code></td><td>Knowledge Base</td><td>all</td></tr>
+      <tr><td><code>/dashboard/settings</code></td><td>Mailbox, AI, polling, members</td><td>admin</td></tr>
+      <tr><td><code>/dashboard/spam</code></td><td>Spam review</td><td>admin</td></tr>
+    </table>
+    <span class="source-cite">find src/app -name page.tsx (11 pages); grep requirePageRole src/app</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What does the SWR hook suite cover?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Five main hooks abstract the most common API calls: <code>useDashboard()</code> (stats and metrics), <code>useTickets(query)</code> (the queue list with filters/sort/page), <code>useTicket(id)</code> (a single ticket detail — accepts null to skip fetching), <code>useTeam()</code> (active team members), and <code>useRefreshAll()</code> (a function to revalidate every cached <code>/api/*</code> request after a mutation or when the user clicks Refresh).</p>
-        <pre><code>export function useTickets(query: TicketListQuery) {
-  return useSWR&lt;TicketListResponse&gt;(ticketsKey(query), apiGet, liveOptions);
-}
+<div class="qa-item">
+  <div class="qa-question">How do server and client components divide the work?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Dashboard pages are small <strong>server components</strong>: they call <code>requirePageRole</code> (redirecting before any HTML is sent), set metadata and render a feature component inside <code>Suspense</code>. The interactive feature components are <strong>client components</strong> that fetch through SWR. <code>src/app/providers.tsx</code> is the client root: NextAuth's <code>SessionProvider</code>, <code>next-themes</code>, a global <code>SWRConfig</code> (2 s dedupe, 3 retries, no retry on 4xx, redirect to login on 401 keeping the current URL), tooltips and toasts. The dashboard layout is <code>force-dynamic</code> because every page depends on the session.</p>
+    <span class="source-cite">src/app/providers.tsx:1-30; src/app/dashboard/layout.tsx:1-18; src/app/dashboard/review/page.tsx</span>
+  </div>
+</div>
 
-export function useRefreshAll() {
-  const { mutate } = useSWRConfig();
-  return useCallback(
-    () => mutate((key) => typeof key === "string" && key.startsWith("/api/")),
-    [mutate],
-  );
-}</code></pre>
-        <span class="source-cite">src/hooks/use-api.ts:22-62</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How does the ticket workspace open on top of any page?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>The dashboard layout renders the <code>TicketWorkspace</code> sheet next to every page. It reads the open ticket from the <code>?ticket=&lt;id&gt;</code> URL parameter via <code>useTicketParam</code>: opening pushes a history entry, closing replaces it, so the workspace survives refresh, back/forward and can be shared as a link. The sheet warns before discarding an unsent draft.</p>
+    <span class="source-cite">src/hooks/use-ticket-param.ts:6-25; src/app/dashboard/layout.tsx; src/features/ticket-workspace/components/ticket-workspace.tsx</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How does sync status get shown to the user, and what states are tracked?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Every API call (via <code>apiGet</code> and <code>apiSend</code>) records success or failure to an external store using <code>useSyncExternalStore</code>, not React state. The store tracks <code>lastSuccessAt</code>, <code>lastError</code>, <code>consecutiveFailures</code>, and <code>browserOnline</code>, and emits to listening components. A selector function <code>deriveSyncState(snapshot, now)</code> derives the user-facing label from the snapshot: "offline" if <code>browserOnline === false</code> or 3+ consecutive failures, "reconnecting" if 1–2 failures, "stale" if no sync in 75 seconds (2.5× the 30s interval), or "synced".</p>
-        <pre><code>export function deriveSyncState(s: SyncSnapshot, now: number): SyncState {
-  if (!s.browserOnline) return "offline";
-  if (s.consecutiveFailures >= 3) return "offline";
-  if (s.consecutiveFailures > 0) return "reconnecting";
-  if (s.lastSuccessAt === null) return "connecting";
-  if (now - s.lastSuccessAt > REFRESH_INTERVAL_MS * 2.5) return "stale";
-  return "synced";
-}</code></pre>
-        <span class="source-cite">src/lib/sync-status.ts (entire file); states defined at line 8</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the API client handle errors and record failures?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p><code>apiGet()</code> wraps <code>fetch()</code> and catches network errors and non-2xx responses. When a fetch fails (network down or timeout), it throws <code>ApiRequestError("Network unavailable...", 0)</code> and calls <code>recordSyncFailure("Network unavailable")</code>. When the response is non-2xx, it reads the server's JSON <code>error</code> field (or falls back to <code>statusText</code>), constructs an <code>ApiRequestError</code> with the message and status code, and records the failure. On success, it calls <code>recordSyncSuccess()</code> to reset the consecutive-failures counter.</p>
-        <pre><code>if (!res.ok) {
-  const message = await readError(res);
-  recordSyncFailure(message);
-  throw new ApiRequestError(message, res.status);
-}
-const data = (await res.json()) as T;
-recordSyncSuccess();
-return data;</code></pre>
-        <span class="source-cite">src/lib/api-client.ts:27-44</span>
-      </div>
-    </div>
-
-    <h2>Layout &amp; shell</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">How is the app shell structured?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>The app shell wraps every page and consists of: a sticky <code>TopBar</code> (56px height, always visible), a collapsible sidebar (on desktop, toggleable to the left; on mobile, a drawer Sheet), and a main content area. The shell state (sidebar open/closed, mobile nav open/closed, command palette open/closed) is managed by <code>ShellProvider</code> and <code>useShell()</code>. The sidebar uses localStorage to persist the collapsed/expanded state across sessions. A skip-to-content link is always first in the tab order for keyboard navigation.</p>
-        <span class="source-cite">src/components/layout/app-shell.tsx; src/components/layout/shell-context.tsx (entire files)</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the ticket workspace stay mounted instead of being a separate route?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>The ticket details panel is not a route; it lives as a slide-over drawer on the same page as the queue list. The open ticket id is persisted in the <code>?ticket=&lt;id&gt;</code> URL search param via <code>useTicketParam()</code>, so opening a ticket updates the URL without navigating. Closing the param closes the drawer. This pattern lets the user browse the queue while keeping the same URL intact for back/forward and refresh, and avoids unmounting/remounting the queue list when opening a ticket.</p>
-        <pre><code>export function useTicketParam() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const ticketId = searchParams.get("ticket");
-
-  const setTicket = useCallback((id: string | null) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (id) params.set("ticket", id);
-    else params.delete("ticket");
-    const qs = params.toString();
-    const href = qs ? `${pathname}?${qs}` : pathname;
-    if (id) router.push(href, { scroll: false });
-    else router.replace(href, { scroll: false });
-  }, [pathname, router, searchParams]);
-
-  return { ticketId, openTicket, closeTicket };
-}</code></pre>
-        <span class="source-cite">src/hooks/use-ticket-param.ts (entire file)</span>
-      </div>
-    </div>
-
-    <h2>Feature organization</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">What is the folder structure inside a feature domain?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Each feature lives under <code>src/features/&lt;domain&gt;/</code> and is subdivided into: <code>components/</code> (React components used by this feature), <code>hooks/</code> (feature-specific hooks), and <code>lib/</code> (business logic, utilities, types). Shared UI primitives live in <code>src/components/ui/</code>, shared hooks in <code>src/hooks/</code>, and shared utilities in <code>src/lib/</code>. The import direction is enforced: <code>app → features → shared</code>. One documented exception: <code>command-center</code> imports <code>queue</code>'s <code>WorkQueue</code> component.</p>
-        <span class="source-cite">src/features/queue/ contains components/ (queue-list.tsx, queue-filters.tsx, work-queue.tsx, queue-skeleton.tsx), hooks/ (use-queue-state.ts), and lib/ (grid.ts) — demonstrating the pattern</span>
-      </div>
-    </div>
-
-    <div class="qa-item">
-      <div class="qa-question">How does the queue filter state work with URL parameters?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p><code>useQueueState(scope, pageSize)</code> reads and writes all queue filter, sort, and page state to URL search params. Status, priority, category, search query, sort field, sort order, and page are all persisted in the URL, so filtering survives refresh and back/forward. The hook debounces search input by 300ms to avoid hammering the API while typing. Some scopes (e.g., "incoming") lock the status filter (always "New"), and changes reset the page number to 1.</p>
-        <pre><code>const debounceRef = useRef&lt;ReturnType&lt;typeof setTimeout&gt; | null&gt;(null);
-const setSearch = useCallback(
-  (value: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      writeParams({ q: value.trim() || null }, true);
-    }, 300);
-  },
-  [writeParams],
-);</code></pre>
-        <span class="source-cite">src/features/queue/hooks/use-queue-state.ts:124-133</span>
-      </div>
-    </div>
-
-    <h2>Performance &amp; constraints</h2>
-
-    <div class="qa-item">
-      <div class="qa-question">Does the app enable the React Compiler, and what does that mean for state updates?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Yes, the app enables <code>reactCompiler: true</code> in <code>next.config.ts</code>. The React Compiler (Forget) automatically memoizes component output and fine-grained dependencies, reducing unnecessary re-renders. This introduces one key constraint: useEffect with a sync setState (setting state directly in the effect body, not in a callback) violates the compiler's expectation that effects have no early returns or complex control flow tied to state. Effects must either be properly async or dispatch to a callback (useCallback); any sync setState in an effect body will likely cause a linting error.</p>
-        <pre><code>const nextConfig: NextConfig = {
+<div class="qa-item">
+  <div class="qa-question">Which compiler/framework features are on?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Next.js 16 App Router with React 19 and the React Compiler (<code>reactCompiler: true</code>), which memoizes automatically — so code avoids manual memoization tricks and uses compiler-safe patterns such as "adjust state during render" instead of effects for derived resets. TypeScript strict, Tailwind v4.</p>
+<pre><code>const nextConfig: NextConfig = {
+  /* config options here */
   reactCompiler: true,
 };</code></pre>
-        <span class="source-cite">next.config.ts:5</span>
-      </div>
-    </div>
+    <span class="source-cite">next.config.ts</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How does the queue table adjust its column layout without breaking responsiveness?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>The queue table uses CSS container queries (<code>@container</code> and <code>@min-[Xpx]:</code>) instead of viewport breakpoints (<code>md:</code>, <code>lg:</code>) to size columns against the table's own rendered width. The <code>ROW_GRID</code> template in <code>src/features/queue/lib/grid.ts</code> defines four breakpoints: 560px (ticket number + severity + title only), 860px (adds customer and AI confidence), 1100px (adds updated-at), and 1240px (adds category). Low-value columns drop in order as the container narrows, so the same component never produces horizontal scroll regardless of whether it's rendered full-width or nested next to a sidebar.</p>
-        <span class="source-cite">src/features/queue/lib/grid.ts:7-11</span>
-      </div>
-    </div>
+<h2>Code organization</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">How often does the SLA countdown update on the screen?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>The current time is fetched with <code>useNow(intervalMs = 30_000)</code>, which re-renders every 30 seconds by default. This is paired with SLA due-date calculations and "x ago" relative timestamps. Calling <code>useNow()</code> with a smaller interval (e.g., <code>useNow(1000)</code> for countdown mode) is possible, but the default is 30 seconds to avoid excessive re-renders.</p>
-        <pre><code>export function useNow(intervalMs = 30_000): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), intervalMs);
-    return () => window.clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}</code></pre>
-        <span class="source-cite">src/hooks/use-now.ts (entire file)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What is in each feature folder?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Feature</th><th>Files</th><th>What it is</th></tr>
+      <tr><td>analytics</td><td>analytics.tsx</td><td>Status, priority, category and SLA breakdowns</td></tr>
+      <tr><td>auth</td><td>auth-hero.tsx</td><td>Animated login/signup hero (pure CSS)</td></tr>
+      <tr><td>command-center</td><td>command-center, metric-strip, sla-risk-panel, activity-feed, fallback</td><td>The admin/viewer home dashboard</td></tr>
+      <tr><td>knowledge-base</td><td>knowledge-base, article-dialog, delete-article-dialog</td><td>Articles list, admin create/edit/delete</td></tr>
+      <tr><td>queue</td><td>work-queue, queue-list, queue-filters, queue-skeleton, hooks/use-queue-state, lib/grid</td><td>All ticket lists (incoming, review, my work) with URL-synced filters and container-query columns</td></tr>
+      <tr><td>settings</td><td>settings, mailbox-form, ai-settings, team-members-list, add-member-dialog, deactivate-member-dialog</td><td>Admin configuration</td></tr>
+      <tr><td>spam</td><td>spam-review</td><td>Spam list with "Not spam"</td></tr>
+      <tr><td>ticket-workspace</td><td>ticket-workspace, workspace-view, workspace-header, conversation-column, reply-composer, send-confirm-dialog, ticket-sidebar, sidebar-section, ai-summary-card, assign-menu; hooks use-reply-draft, use-ticket-mutation, use-can-work-ticket; lib/ticket-detail</td><td>The ticket sheet: conversation, composer, details, AI insights</td></tr>
+    </table>
+    <span class="source-cite">find src/features -type f (37 files)</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What's in the shared UI and shell folders?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><strong>src/components/ui (23):</strong> ai-mark, avatar, badge, button, confidence-meter, dialog, dropdown-menu, empty-state, error-state, field, kbd, lozenge, panel, priority-icon, section-message, sheet, skeleton, sla-badge, spinner, table, tabs, toast, tooltip.</p>
+    <p><strong>src/components/layout (13):</strong> app-shell, shell-context, top-bar, sidebar-content, nav.ts, page-header, logo, command-palette, keyboard-shortcuts, sync-indicator, theme-menu, user-menu, change-password-dialog.</p>
+    <span class="source-cite">ls src/components/ui src/components/layout</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How is navigation role-aware, and what shortcuts exist?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><code>nav.ts</code> is the single definition of navigation: each item has a label, icon, shortcut and the roles that may see it. The sidebar, the command palette (<code>/</code> or Ctrl K) and the <code>G</code>-prefixed shortcuts all read it, so a role never sees a link or shortcut to a page it can't open. Shortcuts: G D Command Center, G R Needs Review, G I Incoming Queue, G M My Work, G A Analytics, G K Knowledge Base, G S Settings, G J Spam; <code>?</code> shows them all; <code>j</code>/<code>k</code> and Enter move through lists.</p>
+    <span class="source-cite">src/components/layout/nav.ts:37-101; src/components/layout/keyboard-shortcuts.tsx; src/components/layout/command-palette.tsx</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What does the user menu offer?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>Name, email and role, an availability toggle for admins and agents (<code>PATCH /api/me</code>), <em>Change password</em> (dialog posting to <code>/api/me/password</code>), the keyboard-shortcuts list, and sign out. The light/dark/system theme switch is a separate menu in the top bar.</p>
+    <span class="source-cite">src/components/layout/user-menu.tsx:3; src/components/layout/change-password-dialog.tsx; src/components/layout/top-bar.tsx:84 (ThemeMenu)</span>
+  </div>
+</div>
+
+<h2>Data &amp; state</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How is data fetched?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>SWR hooks in <code>src/hooks/use-api.ts</code> (<code>useDashboard</code>, <code>useTickets</code>, <code>useTicket</code>, <code>useTeam</code>, <code>useMe</code>, <code>useWorkload</code>) refresh every 30 seconds and on focus, keep previous data while revalidating, and accept an "enabled" flag so a role doesn't fetch data it can't use. <code>useRefreshAll</code> revalidates every <code>/api/*</code> key after a mutation. <code>apiGet</code>/<code>apiSend</code> in <code>src/lib/api-client.ts</code> turn error responses into <code>ApiRequestError</code> (status + server message) and record success/failure for the sync indicator.</p>
+    <span class="source-cite">src/hooks/use-api.ts:25-90; src/lib/api-client.ts; src/lib/sync-status.ts:6</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">Where does UI state live?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li><strong>URL:</strong> the open ticket (<code>?ticket=</code>) and queue filters/sort/page (<code>use-queue-state.ts</code>), so views are shareable and survive refresh.</li>
+      <li><strong>Server cache:</strong> everything from the API, in SWR.</li>
+      <li><strong>localStorage:</strong> unsent reply and note drafts per ticket (best effort, wrapped in try/catch).</li>
+      <li><strong>React context:</strong> shell state (sidebar collapsed, palette open) in <code>shell-context.tsx</code>.</li>
+    </ul>
+    <span class="source-cite">src/features/queue/hooks/use-queue-state.ts; src/features/ticket-workspace/hooks/use-reply-draft.ts; src/components/layout/shell-context.tsx</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How does the reply composer's state work?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p><code>useReplyDraft</code> is lifted above the responsive layouts (desktop and mobile render different trees) so they share one state. It keeps separate texts for <em>Reply</em> and <em>Internal note</em>; the reply starts from the pending AI draft (the newest draft with no <code>sent_message_id</code>) or a locally saved edit; <em>Restore AI draft</em> resets it; a "Then set" status defaults to Pending and only offers statuses the server says are allowed (<code>allowed_statuses</code>); Closed tickets block replies but allow notes; a ref-based guard prevents double submission; errors keep the text and map status codes to specific messages. When the ticket changes, state is re-derived during render (React's documented pattern) instead of in an effect.</p>
+    <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts; src/features/ticket-workspace/components/reply-composer.tsx</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How are the forms for mailbox and AI settings built?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>The mailbox form switches between a status card (connected) and a connect flow with Gmail / Other provider tabs; the Gmail tab is a numbered three-step guide with links to Google's pages. The AI panel shows key status, a verify-and-save form and an accessible switch (<code>role="switch"</code>, <code>aria-checked</code>, labelled and described) for automatic replies. Both show server messages inline and never display stored secrets.</p>
+    <span class="source-cite">src/features/settings/components/mailbox-form.tsx; src/features/settings/components/ai-settings.tsx</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What accessibility practices are used?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li>Ids from <code>useId</code> because some components render twice (desktop and mobile layouts), so labels and <code>aria-describedby</code> never collide.</li>
+      <li>Labels for every input, including visually hidden ones; <code>aria-invalid</code> and described error messages.</li>
+      <li>Radix-based dialogs, dropdowns and tabs for focus management and keyboard support.</li>
+      <li><code>aria-pressed</code> on the Reply / Internal note toggle; <code>role="switch"</code> on the auto-send setting.</li>
+      <li>Customer email bodies rendered as plain text, never as HTML.</li>
+    </ul>
+    <span class="source-cite">src/features/ticket-workspace/components/reply-composer.tsx; conversation-column.tsx; src/components/ui/dialog.tsx</span>
+  </div>
+</div>
 
   </main>
 </div>

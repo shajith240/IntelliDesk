@@ -1,84 +1,66 @@
 # Documentation status
 
-Last verified: 2026-09-24, against commit `08357c7` of this repository.
+Last verified: 2026-09-25, against commit `ffccba5` (plus the documentation commit that follows it).
+The previous edition described commit `08357c7` and is fully superseded.
 
-## Page inventory (14 pages, 133 Q&A items total)
+## Page inventory (21 content pages + template)
 
 | Page | Q&A items | Written by |
 | --- | --- | --- |
-| index.html | 3 | orchestrator |
-| architecture.html | 9 | subagent |
-| data-model.html | 9 | subagent |
-| auth-security.html | 11 | subagent |
-| api-routes.html | 10 | subagent |
-| frontend-architecture.html | 11 | subagent |
-| design-system.html | 13 | subagent |
-| feature-walkthrough-pipeline.html | 12 | subagent |
-| feature-walkthrough-agent.html | 10 | subagent |
-| engineering-decisions.html | 12 | orchestrator |
-| bugs-lessons.html | 8 | orchestrator |
-| testing.html | 8 | subagent |
-| deployment.html | 8 | subagent |
-| integrations.html | 9 | subagent |
+| index.html | 5 | orchestrator |
+| interview-cheatsheet.html | 14 | orchestrator |
+| product-business.html | 9 | orchestrator |
+| architecture.html | 10 | orchestrator |
+| data-model.html | 14 | subagent (verified) |
+| database-design.html | 17 | orchestrator |
+| auth-security.html | 22 | subagent (verified) |
+| roles-permissions.html | 11 | orchestrator |
+| api-routes.html | 17 | orchestrator |
+| feature-walkthrough-pipeline.html | 26 | subagent (verified, 2 corrections) |
+| ai-safety.html | 14 | orchestrator |
+| integrations.html | 12 | orchestrator |
+| frontend-architecture.html | 13 | orchestrator (1 correction) |
+| design-system.html | 14 | orchestrator (rewritten; old excerpts had drifted) |
+| feature-walkthrough-agent.html | 23 | subagent (verified) |
+| admin-operations.html | 11 | orchestrator (1 correction) |
+| engineering-decisions.html | 25 | orchestrator |
+| bugs-lessons.html | 10 | orchestrator |
+| testing.html | 10 | orchestrator (check lists generated from the test files) |
+| deployment.html | 12 | orchestrator |
+| roadmap.html | 7 | orchestrator |
 
-`engineering-decisions.html` and `bugs-lessons.html` were written directly by the orchestrator rather than
-delegated, since the orchestrator made the changes those pages describe first-hand in the same working session and
-could cite exact reasoning and line numbers without reconstructing intent from a diff.
+Six subagents were dispatched; four pages were completed by subagents before a usage limit stopped them, and the
+orchestrator wrote the rest. Every page was then checked the same way.
 
-## Consistency sweep results (run by the orchestrator after all subagents reported)
+## Automated checks run on every page
 
-- **CSS class coverage**: every `class="..."` used across all 14 pages resolves to a class defined in the shared
-  `<style>` block. Zero undefined classes.
-- **HTML tag balance**: every page's `<div>`/`</div>` and `<main>`/`</main>` counts match exactly.
-- **Internal navigation links**: all 14×14 `nav-link` hrefs resolve to a real file in this folder. Zero broken links.
-- **Placeholder / lorem ipsum scan**: zero matches for `[TODO]`, `[SECTION]`, `[INSERT]`, "lorem ipsum", "placeholder
-  text", or lorem-ipsum-adjacent words, across all pages.
-- **Shared template integrity**: the `<style>` block, the `<nav class="sidebar">` block, and the `<script>` block are
-  byte-identical (verified by hash) across all 14 real pages and `template.html` itself. No subagent modified the
-  shared chrome.
-- **Active-nav state**: no page ships a hardcoded `nav-link active` class; it's set client-side by the shared script
-  based on the current filename, so the correct entry highlights on every page automatically.
+- **Shared chrome**: the `<style>`, `<nav>` and `<script>` blocks are byte-identical (SHA-1) to `template.html`.
+- **CSS classes**: every class used is defined in the shared stylesheet.
+- **HTML balance**: `<div>`/`</div>` counts match.
+- **Code excerpts**: every `<pre><code>` block was compared line by line with the file(s) its citation names.
+  The only blocks that don't match a file are ASCII diagrams, shell command lists and one usage example, and their
+  citations say so.
 
-## Spot-checks the orchestrator ran independently (beyond each subagent's own validation)
+## Manual verification
 
-Two claims from subagent hand-off summaries were flagged as suspicious while agents were still running, and checked
-against the real source after all pages landed:
+Specific claims were re-checked against source while writing (for example: team-management rules in
+`src/app/api/team/[id]/route.ts:56-82`, spam-score threshold `parser.ts:280`, confidence bands
+`confidence-meter.tsx:16-33`, user-menu contents). Corrections made:
 
-- A summary mentioned "rate limiting" on `/api/emails/poll`. Grepped the actual route handler and the final
-  `api-routes.html` — the phrase does not appear in either. It was loose wording in the summary that never made it
-  into the page content. No fix needed.
-- `architecture.html`'s citation for the server/client boundary claim is phrased as a paragraph rather than a single
-  `file:line` — verified it's still accurate (providers.tsx is a client component, the ESLint rule and the
-  `server-only` convention are both real), just a different citation style than most other pages. Left as is.
+- admin-operations: the assign menu shows open-ticket counts, not a "(you)" marker.
+- frontend-architecture: the theme switch lives in the top bar, not the user menu.
+- feature-walkthrough-pipeline: the `IMAP_USER` spam rule was removed from the code during this documentation pass
+  (it was single-mailbox legacy superseded by per-workspace own-mailbox detection); the page and a line range
+  were updated.
 
-Additionally, every numeric threshold that appears in the pipeline and API pages was independently re-checked against
-the real source after the fact:
+## Code changes made during this documentation pass
 
-| Claim | Cited value | Verified against |
-| --- | --- | --- |
-| Duplicate-ticket similarity threshold | 0.85 | `src/server/pipeline/deduplicator.ts:7` |
-| Auto-classification confidence threshold | 0.8 | `src/server/gemini/classify.ts:104` |
-| FAQ "perfect match" auto-send threshold | 0.9 | `src/server/gemini/respond.ts:9` |
-| FAQ "partial match" suggest threshold | 0.7 | `src/server/gemini/respond.ts:10` |
-| Default Gemini model | `gemini-2.5-flash` | `src/server/gemini/client.ts:13` |
-| npm scripts (no test script exists) | `dev`, `build`, `start`, `lint` only | `package.json` |
-
-All six matched exactly. No corrections were needed to any page.
+- Removed the unused `NEXT_PUBLIC_DEMO_MODE` variable (it referred to deleted seed routes) from `.env.example`
+  and README.
+- Removed the legacy global `IMAP_USER` spam rule from `src/server/email/parser.ts` and `.env.example`.
 
 ## Known limitations of this documentation
 
-- It reflects the codebase as of 2026-09-24 (commit `08357c7`). If the code changes, these pages will drift and
-  should be re-verified the same way they were built: open the cited file, confirm the claim, fix or remove it if
-  it no longer holds.
-- `testing.html` documents, honestly, that no automated test suite exists yet — do not read that page as describing
-  a testing setup that's actually in place.
-- One fact worth knowing that is intentionally *not* baked into these pages as a permanent claim: the default Gemini
-  model string (`gemini-2.5-flash`, cited above) was announced for deprecation in mid-October 2026 by Google. That's
-  a fact about the vendor's roadmap, not about this codebase, so it isn't treated as part of the architecture — but
-  if `integrations.html` is read after that date, verify the model string in `src/server/gemini/client.ts` is still
-  current before repeating it in an interview.
-
-## Corrections made during writing
-
-None were needed. Every subagent's own validation (undefined-class check, div-balance check) passed on first
-delivery, and the orchestrator's independent spot-checks above found no factual errors to correct.
+- Accurate as of the commit above. When code changes, re-verify affected claims by opening the cited file.
+- Market prices on product-business.html are research from September 2026, not code facts.
+- Real Gmail sending/threading had not been exercised in production when these pages were written.

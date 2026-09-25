@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Overview — IntelliDesk AI Project Docs</title>
+<title>Admin Operations — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -335,91 +335,115 @@
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
 
-    <h1>IntelliDesk AI — Project Bible</h1>
-<p class="page-intro">The complete reference for IntelliDesk AI: what it is, how it's built, why every design decision was made, what was broken and how it was fixed, and what comes next. Every technical claim points to the file (and usually the line) it comes from, so any answer can be backed up with "here's the code".</p>
+    <h1>Admin Operations</h1>
+<p class="page-intro">Everything a workspace admin does, in the order they'd do it when setting up, with the screens, the API calls, the validations, what gets audited, and the errors they can see.</p>
 
-<h2>How to use this site</h2>
+<h2>Setting up the workspace</h2>
 
 <div class="qa-item">
-  <div class="qa-question">I have an interview tomorrow. Where do I start?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-question">What does an admin do on day one?<span class="qa-difficulty basic">Basic</span></div>
   <div class="qa-answer">
     <ol>
-      <li><a href="interview-cheatsheet.html">Interview Cheat-Sheet</a> — the pitch, the numbers, the 12 most likely questions.</li>
-      <li><a href="architecture.html">System Architecture</a> and <a href="database-design.html">Database Design &amp; Migrations</a> — the two areas that impress most.</li>
-      <li>The two walkthroughs: <a href="feature-walkthrough-pipeline.html">Email → Ticket Pipeline</a> and <a href="feature-walkthrough-agent.html">Agent Works a Ticket</a> — be able to trace one email end to end.</li>
-      <li><a href="bugs-lessons.html">Bugs &amp; Lessons</a> — real problems found and fixed make the best stories.</li>
+      <li><strong>Settings → Support mailbox:</strong> connect Gmail (or another provider).</li>
+      <li><strong>Settings → AI:</strong> paste the company's Gemini API key (or rely on the platform key); leave automatic replies off at first.</li>
+      <li><strong>Knowledge Base:</strong> add the most common questions and answers — the AI only drafts from these.</li>
+      <li><strong>Settings → Members:</strong> add agents and viewers; hand each their one-time password.</li>
+      <li>From then on: the <strong>Needs Review</strong> queue, assigning, the <strong>Spam</strong> page and the Command Center.</li>
     </ol>
-    <p>Use the filter box in the sidebar to search the current page.</p>
+    <span class="source-cite">src/features/settings/components/settings.tsx; src/components/layout/nav.ts</span>
   </div>
 </div>
 
 <div class="qa-item">
-  <div class="qa-question">Can I trust every claim on this site?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-question">How does connecting Gmail work?<span class="qa-difficulty intermediate">Intermediate</span></div>
   <div class="qa-answer">
-    <p>Each claim was checked against the code at commit <code>ffccba5</code> (September 2026) and carries a citation. Code excerpts were copied from the cited files and checked automatically. Things that don't exist are marked "Not implemented", and market figures on the product page are marked as research. If the code changes, re-verify a claim by opening its cited file.</p>
-    <span class="source-cite">all-about-project/STATUS.md (verification record)</span>
+    <p>The Gmail tab is a three-step guide: turn on 2-Step Verification, create an app password (links open the exact Google pages), paste the address and the 16-letter password. "Verify and connect" posts to <code>/api/settings/email-config</code>, which performs a real IMAP login and SMTP handshake before saving anything. Wrong credentials produce an actionable message ("use a 16-character app password…"). On success the password is encrypted and the card shows the address, hosts, "Connected" and when it was last checked. <em>Change mailbox</em> / <em>Reconnect</em> reopen the form; <em>Disconnect</em> (with confirmation) deletes the row so the ciphertext doesn't linger. Audit: <code>mailbox_connected</code>, <code>mailbox_disconnected</code>.</p>
+    <p>The "Other provider" tab takes address, optional username, password, IMAP host (port 993 fixed) and SMTP host with port 465 or 587; hosts must resolve to public addresses.</p>
+    <span class="source-cite">src/features/settings/components/mailbox-form.tsx; src/app/api/settings/email-config/route.ts:42-164</span>
   </div>
 </div>
 
-<h2>Project snapshot</h2>
-
 <div class="qa-item">
-  <div class="qa-question">What is IntelliDesk in one flow?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-question">How does the AI panel work?<span class="qa-difficulty intermediate">Intermediate</span></div>
   <div class="qa-answer">
-    <ol>
-      <li>An admin connects the company's support Gmail (guided app password; verified and encrypted).</li>
-      <li>Every 10 minutes, new mail is stored and processed: machine mail and spam are filtered, duplicates and threads detected, Gemini classifies and prioritizes, the customer is identified, and one database transaction appends to or creates a ticket.</li>
-      <li>The AI drafts a reply from the knowledge base; it's only sent automatically if the admin enabled it and strict rules pass.</li>
-      <li>Flagged tickets go to Needs Review; the admin assigns them to available people.</li>
-      <li>The agent replies (or adds internal notes) and chooses the status; the reply threads correctly in the customer's inbox; the customer's answer reopens the ticket.</li>
-    </ol>
+    <p>The panel shows which key the AI runs on: "Your key ···abcd" (healthy or "Needs attention" with the last error), "Shared platform key", or "Not configured" (email waits in the queue). Pasting a key and clicking <em>Verify and save</em> checks it with Google first; a rejected key saves nothing. <em>Remove</em> deletes it. The switch "Send confident answers automatically" is off by default and its description lists exactly when a reply may go out unreviewed. Audit: <code>ai_key_saved</code>, <code>ai_key_removed</code>, <code>ai_auto_send_changed</code>.</p>
+    <span class="source-cite">src/features/settings/components/ai-settings.tsx; src/app/api/settings/ai/route.ts</span>
+  </div>
+</div>
+
+<h2>Team</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How are members added?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><em>Add member</em> asks for name, email and role (agent, viewer or admin). The server generates a random 16-character password, stores only its bcrypt hash, and returns the password once; the dialog shows it with a copy button (falling back to manual copy if clipboard access is blocked). The member signs in and changes it from the user menu. An email already in use returns 409. Audit: <code>member_added</code>.</p>
+    <span class="source-cite">src/features/settings/components/add-member-dialog.tsx:64-91; src/app/api/team/route.ts:48-109</span>
   </div>
 </div>
 
 <div class="qa-item">
-  <div class="qa-question">What are the key facts and numbers?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-question">How are roles changed and members deactivated?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>From the member's row menu. Deactivation opens a confirmation that explains their open tickets will return to the pool. The server refuses to let an admin demote or deactivate themselves and keeps at least one active admin. Deactivating or making someone a viewer releases their open tickets (recorded in assignment history with the reason). The member's session ends within 5 minutes. Audit: <code>member_updated</code>.</p>
+    <span class="source-cite">src/features/settings/components/team-members-list.tsx; deactivate-member-dialog.tsx; src/app/api/team/[id]/route.ts:56-127</span>
+  </div>
+</div>
+
+<h2>Daily work</h2>
+
+<div class="qa-item">
+  <div class="qa-question">How does the admin work the Needs Review queue?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><strong>Needs Review</strong> lists open, unassigned tickets the AI flagged. Each row's menu has <em>Assign to…</em> with teammates ranked available first, then by open-ticket count (each shows its number of open tickets), plus <em>Unassign</em>. The same menu exists in the ticket workspace header. Assignment is atomic and audited (<code>ticket_assigned</code>/<code>ticket_unassigned</code>).</p>
+    <span class="source-cite">src/app/dashboard/review/page.tsx; src/features/ticket-workspace/components/assign-menu.tsx; src/app/api/team/workload/route.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How is the Spam page used?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p>It lists what the local filter or the AI classified as spam in the last 30 days (sender, subject, preview, time). <em>Not spam</em> sends the email back to the intake queue with an override so the filters don't catch it again; it becomes a ticket on the next mailbox check (within 10 minutes). Audit: <code>email_marked_not_spam</code>. Machine-generated mail (bounces, out-of-office) is not spam and never appears here: it's ignored before the spam filters run.</p>
+    <span class="source-cite">src/features/spam/components/spam-review.tsx; src/app/api/emails/spam/route.ts; src/app/api/emails/[id]/not-spam/route.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How is the knowledge base maintained?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>Admins create and edit articles (question, answer, category) in a dialog and delete them with confirmation; agents and viewers can read. Each article is embedded before it is saved (an AI outage saves nothing and shows "AI isn't set up / busy"), edits re-embed only when the text changed, and deleting an article also deletes its vector so the AI stops quoting it. Each card shows "Cited in N AI drafts", counted from the citations table. Search strips filter syntax before querying.</p>
+    <span class="source-cite">src/features/knowledge-base/components/*.tsx; src/app/api/faqs/route.ts; src/app/api/faqs/[id]/route.ts</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What do the Command Center and Analytics show?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><strong>Command Center</strong>: a metric strip (open queue split into new / in progress / pending, highest-priority count, SLA breached, needs review, average AI confidence), the SLA risk panel, recent activity from the audit log, and the open work queue. <strong>Analytics</strong>: status breakdown across all five statuses, priority and category breakdowns, SLA averages. Viewers see the same; agents are redirected to My Work. "Today" figures use the workspace timezone.</p>
+    <span class="source-cite">src/features/command-center/components/*.tsx; src/features/analytics/components/analytics.tsx; src/app/api/dashboard/route.ts</span>
+    <div class="callout missing"><strong>Not implemented</strong> Analytics shows the current state only; there's no historical time series.</div>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">How can emails be imported in bulk?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <p><code>POST /api/emails/bulk</code> (admin) accepts up to 50 emails per call and runs each through the full pipeline with a pause between them to respect AI rate limits. It exists for migrating an existing inbox; there is no UI for it.</p>
+    <span class="source-cite">src/app/api/emails/bulk/route.ts:12-40</span>
+  </div>
+</div>
+
+<div class="qa-item">
+  <div class="qa-question">What does an admin see when something is wrong?<span class="qa-difficulty intermediate">Intermediate</span></div>
   <div class="qa-answer">
     <table class="data-table">
-      <tr><th>Item</th><th>Value</th></tr>
-      <tr><td>Stack</td><td>Next.js 16.1.4, React 19.2.3 (React Compiler), TypeScript, Tailwind v4, NextAuth v5, SWR, zod; Supabase Postgres 17; Pinecone; Gemini 2.5 Flash + gemini-embedding-001; imapflow / nodemailer / mailparser</td></tr>
-      <tr><td>Hosting</td><td>Vercel; GitHub Actions for the 10-minute email schedule</td></tr>
-      <tr><td>Code</td><td>153 TS/TSX files: 24 API routes, 11 pages, 8 feature domains, 28 server modules, 23 UI primitives</td></tr>
-      <tr><td>Database</td><td>20 tables, 9 functions, 13 migrations; RLS closed to browser roles</td></tr>
-      <tr><td>Tests</td><td>45 database checks (5 suites), 16 unit tests (4 files)</td></tr>
-      <tr><td>Roles</td><td>admin, agent, viewer</td></tr>
+      <tr><th>Situation</th><th>Where it shows</th><th>Fix</th></tr>
+      <tr><td>Mailbox login failing</td><td>Settings mailbox card: "Needs attention" + message</td><td>New app password → Reconnect</td></tr>
+      <tr><td>AI key invalid</td><td>Settings AI panel: "Needs attention" + message</td><td>Paste a working key (requeues waiting email)</td></tr>
+      <tr><td>No AI configured</td><td>AI panel "Not configured"; creating an article returns 503</td><td>Add a key</td></tr>
+      <tr><td>Reply rejected by SMTP</td><td>Message in the conversation marked "Not delivered" with the error</td><td>Check the mailbox, send again</td></tr>
+      <tr><td>Data out of date</td><td>Top bar sync indicator</td><td>Refresh button</td></tr>
     </table>
-    <span class="source-cite">PLAN.txt ground truth</span>
-  </div>
-</div>
-
-<h2>Every page</h2>
-
-<div class="qa-item">
-  <div class="qa-question">What is on each page?<span class="qa-difficulty basic">Basic</span></div>
-  <div class="qa-answer">
-    <table class="data-table">
-      <tr><th>Page</th><th>Covers</th></tr>
-      <tr><td><a href="interview-cheatsheet.html">Interview Cheat-Sheet</a></td><td>Pitch, numbers, likely questions with short answers</td></tr>
-      <tr><td><a href="product-business.html">Product &amp; Business</a></td><td>Problem, users, differentiators, competitors, pricing, go-to-market</td></tr>
-      <tr><td><a href="architecture.html">System Architecture</a></td><td>Components, request lifecycle, tenancy, background work, failure handling</td></tr>
-      <tr><td><a href="data-model.html">Data Model &amp; Schema</a></td><td>All 20 tables, columns, keys, constraints, functions, ERD</td></tr>
-      <tr><td><a href="database-design.html">Database Design &amp; Migrations</a></td><td>Normalization, invariants in the database, all 13 migrations, expand/contract</td></tr>
-      <tr><td><a href="auth-security.html">Auth &amp; Security</a></td><td>Login, sessions, throttling, lockdown, encryption, SSRF, injection defenses, incidents</td></tr>
-      <tr><td><a href="roles-permissions.html">Roles &amp; Permissions</a></td><td>Permission matrix, assignment model, team rules, defense in depth</td></tr>
-      <tr><td><a href="api-routes.html">API &amp; Backend Routes</a></td><td>All 24 routes: auth, inputs, outputs, status codes, side effects</td></tr>
-      <tr><td><a href="feature-walkthrough-pipeline.html">Email → Ticket Pipeline</a></td><td>One email from the mailbox to a ticket, step by step</td></tr>
-      <tr><td><a href="ai-safety.html">AI Design &amp; Safety</a></td><td>Keys, prompts, grounding, auto-send policy, mail loops, failures</td></tr>
-      <tr><td><a href="integrations.html">External Services</a></td><td>Supabase, Pinecone, Gemini, IMAP/SMTP, GitHub Actions, vendor limits</td></tr>
-      <tr><td><a href="frontend-architecture.html">Frontend Architecture</a></td><td>Pages, server/client split, features, shell, data fetching, state</td></tr>
-      <tr><td><a href="design-system.html">Design System</a></td><td>Tokens, theming, typography, motion, component conventions</td></tr>
-      <tr><td><a href="feature-walkthrough-agent.html">Agent Works a Ticket</a></td><td>From login to a threaded reply, with every error case</td></tr>
-      <tr><td><a href="admin-operations.html">Admin Operations</a></td><td>Mailbox, AI, team, review queue, spam, knowledge base, dashboards</td></tr>
-      <tr><td><a href="engineering-decisions.html">Decisions &amp; Trade-offs</a></td><td>Why each major choice was made, with alternatives</td></tr>
-      <tr><td><a href="bugs-lessons.html">Bugs &amp; Lessons</a></td><td>Security incidents, data-loss bugs, logic bugs, lessons</td></tr>
-      <tr><td><a href="testing.html">Testing Strategy</a></td><td>Every database check and unit test, how they run, gaps</td></tr>
-      <tr><td><a href="deployment.html">Deployment &amp; Operations</a></td><td>Deploys, env vars, migrations, runbook</td></tr>
-      <tr><td><a href="roadmap.html">Timeline &amp; Roadmap</a></td><td>Phases so far, what's next, known limitations</td></tr>
-    </table>
+    <span class="source-cite">src/server/email/mailbox.ts; src/features/settings/components/ai-settings.tsx; conversation-column.tsx; src/lib/sync-status.ts</span>
   </div>
 </div>
 

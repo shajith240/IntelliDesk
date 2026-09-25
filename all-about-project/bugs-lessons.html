@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bugs &amp; Lessons Learned — IntelliDesk AI Project Docs</title>
+<title>Bugs &amp; Lessons — IntelliDesk AI Project Docs</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -288,19 +288,29 @@
 <div class="container">
   <nav class="sidebar" id="sidebar">
     <h1>IntelliDesk AI</h1>
-    <p class="subtitle">Interview prep — grounded in the actual code</p>
+    <p class="subtitle">The project bible — every claim grounded in the actual code</p>
     <input type="text" id="search-input" placeholder="Filter this page&hellip;">
 
     <div class="nav-group">
       <div class="nav-group-label">Start</div>
-      <a class="nav-link" href="index.html">Overview</a>
+      <a class="nav-link" href="index.html">Overview &amp; How to Use</a>
+      <a class="nav-link" href="interview-cheatsheet.html">Interview Cheat-Sheet</a>
+      <a class="nav-link" href="product-business.html">Product &amp; Business</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">System</div>
       <a class="nav-link" href="architecture.html">System Architecture</a>
       <a class="nav-link" href="data-model.html">Data Model &amp; Schema</a>
+      <a class="nav-link" href="database-design.html">Database Design &amp; Migrations</a>
       <a class="nav-link" href="auth-security.html">Auth &amp; Security</a>
+      <a class="nav-link" href="roles-permissions.html">Roles &amp; Permissions</a>
       <a class="nav-link" href="api-routes.html">API &amp; Backend Routes</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Email &amp; AI</div>
+      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket Pipeline</a>
+      <a class="nav-link" href="ai-safety.html">AI Design &amp; Safety</a>
+      <a class="nav-link" href="integrations.html">External Services</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Frontend</div>
@@ -309,192 +319,177 @@
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Walkthroughs</div>
-      <a class="nav-link" href="feature-walkthrough-pipeline.html">Email &rarr; Ticket &rarr; AI Draft</a>
-      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Reviews &amp; Sends</a>
+      <a class="nav-link" href="feature-walkthrough-agent.html">Agent Works a Ticket</a>
+      <a class="nav-link" href="admin-operations.html">Admin Operations</a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Engineering</div>
       <a class="nav-link" href="engineering-decisions.html">Decisions &amp; Trade-offs</a>
       <a class="nav-link" href="bugs-lessons.html">Bugs &amp; Lessons</a>
       <a class="nav-link" href="testing.html">Testing Strategy</a>
-      <a class="nav-link" href="deployment.html">Deployment &amp; DevOps</a>
-      <a class="nav-link" href="integrations.html">External Services</a>
+      <a class="nav-link" href="deployment.html">Deployment &amp; Operations</a>
+      <a class="nav-link" href="roadmap.html">Timeline &amp; Roadmap</a>
     </div>
   </nav>
 
   <main class="content">
     <button class="toggle-sidebar" id="toggle-btn">&#9776; Menu</button>
-    <h1>Bugs Fixed &amp; Lessons Learned</h1>
-    <p class="page-intro">Concrete bugs found and fixed during this project, with the root cause and the fix.
-      Framed as "what broke, why, how it was found, how it was fixed" — the shape interviewers usually want.</p>
 
-    <h2>CSS &amp; layout bugs</h2>
+    <h1>Bugs &amp; Lessons</h1>
+<p class="page-intro">Every significant bug found in the project — security holes, data-loss bugs, logic errors and UI defects — with how it was found, the root cause, the fix, and the lesson. Many were found by auditing the code against how mature helpdesks behave, or by tests written to prove a rule.</p>
 
-    <div class="qa-item">
-      <div class="qa-question">A global focus-ring style kept appearing where components explicitly said <code>outline-none</code> — what caused it?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p><strong>Symptom:</strong> the command palette's search input and the queue's search box showed a thick
-          blue focus outline even though their own classes included <code>outline-none</code> / a custom thin focus
-          ring. It happened inconsistently — some inputs were affected, some weren't.</p>
-        <p><strong>Root cause:</strong> the project's global <code>:focus-visible</code> rule (2px solid ring on
-          every focusable element) was written directly in <code>globals.css</code>, outside any Tailwind
-          <code>@layer</code>. In Tailwind v4's cascade, un-layered CSS has higher priority than utility classes
-          emitted inside Tailwind's own layers — so the global rule was beating component-level
-          <code>outline-none</code>/<code>focus-visible:ring-*</code> utilities regardless of source order, which is
-          why it looked "random."</p>
-        <p><strong>Fix:</strong> moved the base rules (box-sizing reset, body defaults, the focus-visible ring,
-          selection color) into an explicit <code>@layer base</code> block, so component utility classes — which
-          Tailwind emits into a later layer — can override it as intended.</p>
-        <pre><code>/* In a layer so component utilities (outline-none, focus-visible:ring-*) can override these. */
-@layer base {
-  :focus-visible {
-    outline: 2px solid hsl(var(--ring));
-    outline-offset: 2px;
-  }
-}</code></pre>
-        <span class="source-cite">src/app/globals.css:202 — @layer base wrapping the reset/focus rules</span>
-      </div>
-    </div>
+<h2>Security incidents</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">Why did the SLA risk panel and the queue table both develop horizontal scrolling / overlapping content at narrow widths, and how was it fixed?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p><strong>Symptom:</strong> at 390px viewport width, the SLA risk panel's rail and the Command Center's grid
-          had visible horizontal page scroll; the panel's "Open" button and SLA badge could visually collide.</p>
-        <p><strong>Root cause:</strong> a CSS grid declared only a wide breakpoint's column template
-          (e.g. <code>xl:grid-cols-[minmax(0,1fr)_360px]</code>) with nothing for the base/mobile case. Without an
-          explicit base <code>grid-template-columns</code>, the grid falls back to an implicit, content-sized auto
-          column, which doesn't shrink below its content's natural width — producing overflow instead of wrapping.</p>
-        <p><strong>Fix:</strong> every such grid was given an explicit single-column base template
-          (<code>grid-cols-[minmax(0,1fr)]</code>) before the wider breakpoint kicks in, and the SLA panel's rows
-          were restructured with <code>min-w-0 truncate</code> on the text sibling of any fixed-width button so long
-          content truncates instead of pushing the button out of view.</p>
-        <pre><code>className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2"</code></pre>
-        <span class="source-cite">src/features/command-center/components/command-center.tsx:101; the same base-track fix was applied to src/components/command-center/CommandCenterFallback.tsx, src/features/analytics/components/analytics.tsx, and src/features/settings/components/mailbox-form.tsx</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What was the most serious security problem found?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p><strong>The Supabase Data API was open.</strong> Row-level security was disabled and the <code>anon</code> and <code>authenticated</code> roles held full privileges on every table. Supabase's anon key is public by design (it ships to browsers), so anyone holding it could read password hashes and mailbox credentials through PostgREST. The RLS policies written earlier relied on <code>auth.uid()</code>, which is always null because the app uses NextAuth, not Supabase Auth.</p>
+    <p><strong>Fix (migration 006):</strong> RLS on everywhere with no policies, all privileges revoked from browser roles (including default privileges for future objects), legacy tables moved to an unexposed schema. The app is unaffected because it uses the service role on the server only.</p>
+    <p><strong>Lesson:</strong> "we set up RLS" means nothing until you check which role actually holds which grant. Closed by default, opened deliberately.</p>
+    <span class="source-cite">supabase/migrations/006_lockdown_public_api.sql:1-14</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">The ticket queue used to require horizontal scrolling on narrow screens. What was the actual fix, not just "make it responsive"?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>The original queue was a fixed-width HTML <code>&lt;table&gt;</code> wrapped in <code>overflow-x-auto</code>,
-          which is the standard "just let it scroll" escape hatch — but the product requirement was that it must
-          never scroll horizontally, at any width, in any container. The fix replaced the table with a
-          <code>&lt;ul&gt;</code> of rows using CSS Grid with Tailwind v4 container queries
-          (<code>@container</code> on the wrapper; <code>@min-[560px]:grid-cols-[...]</code>,
-          <code>@min-[860px]:...</code>, <code>@min-[1100px]:...</code>, <code>@min-[1240px]:...</code> on the row
-          template), so columns are sized against the queue's own rendered width rather than the viewport. Below the
-          first tier it renders as a 2-line card instead of a row. The column template is defined once in a shared
-          module and imported by both the real rows and the loading skeleton, so they can't silently drift apart.</p>
-        <span class="source-cite">src/features/queue/lib/grid.ts — ROW_GRID / HIDE_860 / HIDE_1100 / HIDE_1240, imported by both queue-list.tsx and queue-skeleton.tsx</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Which other security holes were fixed?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Problem</th><th>Risk</th><th>Fix</th></tr>
+      <tr><td>Plaintext admin password in a committed migration comment (public repo)</td><td>Account takeover</td><td>Scrubbed and the password rotated</td></tr>
+      <tr><td><code>/api/seed</code>, <code>/api/cleanup</code>, <code>/api/migrate</code> unauthenticated</td><td>Anyone could create or wipe data</td><td>Routes deleted</td></tr>
+      <tr><td>Open public signup</td><td>Anyone could create a workspace</td><td>Off unless explicitly enabled</td></tr>
+      <tr><td>No login throttling</td><td>Password brute force</td><td>5 failures/email, 20/IP per 15 min</td></tr>
+      <tr><td>Unknown emails answered faster than known ones</td><td>Account enumeration</td><td>bcrypt always runs (dummy hash)</td></tr>
+      <tr><td>JWT never re-checked</td><td>Deactivated users kept access for 30 days</td><td>Role/active/org re-read every 5 minutes</td></tr>
+      <tr><td>Viewers could change tickets; agents could assign themselves</td><td>Broken authorization</td><td>Central policy module + DB checks</td></tr>
+      <tr><td>Custom mail host accepted any address</td><td>SSRF into internal networks / cloud metadata</td><td>Hosts must resolve to public IPs</td></tr>
+      <tr><td>SMTP could authenticate without TLS</td><td>Credentials in clear text</td><td><code>requireTLS</code>, TLS 1.2+, certificate checks</td></tr>
+      <tr><td>Customer name and AI text interpolated into HTML emails</td><td>HTML injection in outgoing mail</td><td>Every value escaped</td></tr>
+      <tr><td>Inbound subjects in headers without sanitizing</td><td>Header injection</td><td>CR/LF stripped</td></tr>
+      <tr><td>Customer email subjects/bodies in server logs</td><td>PII in logs</td><td>Removed from logs</td></tr>
+      <tr><td>Mailbox passwords stored as plaintext JSON</td><td>Credential exposure</td><td>AES-256-GCM, org id as associated data</td></tr>
+      <tr><td>Knowledge-base search interpolated into a PostgREST filter</td><td>Filter injection</td><td>Filter syntax stripped</td></tr>
+      <tr><td>Threading lookups not scoped to the organization</td><td>One tenant's reply attached to another's ticket</td><td>Every lookup org-scoped</td></tr>
+    </table>
+    <span class="source-cite">git log (commits 041ab64, c9a20ed, 484d91d, d405738, ffccba5); auth-security.html</span>
+  </div>
+</div>
 
-    <h2>React &amp; state bugs</h2>
+<h2>Data-loss and correctness bugs</h2>
 
-    <div class="qa-item">
-      <div class="qa-question">A ticket's conversation heading had a broken accessible label and a broken test selector — what was wrong?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p><strong>Symptom:</strong> a Playwright locator for the conversation heading resolved to 37 matching, mostly
-          hidden elements instead of one.</p>
-        <p><strong>Root cause:</strong> the ticket workspace renders up to three parallel responsive layouts (desktop
-          3-column, tablet, and a mobile tabbed layout) simultaneously in the DOM, toggling visibility with CSS rather
-          than unmounting the inactive ones. The conversation column's heading used a hardcoded string id
-          (<code>id="conversation-heading"</code>) for its <code>aria-labelledby</code> target — fine for one
-          instance, but every responsive layout variant rendered its own copy of the same component, producing
-          multiple elements with the same <code>id</code> in the document at once, which is invalid HTML and breaks
-          both the accessibility tree and any selector that assumes uniqueness.</p>
-        <p><strong>Fix:</strong> replaced the hardcoded string with React's <code>useId()</code>, which generates a
-          unique id per component instance.</p>
-        <pre><code>const headingId = useId();
-// ...
-&lt;section aria-labelledby={headingId}&gt;
-  &lt;h2 id={headingId}&gt;...</code></pre>
-        <span class="source-cite">src/features/ticket-workspace/components/conversation-column.tsx:51 (useId), :77-78 (usage)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">How could customer email be lost, and how was that fixed?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Three separate ways:</p>
+    <ol>
+      <li><strong>Marked read before stored.</strong> Mail was flagged <code>\Seen</code> when fetched; if the serverless function timed out before processing, the email was gone. Now it's stored first and flagged after (at-least-once).</li>
+      <li><strong>Marked processed before ticketed.</strong> The pipeline set <code>processed = true</code> early; a later failure left an email "done" but on no ticket. Now the flag is the last write, after the idempotent commit point.</li>
+      <li><strong>Near-duplicates discarded.</strong> A follow-up very similar to the sender's earlier email was dropped as a duplicate. Now it is attached to that ticket; only a re-delivery of the same Message-ID is dropped.</li>
+    </ol>
+    <span class="source-cite">src/server/email/imap.ts:96-101; src/server/pipeline/processor.ts:236, 313</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">How is double-submission prevented when an agent clicks "Send response" on a ticket reply, and why is a boolean return value from <code>send()</code> significant?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Sending a reply is a real, irreversible side effect — it emails a customer and marks the ticket resolved —
-          so the send path has two layers of protection: a <code>useRef</code> in-flight flag checked synchronously
-          at the top of <code>send()</code> (refs, unlike state, update immediately without waiting for a re-render,
-          which matters if the button is clicked twice within the same tick), and the button itself is disabled while
-          a request is outstanding.</p>
-        <p>The confirmation dialog originally closed unconditionally after calling <code>send()</code>; the fix made
-          <code>send()</code> return a <code>Promise&lt;boolean&gt;</code> — <code>true</code> only on a verified
-          successful response — so the dialog closes on success and stays open, showing the server's error message,
-          on failure. Closing on click regardless of outcome would have hidden a failed send from the agent while the
-          ticket silently remained unresolved.</p>
-        <pre><code>const sendingRef = useRef(false);
-const send = useCallback(async (): Promise&lt;boolean&gt; =&gt; {
-	if (!pending || sendingRef.current || status === "sending") return false;
-	...
-	sendingRef.current = true;
-	...
-} finally {
-	sendingRef.current = false;
-}</code></pre>
-        <span class="source-cite">src/features/ticket-workspace/hooks/use-reply-draft.ts:90 (sendingRef), :95-96 (Promise&lt;boolean&gt; signature and guard)</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Why could a retry create a duplicate ticket or silently skip an email?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>The email's vector was written to Pinecone before its ticket was created. When a later step failed and the email was retried, semantic duplicate detection found the email's <em>own</em> vector with similarity 1.0 and discarded it as a duplicate. Separately, ticket creation and linking the email were two calls, so a crash in between left a ticket with no conversation. Fixes: the deduplicator ignores the email's own id, and <code>record_inbound_message()</code> creates the ticket and first message in one idempotent transaction.</p>
+    <span class="source-cite">src/server/pipeline/deduplicator.ts; supabase/migrations/010_record_inbound_message.sql</span>
+  </div>
+</div>
 
-    <h2>Investigations that turned out not to be code bugs</h2>
+<div class="qa-item">
+  <div class="qa-question">What was the "AI drafts never saved" bug?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <p>The reply generator returns a type of <code>"auto"</code> or <code>"suggest"</code>, but the insert wrote that value into <code>auto_responses.match_type</code>, whose CHECK constraint only allows <code>perfect</code>, <code>partial</code> or <code>none</code>. Every insert failed, and the code didn't check the error, so the feature silently did nothing: the table was empty in production. Found while verifying data before a migration; fixed by mapping the value and by treating insert errors as failures.</p>
+    <p><strong>Lesson:</strong> an ignored database error is a silent feature outage. Check <code>error</code> on every write.</p>
+    <span class="source-cite">src/server/pipeline/processor.ts (draftOrSendAutoResponse match_type mapping)</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question"><code>/api/dashboard</code> was observed taking 33–75 seconds on one occasion. What was the actual cause, and how was it diagnosed?<span class="qa-difficulty intermediate">Intermediate</span></div>
-      <div class="qa-answer">
-        <p>Rather than assuming the route's own logic was the bottleneck, each of the dashboard's underlying Supabase
-          queries was timed individually and directly (bypassing the Next.js route) using the service-role client in
-          a standalone script. Every individual query — ticket counts, SLA policies, recent audit log rows — came
-          back in roughly 280–370ms, both during the slow observation and afterward. A raw fetch to the Supabase REST
-          root also returned in under 150ms. This ruled out the application code (a slow query, an N+1, a missing
-          index) and pointed to a transient network/infrastructure condition on Supabase's side; a repeat request
-          minutes later completed in about 2 seconds, the expected range for the route's combined queries.</p>
-        <p>Lesson: time the dependency directly before assuming the bug is in your own code, especially for a latency
-          spike that doesn't reproduce consistently.</p>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">Which other logic bugs were found in the audit?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <table class="data-table">
+      <tr><th>Bug</th><th>Fix</th></tr>
+      <tr><td>Agents couldn't reply to urgent (P1/P2) tickets in the app: replies only existed as AI drafts, which P1/P2 never get, so the SLA clock never stopped</td><td>Free-form replies and internal notes on any ticket</td></tr>
+      <tr><td>Every reply forced the ticket to Resolved</td><td>The agent chooses the status (Pending by default)</td></tr>
+      <tr><td>Customer replies didn't reopen Resolved tickets, and could trigger a second automatic reply</td><td><code>record_inbound_message</code> reopens; no auto-reply on follow-ups</td></tr>
+      <tr><td>Auto-replies to out-of-office messages, bounces and newsletters (mail-loop risk)</td><td>Automated-mail detection, RFC 3834 headers, rate limit</td></tr>
+      <tr><td>AI outage produced tickets labelled with invented defaults</td><td>Retry, then leave the email queued</td></tr>
+      <tr><td>When drafting failed, the raw FAQ answer was emailed automatically</td><td>Fallback removed</td></tr>
+      <tr><td>HTML-only emails reached the AI as raw HTML</td><td>Converted to text with line breaks kept</td></tr>
+      <tr><td>Every Gmail sender merged into one "gmail.com" company</td><td>Personal-domain senders get no company account</td></tr>
+      <tr><td>One global ticket-number sequence leaked tenants' volumes</td><td>Per-organization counters</td></tr>
+      <tr><td>Deleted knowledge-base articles kept being quoted by the AI</td><td>Vector deleted with the article</td></tr>
+      <tr><td>Audit rows written to columns that didn't exist, silently dropped</td><td>Correct columns; audit log now append-only</td></tr>
+      <tr><td>Deleting a ticket deleted its audit history</td><td>Foreign key changed to keep history</td></tr>
+      <tr><td>"Resolved today" used the server's midnight</td><td>Workspace timezone</td></tr>
+      <tr><td>Duplicate check used <code>.single()</code> and errored when several rows matched</td><td><code>limit(1).maybeSingle()</code></td></tr>
+      <tr><td>IMAP flags were set while the FETCH stream was still open (deadlock risk), and a UID cache was shared between tenants</td><td>Collect first, then process and flag; cache removed</td></tr>
+    </table>
+    <span class="source-cite">git log (b5d90be, d405738, ffccba5, 484d91d); feature-walkthrough-pipeline.html</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">Why does running the production build locally with <code>npm start</code> require setting <code>AUTH_TRUST_HOST=true</code>, when neither Vercel nor <code>npm run dev</code> need it?<span class="qa-difficulty basic">Basic</span></div>
-      <div class="qa-answer">
-        <p>Auth.js (NextAuth v5) rejects requests whose <code>Host</code> header doesn't match a trusted value unless
-          it can determine the deployment is on a known-trusted platform. Vercel sets the trust automatically at the
-          platform level, and the Next.js dev server is exempted; a plain local production server (<code>next start</code>)
-          is neither, so it needs the escape hatch explicitly. This surfaced as login silently failing (redirecting
-          back to <code>/login</code> with no visible session) the first time the production build was run locally
-          for testing, traced by reading the server log, which had an explicit <code>UntrustedHost</code> error.</p>
-      </div>
-    </div>
+<h2>Bugs caught by tests and rehearsals</h2>
 
-    <h2>Security fixes</h2>
+<div class="qa-item">
+  <div class="qa-question">What did the tests and migration rehearsals catch before production?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li><strong>Bounce detection:</strong> mailparser returns <code>Content-Type</code> as <code>{ value, params }</code>; the detector read only <code>value</code> and missed delivery reports. The unit test failed on its first run.</li>
+      <li><strong>Generated column in a foreign key:</strong> Postgres rejects <code>ON DELETE SET NULL</code> on such a key; the rehearsal failed, and the design changed to <code>NO ACTION</code> (arguably better).</li>
+      <li><strong>Constraint ordering:</strong> a table referencing a composite key was created before the key existed.</li>
+      <li><strong>Existing constraint name</strong> collided in 007.</li>
+      <li><strong>Seed data inconsistency:</strong> 14 tickets had a confidence but no AI verdict, found when preparing the generated column, and backfilled first.</li>
+      <li><strong>Test assumptions:</strong> a test tried to backdate a resolution time in the same statement as the status change; the new trigger (correctly) overrode it. The test was wrong, not the trigger.</li>
+    </ul>
+    <span class="source-cite">testing.html; database-design.html</span>
+  </div>
+</div>
 
-    <div class="qa-item">
-      <div class="qa-question">What was wrong with the original <code>/api/emails/poll</code> and <code>/api/emails/process-queue</code> endpoints, and how was it found?<span class="qa-difficulty advanced">Advanced</span></div>
-      <div class="qa-answer">
-        <p>Both endpoints — which trigger real IMAP polling and email processing — had no authentication check at
-          all and were reachable by anyone who knew the URL; <code>/api/emails/ingest</code> accepted an
-          <code>organization_id</code> directly from the unauthenticated request body, meaning a caller could write
-          data into any organization's ticket queue by simply naming its id. This was found by reading the route
-          handlers directly rather than assuming existing endpoints were already gated, alongside the sibling
-          question of what the outbound cron target should even be. The fix added a shared bearer-secret check
-          (see the Engineering Decisions page for <code>verifyBearerSecret</code>) in front of all three routes,
-          each keyed to its own secret so the polling/queue-processing secret and the inbound-ingest secret are
-          independently rotatable.</p>
-        <span class="source-cite">src/server/auth/cron.ts; guards added to src/app/api/emails/poll/route.ts, src/app/api/emails/process-queue/route.ts, src/app/api/emails/ingest/route.ts</span>
-      </div>
-    </div>
+<div class="qa-item">
+  <div class="qa-question">What surprised you about PostgREST?<span class="qa-difficulty advanced">Advanced</span></div>
+  <div class="qa-answer">
+    <p>Two things. After adding a foreign key, PostgREST's schema cache must be reloaded (<code>NOTIFY pgrst, 'reload schema'</code>) before embeds work. And it didn't detect the self-referencing composite foreign key <code>tickets.follow_up_of</code> for embedding at all, so the parent ticket is loaded with a second query. Knowing when to stop fighting a tool is part of the job.</p>
+    <span class="source-cite">src/app/api/tickets/[id]/route.ts (follow_up_parent lookup)</span>
+  </div>
+</div>
 
-    <div class="callout">
-      <strong>General pattern across this list</strong>
-      Most of these bugs were found by directly measuring or directly reading — timing each query by hand instead of
-      guessing, reading the actual route handler instead of assuming it was already guarded, reading the CSS cascade
-      order instead of assuming "outline-none should just work." None were found by a test suite, because none
-      exists yet — see the Testing Strategy page for what that implies and what a first test suite for this project
-      should prioritize.
-    </div>
+<h2>UI bugs</h2>
+
+<div class="qa-item">
+  <div class="qa-question">Which UI bugs were fixed?<span class="qa-difficulty basic">Basic</span></div>
+  <div class="qa-answer">
+    <ul>
+      <li><strong>Unwanted focus rings:</strong> a global <code>:focus-visible</code> rule overrode components' <code>outline-none</code>; fixed by moving it into <code>@layer base</code>.</li>
+      <li><strong>Horizontal scrolling in the queue:</strong> fixed with container queries shared by header and rows.</li>
+      <li><strong>Duplicate element ids:</strong> components render twice (desktop and mobile layouts); ids now come from <code>useId</code>.</li>
+      <li><strong>Double-sending a reply:</strong> a ref-based guard blocks a second submit while one is in flight.</li>
+      <li><strong>A hint text laid out in pieces:</strong> a flex container split inline text and a link into separate columns; wrapped in a single span.</li>
+    </ul>
+    <span class="source-cite">src/app/globals.css:201-221; src/features/queue/lib/grid.ts; src/features/ticket-workspace/hooks/use-reply-draft.ts</span>
+  </div>
+</div>
+
+<h2>Lessons</h2>
+
+<div class="qa-item">
+  <div class="qa-question">What are the main engineering lessons from this project?<span class="qa-difficulty intermediate">Intermediate</span></div>
+  <div class="qa-answer">
+    <ol>
+      <li><strong>Put invariants in the database.</strong> Every rule that "the code always does" was eventually broken by some other code path.</li>
+      <li><strong>Silent failures are the worst failures.</strong> Ignored errors hid a dead feature (drafts) and dropped audit rows.</li>
+      <li><strong>Serverless means "may stop at any line".</strong> Design every multi-step job to be retried safely: store first, commit once, mark done last.</li>
+      <li><strong>Test rules by trying to break them</strong>, against real data, inside a rollback.</li>
+      <li><strong>Change live schemas in expand/contract steps.</strong></li>
+      <li><strong>AI output is untrusted input too.</strong> Ground it, gate it, label it, and let it fail closed.</li>
+      <li><strong>Remove what isn't used</strong> (dead routes, env vars, columns): each one is a place for bugs to hide.</li>
+    </ol>
+  </div>
+</div>
+
   </main>
 </div>
 
